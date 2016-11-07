@@ -16,21 +16,21 @@ import numpy as np
 
 root_path = 'perf'
 SOURCE_FILE = [
-    # 'clustering/sparse_affinity_propagation.pyx',
-    # 'clustering/hierarchical.pyx',
-    # 'clustering/space_tools.pyx',
-    # 'clustering/heap.pyx',
+    'clustering/sparse_affinity_propagation.pyx',
+    'clustering/hierarchical.pyx',
+    'clustering/space_tools.pyx',
+    'clustering/heap.pyx',
     'matrix/karma_sparse.pyx',
     'matrix/routine.pyx',
-    # 'matrix/rank_dispatch.pyx',
+    'matrix/rank_dispatch.pyx',
     'tools/getter.pyx',
     'tools/sort_tools.pyx',
     'tools/types.pyx',
     'tools/curve.pyx',
-    # 'indexing/column_index.pyx',
-    # 'indexing/indexed_list.pyx',
-    # 'where/indices_where_int.pyx',
-    # 'where/indices_where_long.pyx'
+    'indexing/column_index.pyx',
+    'indexing/indexed_list.pyx',
+    'where/indices_where_int.pyx',
+    'where/indices_where_long.pyx'
     ]
 
 
