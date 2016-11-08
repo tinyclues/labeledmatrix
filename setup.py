@@ -30,11 +30,10 @@ SOURCE_FILE = [
     'indexing/column_index.pyx',
     'indexing/indexed_list.pyx',
     'where/indices_where_int.pyx',
-    'where/indices_where_long.pyx'
-    ]
+    'where/indices_where_long.pyx']
 
 
-cargs = ['-O2', '-Wno-unused-function', '-Wno-maybe-uninitialized',
+cargs = ['-O2', '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable',
          '-std=c++11', '-ffast-math', '-fopenmp', '-msse4.2']
 largs = ['-fopenmp', '-msse4.2']
 
