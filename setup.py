@@ -61,7 +61,7 @@ def setup_given_extensions(extensions):
     setup(name='karma-perf',
           version=str(VERSION),
           packages=find_packages(exclude=['tests*']),
-          ext_modules=cythonize([extensions]),
+          ext_modules=cythonize(extensions),
           include_dirs=[np.get_include()],
           install_requires=requirements,
           tests_require=test_requirements,
