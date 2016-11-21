@@ -2,9 +2,9 @@ import unittest
 import itertools
 import random
 from numpy import allclose as eq
-from perf.matrix.karma_sparse import KarmaSparse
-from perf.matrix.karma_sparse import sp, np, ks_diag
-from perf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
+from cyperf.matrix.karma_sparse import KarmaSparse
+from cyperf.matrix.karma_sparse import sp, np, ks_diag
+from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
 # from sklearn.preprocessing import normalize as sk_normalize
 # from karma.learning.matrix_utils import normalize
 # from karma.learning.matrix_utils import truncate_by_count

@@ -14,7 +14,8 @@ from numpy.distutils.misc_util import get_info
 import numpy as np
 
 
-root_path = 'perf'
+root_path = 'cyperf'
+
 SOURCE_FILE = [
     'clustering/sparse_affinity_propagation.pyx',
     'clustering/hierarchical.pyx',

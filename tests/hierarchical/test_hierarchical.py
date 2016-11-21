@@ -12,8 +12,8 @@ from sklearn.datasets.samples_generator import make_blobs
 from sklearn.metrics import normalized_mutual_info_score
 import operator
 
-from perf.clustering.hierarchical import WardTree, traversal, huffman_encoding, huffman_encoding_reordering
-from perf.clustering.space_tools import (pairwise_flat, vector_distance, METRIC_LIST,
+from cyperf.clustering.hierarchical import WardTree, traversal, huffman_encoding, huffman_encoding_reordering
+from cyperf.clustering.space_tools import (pairwise_flat, vector_distance, METRIC_LIST,
                                          pairwise_square, fast_buddies)
 
 

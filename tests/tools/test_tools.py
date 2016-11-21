@@ -4,12 +4,12 @@
 # from itertools import product
 # from karma.types import Error
 # from numpy import allclose as eq
-# from karma.core.perf.common import (logistic, logit, argsort, slice_length, compose_slices,
+# from karma.core.cyperf.common import (logistic, logit, argsort, slice_length, compose_slices,
 #                                     take_indices, apply_python_dict, python_feature_hasher)
-# from karma.core.perf.common import METRIC_LIST, fast_buddies
-# from karma.core.perf.common import vector_distance, pairwise_square, pairwise_flat
+# from karma.core.cyperf.common import METRIC_LIST, fast_buddies
+# from karma.core.cyperf.common import vector_distance, pairwise_square, pairwise_flat
 # from scipy.spatial.distance import cdist, pdist
-# from karma.core.perf.common.sort_tools import cython_argpartition, _inplace_permutation
+# from karma.core.cyperf.common.sort_tools import cython_argpartition, _inplace_permutation
 
 
 # class GetterTestCase(unittest.TestCase):
