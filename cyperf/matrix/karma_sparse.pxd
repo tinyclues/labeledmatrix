@@ -134,7 +134,7 @@ cdef class KarmaSparse:
 
     cpdef KarmaSparse truncate_with_cutoff(self, DTYPE_t cutoff)
 
-    cdef KarmaSparse aligned_truncate_by_count(self, ITYPE_t nb)
+    cdef KarmaSparse aligned_truncate_by_count(self, np.ndarray[ITYPE_t, ndim=1] count)
 
     cdef KarmaSparse aligned_truncate_by_budget(self, density, DTYPE_t volume)
 
@@ -142,7 +142,7 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse global_truncate_cumulative(self, DTYPE_t percentage)
 
-    cpdef KarmaSparse truncate_by_count(self, ITYPE_t nb, axis)
+    cpdef KarmaSparse truncate_by_count(self, nb, axis)
 
     cpdef KarmaSparse truncate_by_budget(self, np.ndarray values, DTYPE_t budget, axis)
 

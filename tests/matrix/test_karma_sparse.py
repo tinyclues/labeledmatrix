@@ -426,22 +426,35 @@ class TestKarmaSparse(unittest.TestCase):
                     self.assertEqual(mat.format, rank.format)
                     self.assertTrue(np.array_equal(mat.indices, rank.indices))
 
-    # def test_truncate_by_count(self):
-    #     ranks = [0, 5]
-    #     for m in self.mf.iterator(dense=True):
-    #         # for the negative values dense and sparse methods gives different result
-    #         a = KarmaSparse(np.abs(m), format="csr")
-    #         at = a.tocsc()
-    #         for mat, nb, axis in itertools.product([a, at], ranks, [0, 1]):
-    #             result = mat.truncate_by_count(axis=axis, nb=nb)
-    #             self.assertEqual(result.format, mat.format)
-    #             self.assertTrue(eq(result.toarray(),
-    #                             truncate_by_count(np.abs(m), axis=axis, max_rank=nb)))
-    #     # test for negative
-    #     m = np.array([[-1., 0., 0., 0., -2., 0., 0.]])
-    #     res = np.array([[-1., 0., 0., 0., 0., 0., 0.]])
-    #     self.assertTrue(eq(KarmaSparse(m).truncate_by_count(axis=1, nb=1).toarray(), res))
-    #     self.assertTrue(eq(KarmaSparse(m).truncate_by_count(axis=0, nb=1).toarray(), m))
+    def test_truncate_by_count(self):
+        ranks = [0, 5]
+        for m in self.mf.iterator(dense=True):
+            # for the negative values dense and sparse methods gives different result
+            a = KarmaSparse(np.abs(m), format="csr")
+            at = a.tocsc()
+            for mat, nb, axis in itertools.product([a, at], ranks, [0, 1]):
+                result = mat.truncate_by_count(axis=axis, nb=nb)
+                self.assertEqual(result.format, mat.format)
+                if axis == 1:
+                    d_result = truncate_by_count_axis1_dense(np.abs(m), np.full(m.shape[0], nb, dtype=np.int))
+                else:
+                    d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m.T)),
+                                                             np.full(m.shape[1], nb, dtype=np.int)).T
+                self.assertTrue(eq(result.toarray(), d_result))
+
+            for mat, axis in itertools.product([a, at], [0, 1]):
+                rank = np.random.randint(0, 5, size=mat.shape[1 - axis])
+                if axis == 1:
+                    d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m)), rank)
+                else:
+                    d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m.T)), rank).T
+                result = mat.truncate_by_count(axis=axis, nb=rank)
+                self.assertTrue(eq(result.toarray(), d_result))
+        # test for negative
+        m = np.array([[-1., 0., 0., 0., -2., 0., 0.]])
+        res = np.array([[-1., 0., 0., 0., 0., 0., 0.]])
+        self.assertTrue(eq(KarmaSparse(m).truncate_by_count(axis=1, nb=1).toarray(), res))
+        self.assertTrue(eq(KarmaSparse(m).truncate_by_count(axis=0, nb=1).toarray(), m))
 
     def test_truncate_by_cumulative(self):
         for mat in self.mf.iterator():

@@ -12,6 +12,10 @@ class testDoctest(unittest.TestCase):
         import cyperf.matrix.karma_sparse
         self.assertEqual(doctest.testmod(cyperf.matrix.karma_sparse).failed, 0)
 
+    def test_argmax_dispatch(self):
+        import cyperf.matrix.argmax_dispatch
+        self.assertEqual(doctest.testmod(cyperf.matrix.argmax_dispatch).failed, 0)
+
     def test_routine(self):
         import cyperf.matrix.routine
         self.assertEqual(doctest.testmod(cyperf.matrix.routine).failed, 0)

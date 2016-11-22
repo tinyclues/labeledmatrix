@@ -949,8 +949,9 @@ cdef class KarmaSparse:
             ITYPE_t i
             tuple res
 
-        for i in prange(self.nrows, nogil=True):
-            row[self.indptr[i]:self.indptr[i + 1]] = i
+        with nogil:
+            for i in xrange(self.nrows):
+                row[self.indptr[i]:self.indptr[i + 1]] = i
         if self.format == CSR:
             res = (np.asarray(row), np.asarray(col))
         else:
@@ -1156,12 +1157,15 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse aligned_truncate_by_count(self, ITYPE_t nb):
-        if nb < 0:
-            raise ValueError("nb should be positive, got {}".format(nb))
-        if self.get_nnz() == 0 or np.max(self.aligned_count_nonzero()) <= nb:
+    cdef KarmaSparse aligned_truncate_by_count(self, np.ndarray[ITYPE_t, ndim=1] count):
+        assert count.shape[0] + 1== self.indptr.shape[0]
+        mm = count.min()
+        if mm < 0:
+            raise ValueError("nb should be positive, got {}".format(mm))
+
+        if self.get_nnz() == 0 or np.all(np.max(self.aligned_count_nonzero()) <= count):
             return self.copy()
-        if nb == 0:
+        if np.all(count == 0):
             return 0 * self
         cdef:
             ITYPE_t i, size
@@ -1171,11 +1175,11 @@ cdef class KarmaSparse:
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
             size = self.indptr[i + 1] - self.indptr[i]
-            partial_unordered_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]], size, min(nb, size))
+            partial_unordered_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]], size, min(count[i], size))
 
         with nogil:
             for i in xrange(self.nrows):
-                size = min(nb, self.indptr[i + 1] - self.indptr[i])
+                size = min(count[i], self.indptr[i + 1] - self.indptr[i])
                 if size > 0:
                     memcpy(&new_indices[new_indptr[i]], &self.indices[self.indptr[i]], size * sizeof(ITYPE_t))
                     memcpy(&new_data[new_indptr[i]], &self.data[self.indptr[i]], size * sizeof(DTYPE_t))
@@ -1307,7 +1311,7 @@ cdef class KarmaSparse:
         res.eliminate_zeros()
         return res
 
-    cpdef KarmaSparse truncate_by_count(self, ITYPE_t nb, axis):
+    cpdef KarmaSparse truncate_by_count(self, nb, axis):
         """
         Keep only `nb` largest elements along `axis`.
         This takes into account only on nonzero elements, so it will truncate
@@ -1329,7 +1333,7 @@ cdef class KarmaSparse:
             array([[-1.,  2.,  0.,  0.],
                    [ 3.,  4.,  0.,  0.]])
         """
-        assert nb >= 0, 'nb values should be non-negative'
+        assert np.all(nb >= 0), 'nb values should be non-negative'
         if axis is None:
             res = self.copy()
             data = np.asarray(res.data)
@@ -1338,10 +1342,15 @@ cdef class KarmaSparse:
             res.data = data
             res.eliminate_zeros()
             return res
-        if self.aligned_axis(axis):
-            return self.aligned_truncate_by_count(nb)
+
+        if is_int(nb):
+            count = np.full(self.shape[1 - axis], nb, dtype=ITYPE)
         else:
-            return self.swap_slicing().aligned_truncate_by_count(nb).swap_slicing()
+            count = np.asarray(nb, dtype=ITYPE)
+        if self.aligned_axis(axis):
+            return self.aligned_truncate_by_count(count)
+        else:
+            return self.swap_slicing().aligned_truncate_by_count(count).swap_slicing()
 
     cpdef KarmaSparse truncate_by_budget(self, np.ndarray values, DTYPE_t budget, axis):
         """

@@ -24,6 +24,7 @@ SOURCE_FILE = [
     'matrix/karma_sparse.pyx',
     'matrix/routine.pyx',
     'matrix/rank_dispatch.pyx',
+    'matrix/argmax_dispatch.pyx',
     'tools/getter.pyx',
     'tools/sort_tools.pyx',
     'tools/types.pyx',
