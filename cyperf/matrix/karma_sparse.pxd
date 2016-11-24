@@ -233,6 +233,10 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, np.ndarray matrix)
 
+    cdef np.ndarray[float, ndim=2] aligned_dense_maxagg(self, np.ndarray matrix)
+
+    cdef np.ndarray[float, ndim=2] misaligned_dense_maxarg(self, np.ndarray matrix)
+
     cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b,
                                               binary_func op)
 

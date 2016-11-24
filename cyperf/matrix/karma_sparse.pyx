@@ -2310,6 +2310,51 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
+    cdef np.ndarray[float, ndim=2] aligned_dense_maxagg(self, np.ndarray matrix):
+        check_shape_comptibility(self.ncols, matrix.shape[0])
+        cdef:
+            ITYPE_t n_cols = matrix.shape[1]
+            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
+            np.ndarray[float, ndim=2, mode="c"] out = np.zeros((self.nrows, n_cols), dtype=np.float32, order='C')
+            ITYPE_t i, k, ind
+            LTYPE_t j
+            DTYPE_t alpha, val
+
+        for i in prange(self.nrows, nogil=True, schedule='static'):
+            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                alpha = self.data[j]
+                ind = self.indices[j]
+                for k in xrange(n_cols):
+                    val = alpha * mat[ind, k]
+                    if val > out[i, k]:
+                        out[i, k] = val
+        return out
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    cdef np.ndarray[float, ndim=2] misaligned_dense_maxarg(self, np.ndarray matrix):
+        check_shape_comptibility(self.nrows, matrix.shape[0])
+        cdef:
+            ITYPE_t n_cols = matrix.shape[1]
+            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
+            np.ndarray[float, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=np.float32, order='C')
+            ITYPE_t i, k
+            LTYPE_t j, ind
+            DTYPE_t alpha, val
+
+        with nogil:
+            for i in xrange(self.nrows):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    ind = self.indices[j]
+                    alpha = self.data[j]
+                    for k in xrange(n_cols):
+                        val = alpha * mat[i, k]
+                        if val > out[ind, k]:
+                            out[ind, k] = val
+        return out
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, np.ndarray matrix):
         check_shape_comptibility(self.nrows, matrix.shape[0])
         cdef:
@@ -2332,6 +2377,15 @@ cdef class KarmaSparse:
                 return self.swap_slicing().aligned_dense_dot(matrix)
             else:
                 return self.misaligned_dense_dot(matrix)
+
+    def dense_maxagg_right(self, np.ndarray matrix):
+        if self.format == CSR:
+            return self.aligned_dense_maxagg(matrix)
+        else:
+            if matrix.shape[1] > 60:  # 60 is an experimentally found constant
+                return self.swap_slicing().aligned_dense_maxagg(matrix)
+            else:
+                return self.misaligned_dense_maxagg(matrix)
 
     def dense_dot_left(self, np.ndarray matrix):
         if self.format == CSC:
