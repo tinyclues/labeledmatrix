@@ -5,6 +5,7 @@ from numpy import allclose as eq
 from cyperf.matrix.karma_sparse import KarmaSparse
 from cyperf.matrix.karma_sparse import sp, np, ks_diag
 from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
+from cyperf.matrix.karma_sparse import dense_pivot
 # from sklearn.preprocessing import normalize as sk_normalize
 # from karma.learning.matrix_utils import normalize
 # from karma.learning.matrix_utils import truncate_by_count
@@ -849,3 +850,42 @@ class TestKarmaSparse(unittest.TestCase):
             for i in xrange(len(a)):
                 ind = arg_sort[i, :rank[i]]
                 self.assertTrue(eq(a[i, ind], b[i, ind]))
+
+    def test_dense_pivot1(self):
+        x = np.array([0, 0, 0, 1], dtype=np.int32)
+        y = np.array([0, 0, 1, 1], dtype=np.int32)
+        val = np.array([12., 7., -1., 5.])
+        shape = (2, 2)
+
+        res1 = dense_pivot(x, y, val, shape=shape, aggregator='add', default=-2.4)
+        expected1 = np.array([[19., -1.], [-2.4, 5.]])
+        np.testing.assert_equal(res1, expected1)
+
+        res2 = dense_pivot(x, y, val, shape=shape, aggregator='max', default=3.3)
+        expected2 = np.array([[12., -1.], [3.3, 5.]])
+        np.testing.assert_equal(res2, expected2)
+
+        res3 = dense_pivot(x, y, val, shape=shape, aggregator='min', default=np.nan)
+        expected3 = np.array([[7., -1.], [np.nan, 5.]])
+        np.testing.assert_equal(res3, expected3)
+
+        res4 = dense_pivot(x, y, val, shape=shape, aggregator='first', default=-np.inf)
+        expected4 = np.array([[12., -1.], [-np.inf, 5.]])
+        np.testing.assert_equal(res4, expected4)
+
+        res5 = dense_pivot(x, y, val, shape=shape, aggregator='last', default=0.)
+        expected5 = np.array([[7., -1.], [0., 5.]])
+        np.testing.assert_equal(res5, expected5)
+
+        def test_dense_pivot2(self):
+            for _ in xrange(200):
+                size = np.random.randint(0, 10 ** 3)
+                shape = (np.random.randint(1, 100), np.random.randint(1, 100))
+                x = np.random.randint(0, shape[0], size)
+                y = np.random.randint(0, shape[1], size)
+                val = np.random.rand(size)
+                agg = random.choice(['add', 'min', 'max', 'last', 'first'])
+
+                res_dense = dense_pivot(x, y, val, shape=shape, aggregator=agg, default=0.)
+                res_sparse = KarmaSparse((val, (x, y)), shape=shape, format="csr", aggregator=agg)
+                self.assertTrue(eq(res_dense, res_sparse))

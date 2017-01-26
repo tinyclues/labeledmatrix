@@ -163,30 +163,22 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=2] dense_pivot(ITYPE_t[::1] rows,
         shape = (maxx + 1, maxy + 1)
 
     cdef binary_func reducer = get_reducer(aggregator)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=2] result = np.full(shape, np.nan, dtype=DTYPE)
-    cdef np.ndarray[dtype=np.uint8_t, ndim=2] mask = np.zeros(shape, dtype=np.uint8)
-    cdef DTYPE_t val, old_val
+    cdef DTYPE_t[:,::1] result = np.full(shape, default, dtype=DTYPE)
+    cdef np.uint8_t[:,::1] mask = np.zeros(shape, dtype=np.uint8)
+    cdef DTYPE_t val
 
     with nogil:
         for n in xrange(nnz):
             val = values[n]
             if val == val:  # val is not np.nan
-                x = rows[n]
-                y = cols[n]
-                old_val = result[x, y]
-                if old_val == old_val:
-                    result[x, y] = reducer(old_val, val)
+                x, y = rows[n], cols[n]
+                if mask[x, y]:
+                    result[x, y] = reducer(result[x, y], val)
                 else:
                     result[x, y] = val
+                    mask[x, y] = 1
 
-        if default == default:  # default is not nan, so it's done
-            # setting default
-            for x in xrange(result.shape[0]):
-                for y in xrange(result.shape[1]):
-                    val = result[x, y]
-                    if val != val:
-                        result[x, y] = default
-    return result
+    return np.asarray(result)
 
 
 @cython.wraparound(False)
