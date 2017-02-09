@@ -16,6 +16,40 @@ from cpython.ref cimport PyObject
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+cpdef void inplace_reversed_index(ITER values, np.ndarray[ndim=1, dtype=INT1, mode='c'] indices,
+                                  dict position, list unique_values) except *:
+    """
+    >>> values = [4, 4, 'r', 'r', 2]
+    >>> indices = np.zeros(len(values), dtype=np.int)
+    >>> position = {}
+    >>> unique_values = []
+    >>> inplace_reversed_index(values, indices, position, unique_values)
+    >>> unique_values
+    [4, 'r', 2]
+    >>> indices
+    array([0, 0, 1, 1, 2])
+    """
+    cdef INT1 nb = len(values), i, ind, count = len(unique_values)
+    cdef PyObject *obj
+    cdef object val
+
+    assert len(indices) >= nb
+
+    for i in xrange(nb):
+        val = values[i]
+        obj = PyDict_GetItem(position, val)
+        if obj is not NULL:
+            ind = <object>obj
+            indices[i] = ind
+        else:
+            position[val] = count
+            indices[i] = count
+            unique_values.append(val)
+            count += 1
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cpdef tuple reversed_index(ITER values):
     """
     >>> reversed_index([4, 4, 'r', 'r', 2])

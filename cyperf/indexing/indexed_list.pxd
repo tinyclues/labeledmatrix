@@ -1,6 +1,9 @@
 cimport numpy as np
-from cyperf.tools.types cimport bool, ITYPE_t, ITER
+from cyperf.tools.types cimport bool, ITYPE_t, ITER, INT1
 from cyperf.tools.getter cimport check_values
+
+cpdef void inplace_reversed_index(ITER values, np.ndarray[ndim=1, dtype=INT1, mode='c'] indices,
+                                  dict position, list unique_values) except *
 
 cpdef tuple reversed_index(ITER values)
 
