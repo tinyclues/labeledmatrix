@@ -8,6 +8,7 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 from sklearn.linear_model import Ridge
 
 from karma.core.curve import compute_mean_curve, gain_from_prediction, nonbinary_gain_from_prediction
+from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import safe_hstack
 
 
@@ -59,18 +60,18 @@ def sklearn_regression_model(X, y, regression_class, **kwargs):
     return clf.predict(X), clf
 
 
-def create_meta_of_regression(prediction, Y, test_curves=None, train_mse=None, test_mses=None):
-    binary_prediction = (set(np.unique(prediction)) - {0, 1, 0., 1.}) == set()
+def create_meta_of_regression(prediction, y, test_curves=None, train_mse=None, test_mses=None):
+    binary_prediction = is_binary(y) and np.max(prediction) <= 1. and np.min(prediction) >= 0.
     if binary_prediction:
         curve_method = gain_from_prediction
-    elif np.min(Y) >= 0:
+    elif np.min(y) >= 0:
         curve_method = nonbinary_gain_from_prediction
     else:
         curve_method = None
 
     meta = {}
     if curve_method is not None:
-        curves = curve_method(prediction, Y)
+        curves = curve_method(prediction, y)
         if binary_prediction:
             curves.guess = gain_from_prediction(prediction)
 
