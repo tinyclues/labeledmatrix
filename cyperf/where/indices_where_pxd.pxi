@@ -19,7 +19,6 @@ ctypedef fused VAL_T:
     long
     float
     double
-    str
     object
 
 

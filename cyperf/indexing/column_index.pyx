@@ -7,7 +7,6 @@
 
 import numpy as np
 
-from cyperf.where import get_module
 from libc.string cimport memcpy
 from cpython.sequence cimport PySequence_Check
 from cpython.ref cimport PyObject

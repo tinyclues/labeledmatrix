@@ -1,3 +1,8 @@
+#cython: embedsignature=True
+#cython: wraparound=False
+#cython: boundscheck=False
+
+
 import cython
 from cpython cimport PyAnySet_Check, PyDict_Check, PyNumber_Check, PyBool_Check
 from cpython.sequence cimport PySequence_Check
@@ -55,8 +60,7 @@ cpdef inline bool has_contains_attr(object value) except? False:
     else:
         return hasattr(value, '__contains__')  # very long call
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
+
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where(ITER column, object value=None):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
@@ -68,8 +72,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where(ITER column, object value=
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not(ITER column, object value=None):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
@@ -81,8 +83,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not(ITER column, object va
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_in(ITER column, object value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
@@ -100,8 +100,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_in(ITER column, object val
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_in(ITER column, object value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
@@ -119,147 +117,72 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_in(ITER column, object
     return result.asarray()
 
 
-cdef bool is_iter_object_type(column):
-    return not (isinstance(column, np.ndarray) and column.dtype.str != 'O')
-
-cdef bool is_object_type(VAL_T value):
-    return cython.typeof(value) == "Python object"
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_eq(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_eq(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_eq(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] == value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_ne(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_ne(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_ne(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] != value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_lt(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_lt(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_lt(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] < value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_le(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_le(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_le(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] <= value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_gt(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_gt(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_gt(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] > value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_ge(ITER column, VAL_T value):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    if not is_iter_object_type(column) and is_object_type(value):
-        try:
-            return indices_where_ge(column,  <double?>value)
-        except TypeError:  # non-numeric type
-            return result.asarray()  # empty array
-    if is_iter_object_type(column) and not is_object_type(value):
-        return indices_where_ge(column,  <object>value)
-
-    # main loop
     for i in xrange(size):
         if column[i] >= value:
             result.append(i)
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_between(ITER column, object value):
     check_values(column, dtype=ITYPE)
     cdef object down = value[0], up = value[1]
@@ -272,8 +195,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_between(ITER column, objec
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_contains(ITER column, object value):
     check_values(column, dtype=ITYPE)
     cdef object x
@@ -287,8 +208,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_contains(ITER column, obje
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_contains(ITER column, object value):
     check_values(column, dtype=ITYPE)
     cdef object x
@@ -302,8 +221,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_contains(ITER column, 
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_operator(ITER column,
                                                                object operator_function,
                                                                object value):
@@ -317,8 +234,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_operator(ITER column,
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_callable(ITER column, object fn):
     check_values(column, dtype=ITYPE)
     cdef ITYPE_t i, size = len(column)
@@ -330,8 +245,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_callable(ITER column, obje
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_same(ITER column1, ITER_BIS column2):
     check_values(column1, dtype=ITYPE)
     check_values(column2, dtype=ITYPE)
@@ -345,8 +258,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_same(ITER column1, ITER_BI
     return result.asarray()
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_same(ITER column1, ITER_BIS column2):
     check_values(column1, dtype=ITYPE)
     check_values(column2, dtype=ITYPE)
