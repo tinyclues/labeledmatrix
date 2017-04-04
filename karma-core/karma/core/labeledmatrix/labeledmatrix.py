@@ -1737,12 +1737,9 @@ class LabeledMatrix(object):
             raise LabeledMatrixException("Unknown default {}".format(default))
         if self.is_sparse:
             v_default = KarmaSparse(v_default).tocsr()
-        sequence = KarmaSequence()
-        sequence.append(Map(inputs, output, dict(zip(self.row, self.matrix)),
-                        v_default))
-        sequence[0].coordinates = self.column
-        sequence[0].default = v_default
-        return KarmaCode(instructions=sequence, outputs=(output,))
+
+        instruction = Map(inputs, output, dict(zip(self.row, self.matrix)), v_default, coordinates=self.column)
+        return KarmaCode(instructions=[instruction], outputs=(output,))
 
     def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
         """
