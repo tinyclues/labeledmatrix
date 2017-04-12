@@ -95,10 +95,42 @@ cpdef bool is_strictly_increasing(ITER x) except? 0:
     False
     >>> is_strictly_increasing([4, 5, 9])
     True
+    >>> is_strictly_increasing(['a', 'b', 'c'])
+    True
+    >>> is_strictly_increasing(np.array(['2017-03-31', '2017-03-31', '2017-04-05'], dtype='datetime64[D]'))
+    False
     """
+    if isinstance(x, np.ndarray) and x.dtype.kind in ['S', 'U', 'M']:
+        return x.size == 0 or np.all(x[1:] > x[:x.size - 1])
+
     cdef ITYPE_t i, nb = len(x)
     for i in xrange(nb - 1):
         if x[i] >= x[i+1]:
+            return 0
+    return 1
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef bool is_increasing(ITER x) except? 0:
+    """
+    >>> is_increasing([4, 4, 5])
+    True
+    >>> is_increasing([4, 3, 5])
+    False
+    >>> is_increasing([4, 5, 9])
+    True
+    >>> is_increasing(['a', 'a', 'c'])
+    True
+    >>> is_increasing(np.array(['2017-03-31', '2017-03-31', '2017-04-05'], dtype='datetime64[D]'))
+    True
+    """
+    if isinstance(x, np.ndarray) and x.dtype.kind in ['S', 'U', 'M']:
+        return x.size == 0 or np.all(x[1:] >= x[:x.size - 1])
+
+    cdef ITYPE_t i, nb = len(x)
+    for i in xrange(nb - 1):
+        if x[i] > x[i+1]:
             return 0
     return 1
 

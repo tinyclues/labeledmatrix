@@ -23,6 +23,14 @@ def get_index_dtype(size):
         return np.int32
 
 
+def is_iterable(inp):
+    try:
+        iter(inp)
+        return True
+    except TypeError:
+        return False
+
+
 def unique_indices(values, reverse=False):
     """
     >>> unique_indices([3, 3, 2, 0, 2, 1, 0], False)
@@ -86,7 +94,7 @@ class ColumnIndex(object):
             self.indices = args[2]
             self.reversed_indices = args[3]
             self.indptr = args[4]
-        else:
+        elif len(args) == 1 and hasattr(args[0], '__call__'):
             # the main purpose of this index is for a given list (numpy array or other data structure)
             # to obtain indices of a given value
             # let [c, b, a, a, b, b, d] be the list of values of a Column which we pass to ColumnIndex constructor
@@ -105,12 +113,21 @@ class ColumnIndex(object):
             # and finally we take indices[indptr[pos]: indptr[pos + 1]] (see __getitem__(self, value))
 
             # we check if the the first argument is a method (Backend._getitem__)
-            assert hasattr(args[0], '__call__')
             self._values = args[0]
 
             self.position, self.reversed_indices, n_keys = factorize(self._values(slice(None, None, None)))
             self.indptr = np.zeros(n_keys + 1, dtype=get_index_dtype(len(self.reversed_indices) + 1))
             _, self.indices = groupsort_indexer(self.indptr, self.reversed_indices)
+        elif len(args) == 1 and is_iterable(args[0]):  # raw values in args[0]
+            values = args[0]
+            ll = len(values)
+
+            def call_method(indices):
+                return take_indices(values, indices, ll)
+
+            self.__init__(call_method)
+        else:
+            raise ValueError(args)
 
     # TODO we need to serialize ColumnIndex together with Column, as we need a ref to backend.__getitem__() method
 

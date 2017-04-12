@@ -1,8 +1,9 @@
 cimport cython
 cimport numpy as np
+from cython.parallel cimport parallel, prange
 from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, string, A, B
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
-from routine cimport (logistic, get_reducer, binary_func, mult, axpy, scalar_product, computed_quantile)
+from routine cimport (logistic, get_reducer, binary_func, mult, axpy, scalar_product, computed_quantile, mmax)
 
 
 # ctypedef (ITYPE_t, ITYPE_t) Shape_t  # BUG in cython : this type not cimportable
@@ -16,6 +17,37 @@ cdef bool check_nonzero_shape(shape) except 0
 cdef bool check_bounds(ITYPE_t row, ITYPE_t upper_bound) except 0
 cdef bool check_ordered(ITYPE_t row0, ITYPE_t row1, bool strict) except 0
 cdef bool check_shape_comptibility(x1, x2) except 0
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
+                                           DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
+    cdef:
+        ITYPE_t i
+        LTYPE_t j
+
+    with nogil:
+        for i in prange(nrows, schedule='guided'):
+            for j in xrange(indptr[i], indptr[i + 1]):
+                out[i] += data[j] * vector[indices[j]]
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void _misaligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
+                                              DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
+    cdef:
+        ITYPE_t i
+        LTYPE_t j
+        DTYPE_t val
+
+    with nogil:
+        for i in xrange(nrows):
+            val = vector[i]
+            if val != 0:
+                for j in xrange(indptr[i], indptr[i + 1]):
+                    out[indices[j]] += val * data[j]
 
 
 @cython.wraparound(False)
@@ -59,6 +91,8 @@ cdef class KarmaSparse:
     cdef bool from_coo(self, data, ix, iy, shape=*, format=*, string aggregator=*) except 0
 
     cdef bool check_internal_structure(self, bool full=*) except 0
+
+    cdef bool check_positive(self) except 0
 
     cdef bool prune(self) except 0
 
@@ -202,6 +236,8 @@ cdef class KarmaSparse:
 
     cpdef KarmaSparse scale_along_axis(self, np.ndarray factor, axis)
 
+    cpdef KarmaSparse scale_along_axis_inplace(self, np.ndarray factor, axis)
+
     cdef KarmaSparse aligned_compatibility_renormalization(self, ITYPE_t[::1] row_gender,
                                                            ITYPE_t[::1] column_gender,
                                                            DTYPE_t homo_factor,
@@ -233,9 +269,9 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, np.ndarray matrix)
 
-    cdef np.ndarray[float, ndim=2] aligned_dense_maxagg(self, np.ndarray matrix)
+    cdef np.ndarray[float, ndim=2] aligned_dense_agg(self, np.ndarray matrix, binary_func fn=*)
 
-    cdef np.ndarray[float, ndim=2] misaligned_dense_maxarg(self, np.ndarray matrix)
+    cdef np.ndarray[float, ndim=2] misaligned_dense_agg(self, np.ndarray matrix, binary_func fn=*)
 
     cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b,
                                               binary_func op)
@@ -257,6 +293,10 @@ cdef class KarmaSparse:
     cdef KarmaSparse add(self, KarmaSparse other)
 
     cdef KarmaSparse multiply(self, KarmaSparse other)
+
+    cdef KarmaSparse kronii_align_dense(self, cython.floating[:,:] other)
+
+    cdef KarmaSparse kronii_align_sparse(self, KarmaSparse other)
 
     cdef KarmaSparse divide(self, KarmaSparse other)
 
@@ -288,3 +328,8 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse restrict_along_column(self, key)
 
+    cdef KarmaSparse aligned_sparse_agg(self, KarmaSparse other, binary_func fn=*)
+
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, DTYPE_t[::1] vector)
+
+    cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector)

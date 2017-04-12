@@ -877,15 +877,129 @@ class TestKarmaSparse(unittest.TestCase):
         expected5 = np.array([[7., -1.], [0., 5.]])
         np.testing.assert_equal(res5, expected5)
 
-        def test_dense_pivot2(self):
-            for _ in xrange(200):
-                size = np.random.randint(0, 10 ** 3)
-                shape = (np.random.randint(1, 100), np.random.randint(1, 100))
-                x = np.random.randint(0, shape[0], size)
-                y = np.random.randint(0, shape[1], size)
-                val = np.random.rand(size)
-                agg = random.choice(['add', 'min', 'max', 'last', 'first'])
-
+    def test_dense_pivot2(self):
+        for _ in xrange(50):
+            size = np.random.randint(0, 10 ** 3)
+            shape = (np.random.randint(1, 100), np.random.randint(1, 100))
+            x = np.random.randint(0, shape[0], size).astype(np.int32)
+            y = np.random.randint(0, shape[1], size).astype(np.int32)
+            val = np.random.rand(size)
+            for agg in ['add', 'min', 'max', 'last', 'first']:
                 res_dense = dense_pivot(x, y, val, shape=shape, aggregator=agg, default=0.)
                 res_sparse = KarmaSparse((val, (x, y)), shape=shape, format="csr", aggregator=agg)
                 self.assertTrue(eq(res_dense, res_sparse))
+
+    def test_dot_vector(self):
+        for a in self.mf.iterator(dense=True):
+            ks = KarmaSparse(a)
+            vec1 = np.random.randn(ks.shape[1])
+            vec0 = np.random.randn(ks.shape[0])
+            np.testing.assert_array_almost_equal(ks.dot(vec1), ks.toarray().dot(vec1))
+            np.testing.assert_array_almost_equal(ks.tocsc().dot(vec1), ks.toarray().dot(vec1))
+            np.testing.assert_array_almost_equal(ks.T.dot(vec0), ks.toarray().T.dot(vec0))
+            np.testing.assert_array_almost_equal(ks.tocsc().T.dot(vec0), ks.toarray().T.dot(vec0))
+
+
+    def test_agg_multiplication_raises(self):
+        a = np.array([[1, -1, 0],
+                      [0, -2, -1],
+                      [2, 0, 0]], dtype=np.float)
+        b = np.array([[0, 1, 3],
+                      [-1, 1, 1],
+                      [5, 0, 2]], dtype=np.float)
+        a_sp = KarmaSparse(a, format='csr')
+        b_sp = KarmaSparse(b, format='csr')
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.dense_shadow(b)
+        self.assertEqual('KarmaSparse contains negative values while only positive are expected',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.sparse_shadow(b_sp)
+        self.assertEqual('KarmaSparse contains negative values while only positive are expected',
+                         str(e.exception))
+
+        a[a < 0] = 0
+        a_sp = KarmaSparse(a, format='csr')
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.dense_shadow(b)
+        self.assertEqual('Numpy matrix contains negative values while only positive are expected',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.tocsc().dense_shadow(b)
+        self.assertEqual('Numpy matrix contains negative values while only positive are expected',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.sparse_shadow(b_sp)
+        self.assertEqual('KarmaSparse contains negative values while only positive are expected',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.dense_shadow(b, reducer='foo')
+        self.assertEqual('Unsupported reducer "foo", choose one from max, add',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = a_sp.sparse_shadow(b_sp, reducer='min')
+        self.assertEqual('Unsupported reducer "min", choose one from max, add',
+                         str(e.exception))
+
+    def test_agg_multiplication(self):
+        a = np.array([[1, 1, 0],
+                      [1, 2, 1],
+                      [2, 0, 0]], dtype=np.float)
+        b = np.array([[0, 1, 3],
+                      [1, 1, 1],
+                      [5, 0, 2]], dtype=np.float)
+        a_sp = KarmaSparse(a, format='csr')
+        b_sp = KarmaSparse(b, format='csr')
+
+        np.testing.assert_array_almost_equal(a_sp.dense_shadow(b),
+                                             [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
+        np.testing.assert_array_almost_equal(a_sp.sparse_shadow(b_sp),
+                                             [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
+
+        # # FIXME the result should be [[0, 0, 0], [0, 0, 2], [0, 0, 0]]
+        # np.testing.assert_array_almost_equal(a_sp.dense_shadow(b, reducer='min'),
+        #                                      [[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+        # np.testing.assert_array_almost_equal(a_sp.sparse_shadow(b_sp, reducer='min'),
+        #                                      [[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+
+        np.testing.assert_array_almost_equal(a_sp.dense_shadow(b, reducer='add'),
+                                             a.dot(b))
+        np.testing.assert_array_almost_equal(a_sp.sparse_shadow(b_sp, reducer='add'),
+                                             a.dot(b))
+
+    def test_agg_multiplication_random(self):
+        for a in self.mf.iterator(dense=True):
+            a[a < 0] = 0
+            ks = KarmaSparse(a, format='csr')
+            for other_matrix in [np.random.randn(*ks.shape).T, 2 * np.random.randint(-1, 2, size=ks.shape).T,
+                                 np.random.poisson(0.01, size=ks.shape).T]:
+                other_matrix[other_matrix < 0] = 0
+                other = KarmaSparse(other_matrix, format='csr')
+                for agg in ['max', 'add']:
+                    dense_res = ks.dense_shadow(other_matrix, reducer=agg)
+                    np.testing.assert_array_almost_equal(ks.sparse_shadow(other, reducer=agg), dense_res)
+                    np.testing.assert_array_almost_equal(ks.sparse_shadow(other.tocsc(), reducer=agg), dense_res)
+                    np.testing.assert_array_almost_equal(ks.tocsc().sparse_shadow(other, reducer=agg), dense_res)
+                    np.testing.assert_array_almost_equal(ks.tocsc().sparse_shadow(other.tocsc(), reducer=agg),
+                                                         dense_res)
+
+    def test_pointwise_multiplication(self):
+        for a in self.mf.iterator(dense=True):
+            b1 = np.random.randint(0, 3, size=a.shape)
+            b2 = np.random.randint(0, 3, size=a.shape[1])
+            b3 = np.random.randint(0, 3, size=(1, a.shape[1]))
+            b4 = np.random.randint(0, 3, size=(a.shape[0], 1))
+
+            for b in [b1, b2, b3, b4]:
+                expected_result = a * b
+                self.assertTrue(eq(expected_result, KarmaSparse(a) * b))
+                self.assertTrue(eq(expected_result, a * KarmaSparse(b)))
+                self.assertTrue(eq(expected_result, KarmaSparse(a) * KarmaSparse(b)))
+                self.assertTrue(eq(expected_result, KarmaSparse(b) * KarmaSparse(a)))

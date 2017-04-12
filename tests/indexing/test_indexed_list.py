@@ -9,8 +9,7 @@ from numpy.testing import assert_array_equal
 from cyperf.indexing.indexed_list import inplace_reversed_index, reversed_index
 
 
-class testReversedIndex(unittest.TestCase):
-
+class TestReversedIndex(unittest.TestCase):
     def test_reversed_index(self):
         unique_values_1, indices_1 = reversed_index([4, 'a'])
 

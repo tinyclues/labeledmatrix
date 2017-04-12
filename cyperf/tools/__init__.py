@@ -47,6 +47,7 @@ def logit_inplace(x, shift=0., width=1.):
     x *= 0.5
     return x
 
+
 def take_indices(iterable, indices, length=None):
     """
     >>> x = np.array([3, 4, 5.])

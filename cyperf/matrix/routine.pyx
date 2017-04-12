@@ -9,6 +9,7 @@ from cyperf.tools.sort_tools cimport partial_sort
 from libc.string cimport memcpy
 from libc.stdlib cimport malloc, free
 import numpy as np
+cimport numpy as np
 
 from cython.parallel import prange
 
@@ -22,6 +23,33 @@ REDUCERLIST['first'] = first
 REDUCERLIST['last'] = last
 REDUCERLIST['complement'] = complement
 REDUCERLIST['truncated_difference'] = trunc_diff
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.cdivision(True)
+cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITER x):
+    """Return the index where to insert item x in list a, assuming a is sorted.
+
+    The return value i is such that all e in a[:i] have e < x, and all e in
+    a[i:] have e >= x.  So if x already appears in the list, a.insert(x) will
+    insert just before the leftmost x already there.
+    """
+    cdef long lo, hi, mid, nb = len(x), i
+    cdef int[::1] out = np.zeros(nb, dtype=np.int32)
+
+    for i in xrange(nb):
+        o = x[i]
+        lo = 0
+        hi = len(a)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if a[mid] < o:
+                lo = mid + 1
+            else:
+                hi = mid
+        out[i] = lo
+    return np.asarray(out)
 
 
 cdef binary_func get_reducer(string x) nogil except *:
@@ -127,3 +155,141 @@ def kronii(A[:,:] a, B[:,:] b):
                     result[ia, ind] = a[ia, ja] * b[ia, jb]
                     ind += 1
     return np.asarray(result)
+
+
+# That can be viewed as new KarmaSparse operation
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def indices_truncation(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+    """
+    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
+    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
+    >>> indptr = np.array([0, 13, 23])
+    >>> ll = np.array([3, 5])
+    >>> bb = np.array([14, 19])
+    >>> indices_truncation(indices, indptr, ll, bb)
+    (array([ 3,  6,  7,  8,  9, 10, 11,  5,  8, 10, 12, 13, 15, 18], dtype=int32), array([ 0,  7, 14]))
+    """
+    cdef LTYPE_t nrows = indptr.shape[0] - 1
+    if nrows <= 0:
+        return np.asarray(indices), np.asarray(indptr)
+
+    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
+    assert indptr[nrows] == indices.shape[0]
+
+    cdef LTYPE_t nnz = indptr[nrows], j, i, pos = 0, ll, uu
+    cdef INT1 ind
+
+    cdef INT1[::1] truncated_indices = np.zeros_like(np.asarray(indices))
+    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+
+    with nogil:
+        for i in xrange(nrows):
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll >= uu:
+                truncated_indptr[i + 1] = truncated_indptr[i]
+                continue
+            for j in xrange(indptr[i], indptr[i+1]):
+                ind = indices[j]
+                if ind < ll:
+                    continue
+                elif ind >= uu:
+                    break
+                else:
+                    truncated_indices[pos] = ind
+                    pos += 1
+            truncated_indptr[i + 1] = pos
+
+    return np.asarray(truncated_indices)[:pos].copy(), np.asarray(truncated_indptr)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def first_indices(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+    """
+    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
+    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
+    >>> indptr = np.array([0, 13, 23])
+    >>> ll = np.array([3, 5])
+    >>> bb = np.array([14, 19])
+    >>> first_indices(indices, indptr, ll, bb)
+    (array([3, 5], dtype=int32), array([0, 1, 2]))
+    """
+    cdef LTYPE_t nrows = indptr.shape[0] - 1
+    if nrows <= 0:
+        return np.asarray(indices), np.asarray(indptr)
+
+    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
+    assert indptr[nrows] == indices.shape[0]
+
+    cdef LTYPE_t nnz = indptr[nrows], j, i, pos = 0, ll, uu
+    cdef INT1 ind
+
+    cdef INT1[::1] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
+    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+
+    with nogil:
+        for i in xrange(nrows):
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll >= uu:
+                truncated_indptr[i + 1] = truncated_indptr[i]
+                continue
+            for j in xrange(indptr[i], indptr[i + 1]):
+                ind = indices[j]
+                if ind < ll:
+                    continue
+                elif ind >= uu:
+                    break
+                else:
+                    truncated_indices[pos] = ind
+                    pos += 1
+                    break
+            truncated_indptr[i + 1] = pos
+
+    return np.asarray(truncated_indices)[:pos].copy(), np.asarray(truncated_indptr)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def last_indices(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+    """
+    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
+    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
+    >>> indptr = np.array([0, 13, 23])
+    >>> ll = np.array([3, 5])
+    >>> bb = np.array([14, 19])
+    >>> last_indices(indices, indptr, ll, bb)
+    (array([11, 18], dtype=int32), array([0, 1, 2]))
+    """
+    cdef LTYPE_t nrows = indptr.shape[0] - 1
+    if nrows <= 0:
+        return np.asarray(indices), np.asarray(indptr)
+
+    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
+    assert indptr[nrows] == indices.shape[0]
+
+    cdef LTYPE_t nnz = indptr[nrows], j, i, pos = 0, ll, uu
+    cdef INT1 ind
+
+    cdef INT1[::1] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
+    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+
+    with nogil:
+        for i in xrange(nrows):
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll >= uu:
+                truncated_indptr[i + 1] = truncated_indptr[i]
+                continue
+            for j in xrange(indptr[i + 1] - 1, indptr[i] - 1, -1):
+                ind = indices[j]
+                if ind < ll:
+                    break
+                elif ind >= uu:
+                    continue
+                else:
+                    truncated_indices[pos] = ind
+                    pos += 1
+                    break
+            truncated_indptr[i + 1] = pos
+
+    return np.asarray(truncated_indices)[:pos].copy(), np.asarray(truncated_indptr)

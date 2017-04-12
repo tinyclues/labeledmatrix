@@ -1,5 +1,5 @@
 cimport cython
-from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, cmap, string, binary_func, bool, A, B
+from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, cmap, string, binary_func, bool, A, B, INT1, INT2, ITER
 from scipy.linalg.cython_blas cimport daxpy, ddot
 from libc.math cimport log
 # Warning : type of blas routines should be compatible with DTYPE_t
