@@ -30,7 +30,7 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE
     with nogil:
         for i in prange(nrows, schedule='guided'):
             for j in xrange(indptr[i], indptr[i + 1]):
-                out[i] += data[j] * vector[indices[j]]
+                out[i] = out[i] + data[j] * vector[indices[j]]
 
 
 @cython.wraparound(False)
