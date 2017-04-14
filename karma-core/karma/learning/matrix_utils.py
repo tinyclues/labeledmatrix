@@ -318,6 +318,8 @@ def pseudo_element_inverse(matrix, scalar=1.):
         mat.data = scalar / matrix.data
     elif is_karmasparse(matrix):
         return scalar / matrix
+    elif np.isscalar(matrix):
+        return scalar / matrix
     else:
         mat = np.zeros(matrix.shape)
         mat[matrix != 0] = scalar / matrix[matrix != 0]
@@ -822,16 +824,11 @@ def safe_multiply(x, y, dense_output=False):
         x = KarmaSparse(x)
     if is_scipysparse(y):
         y = KarmaSparse(y)
-    if np.isscalar(x) or np.isscalar(y):
-        return x * y
-    elif is_karmasparse(x) and is_karmasparse(y):
-        return x * y
-    elif is_karmasparse(x):
-        return x * KarmaSparse(y, format=x.format)
-    elif is_karmasparse(y):
-        return y * KarmaSparse(x, format=y.format)
+
+    if is_karmasparse(y) and not is_karmasparse(x):
+        return y * x
     else:
-        return np.multiply(x, y)
+        return x * y
 
 
 def kl_div(mat1, mat2):
