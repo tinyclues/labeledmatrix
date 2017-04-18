@@ -1003,3 +1003,16 @@ class TestKarmaSparse(unittest.TestCase):
                 self.assertTrue(eq(expected_result, a * KarmaSparse(b)))
                 self.assertTrue(eq(expected_result, KarmaSparse(a) * KarmaSparse(b)))
                 self.assertTrue(eq(expected_result, KarmaSparse(b) * KarmaSparse(a)))
+
+    def test_scale_along_axis(self):
+        for a in self.mf.iterator(dense=False):
+            a = KarmaSparse(a)
+            for _ in xrange(10):
+                w1 = np.random.rand(a.shape[0])
+                w2 = np.random.randint(-2, 3, size=a.shape[1])
+                expected = w2 * (w1 * a.toarray().T).T
+                for mat in [a, a.tocsc()]:
+                    result = mat.scale_along_axis(w1, axis=1) \
+                        .scale_along_axis(w2, axis=0)
+                    self.assertTrue(eq(result, expected))
+                    self.assertTrue(isinstance(result, KarmaSparse))
