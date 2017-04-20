@@ -35,6 +35,25 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
+                            cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result):
+    cdef LTYPE_t i, j, k
+    cdef ITYPE_t ind
+    cdef DTYPE_t out, dd
+
+    with nogil:
+        for i in prange(nrows, schedule='guided'):
+            out = 0
+            for j in xrange(indptr[i], indptr[i + 1]):
+                ind = indices[j]
+                dd = data[j]
+                for k in xrange(size):
+                    out = out + dd * matrix[i * size + k] * factor[ind * size + k]
+            result[i] = out
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef inline void _misaligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
                                               DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
     cdef:

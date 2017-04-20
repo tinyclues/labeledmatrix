@@ -1016,3 +1016,12 @@ class TestKarmaSparse(unittest.TestCase):
                         .scale_along_axis(w2, axis=0)
                     self.assertTrue(eq(result, expected))
                     self.assertTrue(isinstance(result, KarmaSparse))
+
+    def test_kronii_test(self):
+        for a in self.mf.iterator(dense=True):
+            sparse = KarmaSparse(a, copy=False)
+            dense = np.random.rand(a.shape[0], np.random.randint(1, 30))
+            factor = np.random.rand(a.shape[1] * dense.shape[1])
+            expected_result = sparse.kronii(dense).dot(factor)
+            for b in [dense, dense.astype(np.float32)]:
+                self.assertTrue(eq(expected_result, sparse.kronii_dot(b, factor)))
