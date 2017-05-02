@@ -2072,8 +2072,8 @@ cdef class KarmaSparse:
             return self.copy()
         elif axis is not None:
             vnorm[vnorm != 0] = 1.0 / vnorm[vnorm != 0]
-        factor = cython_power(vnorm, invpow)
-        factor *= cython_power(np.log1p(vnorm), invlog)
+        factor = np.power(vnorm, invpow)
+        factor *= np.power(np.log1p(vnorm), invlog)
         if threshold is not None:
             factor /= logit(vnorm, threshold, width)
         if axis is None:
