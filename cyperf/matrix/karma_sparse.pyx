@@ -14,12 +14,25 @@ from cyperf.tools import logit
 from libc.string cimport memset, memcpy
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.stdlib cimport RAND_MAX, rand, srand
-from libc.math cimport pow as cpow
 from libc.math cimport fabs
 
 cdef string CSR = 'csr'
 cdef string CSC = 'csc'
 cdef string DEFAULT_AGG = 'add'
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef np.ndarray[ndim=1, dtype=DTYPE_t] cython_power(DTYPE_t[::1] a, const double p):
+    cdef:
+        LTYPE_t i, nb = a.shape[0]
+        DTYPE_t[::1] result = np.zeros(nb, dtype=DTYPE)
+
+    with nogil:
+        for i in xrange(nb):
+            result[i] = cpow(a[i], p)
+    return np.array(result)
+
 
 cdef Shape_t pair_swap(Shape_t x):
     return (x[1], x[0])
@@ -1154,7 +1167,7 @@ cdef class KarmaSparse:
         return self.apply_pointwise_function(np.sqrt)
 
     cpdef KarmaSparse power(self, DTYPE_t p):
-        return self.apply_pointwise_function(np.power, [p])
+        return self.apply_pointwise_function(cython_power, [p])
 
     cpdef KarmaSparse clip(self, lower, upper=None):
         return self.apply_pointwise_function(np.clip, [lower, upper])
@@ -2035,7 +2048,7 @@ cdef class KarmaSparse:
 
     def sum_power(self, power, axis=None):
         if axis is None:
-            return np.sum(np.power(np.asarray(self.data), power))
+            return np.sum(cython_power(np.asarray(self.data), power))
         else:
             if self.aligned_axis(axis):
                 return self.aligned_sum_power(power)
@@ -2059,8 +2072,8 @@ cdef class KarmaSparse:
             return self.copy()
         elif axis is not None:
             vnorm[vnorm != 0] = 1.0 / vnorm[vnorm != 0]
-        factor = np.power(vnorm, invpow)
-        factor *= np.power(np.log1p(vnorm), invlog)
+        factor = cython_power(vnorm, invpow)
+        factor *= cython_power(np.log1p(vnorm), invlog)
         if threshold is not None:
             factor /= logit(vnorm, threshold, width)
         if axis is None:

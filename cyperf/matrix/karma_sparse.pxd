@@ -1,6 +1,7 @@
 cimport cython
 cimport numpy as np
 from cython.parallel cimport parallel, prange
+from libc.math cimport pow as _cpow
 from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, string, A, B
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
 from routine cimport (logistic, get_reducer, binary_func, mult, axpy, scalar_product, computed_quantile, mmax)
@@ -17,6 +18,17 @@ cdef bool check_nonzero_shape(shape) except 0
 cdef bool check_bounds(ITYPE_t row, ITYPE_t upper_bound) except 0
 cdef bool check_ordered(ITYPE_t row0, ITYPE_t row1, bool strict) except 0
 cdef bool check_shape_comptibility(x1, x2) except 0
+
+
+cdef inline double cpow(double x, double y) nogil:
+    if y == 2:
+        return x * x
+    elif y == 3:
+        return x * x * x
+    elif y == 1:
+        return x
+    else:
+        return _cpow(x, y)
 
 
 @cython.wraparound(False)
