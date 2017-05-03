@@ -33,6 +33,48 @@ cdef inline double cpow(double x, double y) nogil:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+cdef inline void _linear_error_dense(cython.floating[:,::1] inp, DTYPE_t[:,::1] matrix,
+                                     DTYPE_t * tmp, DTYPE_t * out,
+                                     DTYPE_t* column, DTYPE_t* row) nogil:
+        cdef:
+            ITYPE_t n_rows = inp.shape[0], n_inter = inp.shape[1], n_cols = matrix.shape[1]
+            LTYPE_t i, k, j
+            DTYPE_t mx, val, alpha
+
+        for i in xrange(n_rows):
+            mx = row[i]
+            for j in xrange(n_inter):
+                alpha = inp[i, j]
+                if alpha != 0:
+                    axpy(n_cols, alpha, &matrix[j, 0], tmp)
+            for k in xrange(n_cols):
+                val = tmp[k] + mx
+                tmp[k] = column[k]
+                out[k] += val * val
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void _linear_error(LTYPE_t nrows, LTYPE_t n_cols,
+                               LTYPE_t * indptr, ITYPE_t * indices, DTYPE_t * data,
+                               DTYPE_t[:,::1] matrix, DTYPE_t * tmp, DTYPE_t * out,
+                               DTYPE_t* column, DTYPE_t* row) nogil:
+        cdef:
+            LTYPE_t i, k, l, j
+            DTYPE_t mx, val, alpha
+
+        for i in xrange(nrows):
+            mx = row[i]
+            for j in xrange(indptr[i], indptr[i + 1]):
+                axpy(n_cols, data[j], &matrix[indices[j], 0], tmp)
+            for k in xrange(n_cols):
+                val = tmp[k] + mx
+                tmp[k] = column[k]
+                out[k] += val * val
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
                                            DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
     cdef:

@@ -6,6 +6,7 @@ from cyperf.matrix.karma_sparse import KarmaSparse
 from cyperf.matrix.karma_sparse import sp, np, ks_diag
 from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
 from cyperf.matrix.karma_sparse import dense_pivot
+from cyperf.matrix import linear_error
 # from sklearn.preprocessing import normalize as sk_normalize
 # from karma.learning.matrix_utils import normalize
 # from karma.learning.matrix_utils import truncate_by_count
@@ -1025,3 +1026,19 @@ class TestKarmaSparse(unittest.TestCase):
             expected_result = sparse.kronii(dense).dot(factor)
             for b in [dense, dense.astype(np.float32)]:
                 self.assertTrue(eq(expected_result, sparse.kronii_dot(b, factor)))
+
+    def test_linear_error(self):
+        for dense in self.mf.iterator(dense=True):
+            sparse = KarmaSparse(dense, copy=False)
+            regressor = np.random.rand(sparse.shape[1], np.random.randint(1, 30))
+            target = np.random.rand(sparse.shape[0])
+            intercept = np.random.rand(regressor.shape[1])
+
+            expected_result = dense.dot(regressor)
+            expected_result += intercept
+            expected_result += target[:, np.newaxis]
+            expected_result **= 2
+            expected_result = expected_result.sum(axis=0)
+
+            for b in [sparse, dense, dense.astype(np.float32)]:
+                self.assertTrue(eq(expected_result, linear_error(b, regressor, intercept, target)))

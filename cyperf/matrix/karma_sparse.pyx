@@ -23,6 +23,25 @@ cdef string DEFAULT_AGG = 'add'
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+def linear_error_dense(cython.floating[:,::1] inp, DTYPE_t[:,::1] matrix,
+                       DTYPE_t[::1] column, DTYPE_t[::1] row):
+    check_shape_comptibility(inp.shape[1], matrix.shape[0])
+    check_shape_comptibility(matrix.shape[1], column.shape[0])
+    check_shape_comptibility(inp.shape[0], row.shape[0])
+
+    cdef:
+        ITYPE_t n_cols = matrix.shape[1]
+        DTYPE_t[::1] out = np.zeros(n_cols, dtype=DTYPE)
+        DTYPE_t[::1] tmp = column.copy()
+
+    with nogil:
+        _linear_error_dense(inp, matrix, &tmp[0], &out[0], &column[0], &row[0])
+
+    return np.asarray(out)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cpdef np.ndarray[ndim=1, dtype=DTYPE_t] cython_power(DTYPE_t[::1] a, const double p):
     cdef:
         LTYPE_t i, nb = a.shape[0]
@@ -2415,6 +2434,29 @@ cdef class KarmaSparse:
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 axpy(n_cols, self.data[j], &mat[self.indices[j], 0], &out[i, 0])
         return out
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def linear_error(self, DTYPE_t[:,::1] matrix, DTYPE_t[::1] column, DTYPE_t[::1] row):
+        if self.format != CSR:
+            return self.tocsr().linear_error(matrix, column, row)
+
+        check_shape_comptibility(self.ncols, matrix.shape[0])
+        check_shape_comptibility(matrix.shape[1], column.shape[0])
+        check_shape_comptibility(self.nrows, row.shape[0])
+
+        cdef:
+            ITYPE_t n_cols = matrix.shape[1]
+            DTYPE_t[::1] out = np.zeros(n_cols, dtype=DTYPE)
+            DTYPE_t[::1] tmp = column.copy()
+
+        with nogil:
+            _linear_error(self.nrows, n_cols,
+                          &self.indptr[0], &self.indices[0], &self.data[0],
+                          matrix, &tmp[0], &out[0],
+                          &column[0], &row[0])
+
+        return np.asarray(out)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
