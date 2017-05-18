@@ -2642,11 +2642,11 @@ cdef class KarmaSparse:
                         .aligned_sparse_agg(self.transpose(copy=False), fn)\
                         .transpose(copy=False)
 
-    def shadow(self, other):
+    def shadow(self, other, reducer="max"):
         if isinstance(other, np.ndarray):
-            return self.dense_shadow(other)
+            return self.dense_shadow(other, reducer)
         elif is_karmasparse(other):
-            return self.sparse_shadow(other)
+            return self.sparse_shadow(other, reducer)
         else:
             raise ValueError(other)
 
