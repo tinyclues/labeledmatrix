@@ -32,7 +32,8 @@ SOURCE_FILE = [
     'indexing/column_index.pyx',
     'indexing/indexed_list.pyx',
     'where/indices_where_int.pyx',
-    'where/indices_where_long.pyx']
+    'where/indices_where_long.pyx',
+    'hashing/hash_tools.pyx']
 
 
 cargs = ['-O2', '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable',
