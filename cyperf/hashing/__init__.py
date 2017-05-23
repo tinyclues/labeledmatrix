@@ -1,10 +1,17 @@
 import numpy as np
 
-from .hash_tools import hash_numpy_string, hasher_numpy_string
+from .hash_tools import hash_numpy_string, hash_generic_string, hasher_numpy_string
 from .hash_tools import hash_numpy_string_with_many_seeds as _hash_numpy_string_with_many_seeds
 from .hash_tools import randomizer_numpy_string as _randomizer_numpy_string
 from .hash_tools import randomizer_python_string as _randomizer_python_string
 from .hash_tools import increment_over_numpy_string as _increment_over_numpy_string
+
+
+def hash_string(arr, seed):
+    if isinstance(arr, np.ndarray) and arr.dtype.kind == 'S':
+        return hash_numpy_string(arr, seed)
+    else:
+        return hash_generic_string(arr, seed)
 
 
 def hash_numpy_string_with_many_seeds(keys, seeds):

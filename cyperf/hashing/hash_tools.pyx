@@ -1,9 +1,9 @@
 #cython: boundscheck=False, wraparound=False, unraisable_tracebacks=True
 
 import numpy as np
-from cython.parallel import prange, parallel
+from cython.parallel import prange
 cimport cython
-from cyperf.tools.types cimport A
+from cyperf.tools.types cimport A, ITER
 
 
 cdef np.ndarray[char, ndim=2, mode="c"] safe_convertor(np.ndarray keys):
@@ -11,14 +11,36 @@ cdef np.ndarray[char, ndim=2, mode="c"] safe_convertor(np.ndarray keys):
     return np.ascontiguousarray(keys).view(np.int8).reshape(len(keys), keys.dtype.itemsize)
 
 
-cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray keys, signed int seed):
+cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray keys, unsigned int seed):
     cdef char[:,::1] keys_str = safe_convertor(keys)
     cdef long k, n = len(keys), size = keys.dtype.itemsize
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
+    cdef char* ch
 
     with nogil:
         for k in xrange(n):
-            result[k] = Hash32WithSeed(&keys_str[k, 0], size, seed)
+            ch = &keys_str[k, 0]
+            result[k] = Hash32WithSeed(ch, python_string_length(ch, size), seed)
+    return np.array(result)
+
+
+cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, unsigned int seed):
+    cdef long k, n = len(keys)
+    cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
+    cdef char* ch
+    cdef object x
+
+    for k in xrange(n):
+        x = keys[k]
+        if not PyString_Check(x):
+            try:
+                x = str(x)
+            except:
+                x = ""
+
+        ch = PyString_AsString(x)
+        size = len(x)
+        result[k] = Hash32WithSeed(ch, size, seed)
     return np.array(result)
 
 
