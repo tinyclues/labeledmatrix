@@ -105,7 +105,7 @@ def increment_over_numpy_string(np.ndarray keys,
     cdef long k, i, j, seg, group
     cdef signed int total = np.array(composition).sum()
     cdef A val
-    cdef double ratio0 = 1. * composition[0] / total, ratio1 = 1. * composition[1] / total
+    cdef double ratio = composition[0] * 1. / composition[1], extrapolate = (ratio + 1.) / ratio
     cdef double[:, :, ::1] increment = np.zeros((nb_segments, nb_seeds, d), dtype='float64')
 
 
@@ -117,7 +117,7 @@ def increment_over_numpy_string(np.ndarray keys,
                 for j in xrange(d):
                     val = values[k, j]
                     if group:
-                        increment[seg, i, j] += val * ratio0
+                        increment[seg, i, j] += val * extrapolate
                     else:
-                        increment[seg, i, j] -= val * ratio1
+                        increment[seg, i, j] -= val * ratio * extrapolate
     return np.array(increment)
