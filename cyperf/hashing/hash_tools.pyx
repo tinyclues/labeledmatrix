@@ -117,7 +117,7 @@ def increment_over_numpy_string(np.ndarray keys,
                 for j in xrange(d):
                     val = values[k, j]
                     if group:
-                        increment[seg, i, j] += val * extrapolate
-                    else:
                         increment[seg, i, j] -= val * ratio * extrapolate
+                    else:
+                        increment[seg, i, j] += val * extrapolate
     return np.array(increment)
