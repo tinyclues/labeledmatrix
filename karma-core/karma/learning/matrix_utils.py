@@ -469,6 +469,24 @@ def safe_max(matrix, axis=None):
             return max(matrix)
 
 
+def safe_sign(matrix):
+    if is_scipysparse(matrix):
+        matrix = KarmaSparse(matrix)
+    if is_karmasparse(matrix):
+        return matrix.sign()
+    else:
+        return np.sign(matrix)
+
+
+def safe_log(matrix, base=np.e):
+    if is_scipysparse(matrix):
+        matrix = KarmaSparse(matrix)
+    if is_karmasparse(matrix):
+        return matrix.log() / np.log(base)
+    else:
+        return np.log(matrix) / np.log(base)
+
+
 def safe_min(matrix, axis=None):
     """
     >>> import scipy.sparse as sp
@@ -1345,6 +1363,40 @@ def argmax_dispatch(matrix, maximum_pressure, max_rank, max_volume):
     #          dense_argmax_dispatch to be implemented
     matrix = KarmaSparse(matrix, copy=False)
     return sparse_argmax_dispatch(matrix, maximum_pressure, max_rank, max_volume)
+
+
+def as_vector_batch(array):
+    if is_karmasparse(array):
+        return array
+
+    array = np.asarray(array)
+    if len(array.shape) == 1:
+        return array.reshape(array.shape[0], 1)
+    else:
+        return array
+
+
+def flatten_along_first_axis(data):
+    """
+    >>> x = np.random.rand(3, 4, 5, 2)
+    >>> flatten_along_first_axis(x).shape
+    (3, 40)
+    """
+    if is_karmasparse(data):
+        return data
+    else:
+        data = np.asarray(data)
+        if data.shape[0] == 0:
+            return data.reshape(0, np.product(data.shape[1:]))
+
+        return data.reshape(data.shape[0], -1)
+
+
+def to_array_if_needed(data):
+    if is_karmasparse(data):
+        return data
+    else:
+        return np.asarray(data)
 
 
 def safe_hstack(args):
