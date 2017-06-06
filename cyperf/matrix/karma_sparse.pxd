@@ -90,7 +90,7 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
-                            cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result):
+                            cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power):
     cdef LTYPE_t i, j, k
     cdef ITYPE_t ind
     cdef DTYPE_t out, dd
@@ -100,9 +100,9 @@ cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_
             out = 0
             for j in xrange(indptr[i], indptr[i + 1]):
                 ind = indices[j]
-                dd = data[j]
+                dd = cpow(data[j], power)
                 for k in xrange(size):
-                    out = out + dd * matrix[i * size + k] * factor[ind * size + k]
+                    out = out + dd * cpow(matrix[i * size + k], power) * factor[ind * size + k]
             result[i] = out
 
 

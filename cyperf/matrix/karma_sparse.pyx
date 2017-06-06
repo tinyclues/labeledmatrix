@@ -3405,7 +3405,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    def kronii_dot(self, cython.floating[:,::1] matrix, np.ndarray factor):
+    def kronii_dot(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
         if self.format == 'csc':
             return self.swap_slicing().kronii_dot(matrix, factor)
 
@@ -3417,10 +3417,9 @@ cdef class KarmaSparse:
 
         if np.asarray(matrix).dtype == np.float32:
             kronii_dot[float](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                              &self.data[0], <float*>&matrix[0, 0], &_factor[0], &result[0])
+                              &self.data[0], <float*>&matrix[0, 0], &_factor[0], &result[0], power)
         else:
             kronii_dot[double](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                               &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0])
-
+                               &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0], power)
         return np.array(result)
 
