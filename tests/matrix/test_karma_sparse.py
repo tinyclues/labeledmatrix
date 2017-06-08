@@ -1024,8 +1024,10 @@ class TestKarmaSparse(unittest.TestCase):
             dense = np.random.rand(a.shape[0], np.random.randint(1, 30))
             factor = np.random.rand(a.shape[1] * dense.shape[1])
             expected_result = sparse.kronii(dense).dot(factor)
-            for b in [dense, dense.astype(np.float32)]:
+            expected_result2 = (sparse.kronii(dense) ** 2).dot(factor)
+            for b in [dense, dense.astype(np.float32), KarmaSparse(dense)]:
                 self.assertTrue(eq(expected_result, sparse.kronii_dot(b, factor)))
+                self.assertTrue(eq(expected_result2, sparse.kronii_dot(b, factor, 2)))
 
     def test_linear_error(self):
         for dense in self.mf.iterator(dense=True):

@@ -3403,23 +3403,47 @@ cdef class KarmaSparse:
             else:
                 return self.restrict_along_column(col).restrict_along_row(row)
 
-    @cython.wraparound(False)
-    @cython.boundscheck(False)
-    def kronii_dot(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
-        if self.format == 'csc':
-            return self.swap_slicing().kronii_dot(matrix, factor)
+    def kronii_dot(self, matrix, factor, power=1):
+        if is_karmasparse(matrix):
+            return self.kronii_sparse_dot(matrix, factor, power)
+        else:
+            return self.kronii_dense_dot(matrix, factor, power)
 
-        assert self.shape[0] == matrix.shape[0]
-        assert factor.shape[0] == self.shape[1] * matrix.shape[1]
+    def kronii_dense_dot(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
+        check_shape_comptibility(self.shape[0], matrix.shape[0])
+        check_shape_comptibility(factor.shape[0], self.shape[1] * matrix.shape[1])
+
+        if self.format == 'csc':
+            return self.swap_slicing().kronii_dense_dot(matrix, factor, power)
 
         cdef DTYPE_t[::1] result = np.zeros(self.nrows, dtype=np.float64)
         cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
 
-        if np.asarray(matrix).dtype == np.float32:
-            kronii_dot[float](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                              &self.data[0], <float*>&matrix[0, 0], &_factor[0], &result[0], power)
-        else:
-            kronii_dot[double](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                               &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0], power)
+        if self.nnz > 0:
+            if np.asarray(matrix).dtype == np.float32:
+                kronii_dot[float](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
+                                  &self.data[0], <float*>&matrix[0, 0], &_factor[0], &result[0], power)
+            else:
+                kronii_dot[double](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
+                                   &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0], power)
         return np.array(result)
 
+    def kronii_sparse_dot(self, KarmaSparse other, np.ndarray factor, double power=1.):
+        check_shape_comptibility(self.shape[0], other.shape[0])
+        check_shape_comptibility(factor.shape[0], self.shape[1] * other.shape[1])
+
+        if self.format == 'csc':
+            return self.swap_slicing().kronii_sparse_dot(other, factor, power)
+
+        if other.format == 'csc':
+            return self.kronii_sparse_dot(other.swap_slicing(), factor, power)
+
+        cdef DTYPE_t[::1] result = np.zeros(self.nrows, dtype=DTYPE)
+        cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
+        if self.nnz > 0 and other.nnz > 0:
+            kronii_sparse_dot(self.nrows, other.ncols,
+                              &self.indptr[0], &self.indices[0], &self.data[0],
+                              &other.indptr[0], &other.indices[0], &other.data[0],
+                              &_factor[0], &result[0], power)
+
+        return np.array(result)

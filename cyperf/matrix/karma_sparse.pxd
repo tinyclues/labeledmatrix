@@ -105,6 +105,27 @@ cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_
                     out = out + dd * cpow(matrix[i * size + k], power) * factor[ind * size + k]
             result[i] = out
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
+                                   LTYPE_t* self_indptr, ITYPE_t* self_indices, DTYPE_t* self_data,
+                                   LTYPE_t* other_indptr, ITYPE_t* other_indices, DTYPE_t* other_data,
+                                   DTYPE_t* factor, DTYPE_t* result, double power):
+
+    cdef LTYPE_t i, j, ind, start, stop, kk, size
+    cdef DTYPE_t alpha, out
+
+    for i in prange(nrows, nogil=True):
+        start, stop = other_indptr[i], other_indptr[i + 1]
+        out = 0
+        for j in xrange(self_indptr[i], self_indptr[i + 1]):
+            alpha = cpow(self_data[j], power)
+            ind = self_indices[j] * other_ncols
+            for kk in xrange(start, stop):
+                out = out + alpha * cpow(other_data[kk], power) * factor[ind + other_indices[kk]]
+
+        result[i] = out
+
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
