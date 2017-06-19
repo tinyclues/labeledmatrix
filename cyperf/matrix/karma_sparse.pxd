@@ -386,13 +386,13 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse add(self, KarmaSparse other)
 
-    cdef KarmaSparse multiply(self, KarmaSparse other)
+    cdef KarmaSparse multiply(self, other)
+
+    cdef KarmaSparse divide(self, other)
 
     cdef KarmaSparse kronii_align_dense(self, cython.floating[:,:] other)
 
     cdef KarmaSparse kronii_align_sparse(self, KarmaSparse other)
-
-    cdef KarmaSparse divide(self, KarmaSparse other)
 
     cdef DTYPE_t aligned_get_single_element(self, ITYPE_t row, ITYPE_t col) nogil
 
@@ -427,3 +427,5 @@ cdef class KarmaSparse:
     cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, DTYPE_t[::1] vector)
 
     cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector)
+
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other, binary_func fn)

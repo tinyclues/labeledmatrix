@@ -2858,6 +2858,33 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other,
+                                                               binary_func fn):
+        check_shape_comptibility(self.shape, np.asarray(other).shape)
+
+        if self.format != CSR:
+            other = np.asarray(other).transpose()
+
+        cdef:
+            LTYPE_t[::1] indptr = np.asarray(self.indptr).copy()
+            ITYPE_t[::1] indices = np.asarray(self.indices).copy()
+            DTYPE_t[::1] data = np.zeros(self.get_nnz(), dtype=DTYPE)
+            ITYPE_t i
+            LTYPE_t j
+
+        for i in prange(self.nrows, nogil=True, schedule='static'):
+            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                data[j] = fn(self.data[j], other[i, self.indices[j]])
+
+        cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
+                                           self.shape, self.format, copy=False,
+                                           has_sorted_indices=1,
+                                           has_canonical_format=1)
+        res.eliminate_zeros()
+        return res
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef inline KarmaSparse generic_restricted_binary_operation(self, KarmaSparse other,
                                                                 binary_func fn):
         check_shape_comptibility(self.shape, other.shape)
@@ -2986,11 +3013,32 @@ cdef class KarmaSparse:
     cdef KarmaSparse add(self, KarmaSparse other):
         return self.generic_binary_operation(other, get_reducer(DEFAULT_AGG))
 
-    cdef KarmaSparse multiply(self, KarmaSparse other):
-        return self.generic_restricted_binary_operation(other, get_reducer('multiply'))
+    cdef KarmaSparse multiply(self, other):
+        cdef binary_func fn = get_reducer('multiply')
+        if is_karmasparse(other):
+            return self.generic_restricted_binary_operation(other, fn)
+        elif isinstance(other, np.ndarray):
+            if other.dtype == np.float32:
+                return self.generic_dense_restricted_binary_operation[float](other, fn)
+            else:
+                return self.generic_dense_restricted_binary_operation[double](other.astype(np.float, copy=False),
+                                                                              fn)
+        else:
+            raise ValueError(other)
 
-    cdef KarmaSparse divide(self, KarmaSparse other):
-        return self.generic_restricted_binary_operation(other, get_reducer('divide'))
+    cdef KarmaSparse divide(self, other):
+        cdef binary_func fn = get_reducer('divide')
+
+        if is_karmasparse(other):
+            return self.generic_restricted_binary_operation(other, fn)
+        elif isinstance(other, np.ndarray):
+            if other.dtype == np.float32:
+                return self.generic_dense_restricted_binary_operation[float](other, fn)
+            else:
+                return self.generic_dense_restricted_binary_operation[double](other.astype(np.float, copy=False),
+                                                                              fn)
+        else:
+            raise ValueError(other)
 
     def __add__(self, other):
         if is_karmasparse(other) and is_karmasparse(self):
@@ -3034,8 +3082,7 @@ cdef class KarmaSparse:
                                      .format(self.shape, other.shape))
             if len(other.shape) == 2:
                 if self.shape == other.shape:
-                    # TODO : we may want to have special routine to avoid extra copy
-                    return (<KarmaSparse?>self).multiply(KarmaSparse(other, format=self.format))
+                    return (<KarmaSparse?>self).multiply(other)
                 elif self.shape[0] == other.shape[0] and other.shape[1] == 1:
                     return (<KarmaSparse?>self).scale_along_axis(other[:, 0], axis=1)
                 elif self.shape[1] == other.shape[1] and other.shape[0] == 1:

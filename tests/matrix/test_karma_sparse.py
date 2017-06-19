@@ -2,7 +2,7 @@ import unittest
 import itertools
 import random
 from numpy import allclose as eq
-from cyperf.matrix.karma_sparse import KarmaSparse
+from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
 from cyperf.matrix.karma_sparse import sp, np, ks_diag
 from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
 from cyperf.matrix.karma_sparse import dense_pivot
@@ -1000,7 +1000,10 @@ class TestKarmaSparse(unittest.TestCase):
 
             for b in [b1, b2, b3, b4]:
                 expected_result = a * b
+                self.assertTrue(is_karmasparse(KarmaSparse(a) * b))
                 self.assertTrue(eq(expected_result, KarmaSparse(a) * b))
+                self.assertTrue(eq(expected_result, KarmaSparse(a) * b.astype(np.float32)))
+                self.assertTrue(eq(expected_result, KarmaSparse(a).tocsc() * b))
                 self.assertTrue(eq(expected_result, a * KarmaSparse(b)))
                 self.assertTrue(eq(expected_result, KarmaSparse(a) * KarmaSparse(b)))
                 self.assertTrue(eq(expected_result, KarmaSparse(b) * KarmaSparse(a)))
