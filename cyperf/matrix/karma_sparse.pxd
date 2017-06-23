@@ -75,16 +75,15 @@ cdef inline void _linear_error(LTYPE_t nrows, LTYPE_t n_cols,
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cdef inline void _aligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
-                                           DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
+cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t* indptr, ITYPE_t* indices,
+                                           DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out) nogil:
     cdef:
         ITYPE_t i
         LTYPE_t j
 
-    with nogil:
-        for i in prange(nrows, schedule='guided'):
-            for j in xrange(indptr[i], indptr[i + 1]):
-                out[i] = out[i] + data[j] * vector[indices[j]]
+    for i in xrange(start, stop):
+        for j in xrange(indptr[i], indptr[i + 1]):
+            out[i] = out[i] + data[j] * vector[indices[j]]
 
 
 @cython.wraparound(False)
@@ -129,19 +128,18 @@ cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cdef inline void _misaligned_dense_vector_dot(ITYPE_t nrows, LTYPE_t* indptr, ITYPE_t* indices,
-                                              DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out):
+cdef inline void _misaligned_dense_vector_dot(ITYPE_t start, ITYPE_t end, LTYPE_t* indptr, ITYPE_t* indices,
+                                              DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out) nogil:
     cdef:
         ITYPE_t i
         LTYPE_t j
         DTYPE_t val
 
-    with nogil:
-        for i in xrange(nrows):
-            val = vector[i]
-            if val != 0:
-                for j in xrange(indptr[i], indptr[i + 1]):
-                    out[indices[j]] += val * data[j]
+    for i in xrange(start, end):
+        val = vector[i]
+        if val != 0:
+            for j in xrange(indptr[i], indptr[i + 1]):
+                out[indices[j]] += val * data[j]
 
 
 @cython.wraparound(False)

@@ -10,7 +10,8 @@ from cython.parallel import parallel, prange
 from cyperf.tools.types import ITYPE, DTYPE, LTYPE
 from cyperf.tools import logit
 
-
+from cython.parallel cimport threadid
+from openmp cimport omp_get_num_threads
 from libc.string cimport memset, memcpy
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.stdlib cimport RAND_MAX, rand, srand
@@ -2666,21 +2667,51 @@ cdef class KarmaSparse:
                     axpy(n_cols, self.data[j], &mat[i, 0], &out[self.indices[j], 0])
         return out
 
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, DTYPE_t[::1] vector):
         check_shape_comptibility(self.ncols, vector.shape[0])
         cdef DTYPE_t[::1] out = np.zeros(self.nrows, dtype=DTYPE, order='C')
+
+        cdef int ti, n_th
+
+        for ti in prange(1, nogil=True):
+            n_th = omp_get_num_threads()  # workaround to detect threads number
+
+        cdef int size = self.nrows / n_th, start, stop
+
         if self.nnz:
-            _aligned_dense_vector_dot(self.nrows, &self.indptr[0], &self.indices[0],
-                                      &self.data[0], &vector[0], &out[0])
+            with nogil, parallel(num_threads=n_th):
+                ti = threadid()
+                start = size * ti
+                stop = self.nrows if ti + 1 == n_th else size * (ti + 1)
+                _aligned_dense_vector_dot(start, stop, &self.indptr[0], &self.indices[0],
+                                          &self.data[0], &vector[0], &out[0])
+
         return np.asarray(out)
 
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector):
         check_shape_comptibility(self.nrows, vector.shape[0])
-        cdef DTYPE_t[::1] out = np.zeros(self.ncols, dtype=DTYPE, order='C')
+
+        cdef int ti, n_th
+
+        for ti in prange(1, nogil=True):
+            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+
+        cdef int size = self.nrows / n_th, start, stop
+        cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.ncols), dtype=DTYPE)
+
         if self.nnz:
-            _misaligned_dense_vector_dot(self.nrows, &self.indptr[0], &self.indices[0],
-                                         &self.data[0], &vector[0], &out[0])
-        return np.asarray(out)
+            with nogil, parallel(num_threads=n_th):
+                ti = threadid()
+                start = size * ti
+                stop = self.nrows if ti + 1 == n_th else size * (ti + 1)
+                _misaligned_dense_vector_dot(start, stop, &self.indptr[0], &self.indices[0],
+                                             &self.data[0], &vector[0], &out_tmp[ti, 0])
+
+        return np.asarray(out_tmp).sum(axis=0)
 
     def dense_vector_dot_right(self, np.ndarray vector):
         vector = vector.astype(np.float, copy=False)
