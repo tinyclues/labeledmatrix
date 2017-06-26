@@ -148,9 +148,9 @@ cdef inline void inplace_arange(ITYPE_t * x, int size) nogil:
     for j in xrange(size): x[j] = j
 
 
-cpdef np.ndarray[dtype=DTYPE_t, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
-                                                    DTYPE_t[::1] values, shape=*,
-                                                    string aggregator=*, DTYPE_t default=*)
+cpdef np.ndarray[dtype=cython.floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
+                                                            cython.floating[::1] values, shape=*,
+                                                            string aggregator=*, DTYPE_t default=*)
 
 
 cdef class KarmaSparse:

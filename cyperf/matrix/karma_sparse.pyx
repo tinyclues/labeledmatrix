@@ -168,12 +168,12 @@ cdef bool check_shape_comptibility(x1, x2) except 0:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=2] dense_pivot(ITYPE_t[::1] rows,
-                                                    ITYPE_t[::1] cols,
-                                                    DTYPE_t[::1] values,
-                                                    shape=None,
-                                                    string aggregator=DEFAULT_AGG,
-                                                    DTYPE_t default=0):
+cpdef np.ndarray[dtype=cython.floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
+                                                            ITYPE_t[::1] cols,
+                                                            cython.floating[::1] values,
+                                                            shape=None,
+                                                            string aggregator=DEFAULT_AGG,
+                                                            DTYPE_t default=0):
     if not (rows.shape[0] == cols.shape[0] == values.shape[0]):
         raise ValueError("Incompatible size of coordinates and/or data : {}, ({}, {})"
                          .format(values.shape[0], rows.shape[0], cols.shape[0]))
@@ -199,7 +199,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=2] dense_pivot(ITYPE_t[::1] rows,
         shape = (maxx + 1, maxy + 1)
 
     cdef binary_func reducer = get_reducer(aggregator)
-    cdef DTYPE_t[:,::1] result = np.full(shape, default, dtype=DTYPE)
+    cdef cython.floating[:,::1] result = np.full(shape, default, dtype=np.array(values).dtype)
     cdef np.uint8_t[:,::1] mask = np.zeros(shape, dtype=np.uint8)
     cdef DTYPE_t val
 

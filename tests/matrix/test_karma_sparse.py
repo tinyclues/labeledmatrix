@@ -862,6 +862,11 @@ class TestKarmaSparse(unittest.TestCase):
         expected1 = np.array([[19., -1.], [-2.4, 5.]])
         np.testing.assert_equal(res1, expected1)
 
+        res_32 = dense_pivot(x, y, val.astype(np.float32), shape=shape, aggregator='add', default=-2.4)
+        expected_32 = np.array([[19., -1.], [-2.4, 5.]], dtype=np.float32)
+        np.testing.assert_equal(res_32, expected_32)
+        self.assertEqual(res_32.dtype, np.float32)
+
         res2 = dense_pivot(x, y, val, shape=shape, aggregator='max', default=3.3)
         expected2 = np.array([[12., -1.], [3.3, 5.]])
         np.testing.assert_equal(res2, expected2)
