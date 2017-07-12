@@ -75,19 +75,6 @@ cdef inline void _linear_error(LTYPE_t nrows, LTYPE_t n_cols,
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t* indptr, ITYPE_t* indices,
-                                           DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out) nogil:
-    cdef:
-        ITYPE_t i
-        LTYPE_t j
-
-    for i in xrange(start, stop):
-        for j in xrange(indptr[i], indptr[i + 1]):
-            out[i] = out[i] + data[j] * vector[indices[j]]
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
 cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
                             cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power):
     cdef LTYPE_t i, j, k
@@ -129,17 +116,30 @@ cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef inline void _misaligned_dense_vector_dot(ITYPE_t start, ITYPE_t end, LTYPE_t* indptr, ITYPE_t* indices,
-                                              DTYPE_t* data, DTYPE_t* vector, DTYPE_t* out) nogil:
+                                              DTYPE_t* data, A* vector, DTYPE_t* out) nogil:
     cdef:
         ITYPE_t i
         LTYPE_t j
-        DTYPE_t val
+        A val
 
     for i in xrange(start, end):
         val = vector[i]
         if val != 0:
             for j in xrange(indptr[i], indptr[i + 1]):
                 out[indices[j]] += val * data[j]
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t* indptr, ITYPE_t* indices,
+                                           DTYPE_t* data, A* vector, DTYPE_t* out) nogil:
+    cdef:
+        ITYPE_t i
+        LTYPE_t j
+
+    for i in xrange(start, stop):
+        for j in xrange(indptr[i], indptr[i + 1]):
+            out[i] = out[i] + data[j] * vector[indices[j]]
 
 
 @cython.wraparound(False)
@@ -420,9 +420,9 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse aligned_sparse_agg(self, KarmaSparse other, binary_func fn=*)
 
-    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, DTYPE_t[::1] vector)
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, A[::1] vector)
 
-    cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector)
+    cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, A[::1] vector)
 
     cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other, binary_func fn)
 

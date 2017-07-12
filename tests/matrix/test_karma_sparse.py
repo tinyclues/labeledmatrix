@@ -901,15 +901,15 @@ class TestKarmaSparse(unittest.TestCase):
                 self.assertTrue(eq(res_dense, res_sparse))
 
     def test_dot_vector(self):
-        for a in self.mf.iterator(dense=True):
+        for a, dtype in itertools.product(self.mf.iterator(dense=True),
+                                          [np.float, np.float32, np.int, np.int32]):
             ks = KarmaSparse(a)
-            vec1 = np.random.randn(ks.shape[1])
-            vec0 = np.random.randn(ks.shape[0])
+            vec1 = np.random.randn(ks.shape[1]).astype(dtype)
+            vec0 = np.random.randn(ks.shape[0]).astype(dtype)
             np.testing.assert_array_almost_equal(ks.dot(vec1), ks.toarray().dot(vec1))
             np.testing.assert_array_almost_equal(ks.tocsc().dot(vec1), ks.toarray().dot(vec1))
             np.testing.assert_array_almost_equal(ks.T.dot(vec0), ks.toarray().T.dot(vec0))
             np.testing.assert_array_almost_equal(ks.tocsc().T.dot(vec0), ks.toarray().T.dot(vec0))
-
 
     def test_agg_multiplication_raises(self):
         a = np.array([[1, -1, 0],

@@ -2669,7 +2669,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, DTYPE_t[::1] vector):
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, A[::1] vector):
         check_shape_comptibility(self.ncols, vector.shape[0])
         cdef DTYPE_t[::1] out = np.zeros(self.nrows, dtype=DTYPE, order='C')
 
@@ -2692,7 +2692,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector):
+    cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, A[::1] vector):
         check_shape_comptibility(self.nrows, vector.shape[0])
 
         cdef int ti, n_th
@@ -2713,15 +2713,13 @@ cdef class KarmaSparse:
 
         return np.asarray(out_tmp).sum(axis=0)
 
-    def dense_vector_dot_right(self, np.ndarray vector):
-        vector = vector.astype(np.float, copy=False)
+    def dense_vector_dot_right(self, A[::1] vector):
         if self.format == CSR:
             return self.aligned_dense_vector_dot(vector)
         else:
             return self.misaligned_dense_vector_dot(vector)
 
-    def dense_vector_dot_left(self, np.ndarray vector):
-        vector = vector.astype(np.float, copy=False)
+    def dense_vector_dot_left(self, A[::1] vector):
         if self.format == CSR:
             return self.misaligned_dense_vector_dot(vector)
         else:
