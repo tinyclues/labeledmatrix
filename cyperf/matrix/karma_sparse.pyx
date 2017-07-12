@@ -2916,6 +2916,29 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn):
+        check_shape_comptibility(self.shape, np.asarray(other).shape)
+
+        cdef:
+            DTYPE_t[:,::1] result = other.copy()
+            ITYPE_t i, ind
+            LTYPE_t j
+
+        if self.format == CSR:
+            for i in prange(self.nrows, nogil=True, schedule='static'):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    ind = self.indices[j]
+                    result[i, ind] = fn(self.data[j], result[i, ind])
+        else:
+            for i in prange(self.nrows, nogil=True, schedule='static'):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    ind = self.indices[j]
+                    result[ind, i] = fn(self.data[j], result[ind, i])
+
+        return np.asarray(result)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef inline KarmaSparse generic_restricted_binary_operation(self, KarmaSparse other,
                                                                 binary_func fn):
         check_shape_comptibility(self.shape, other.shape)
@@ -3041,9 +3064,6 @@ cdef class KarmaSparse:
     cpdef KarmaSparse minimum(self, KarmaSparse other):
         return self.generic_binary_operation(other, get_reducer('min'))
 
-    cdef KarmaSparse add(self, KarmaSparse other):
-        return self.generic_binary_operation(other, get_reducer(DEFAULT_AGG))
-
     cdef KarmaSparse multiply(self, other):
         cdef binary_func fn = get_reducer('multiply')
         if is_karmasparse(other):
@@ -3073,7 +3093,10 @@ cdef class KarmaSparse:
 
     def __add__(self, other):
         if is_karmasparse(other) and is_karmasparse(self):
-            return (<KarmaSparse?>self).add(other)
+            return (<KarmaSparse?>self).generic_binary_operation(other, get_reducer('add'))
+        elif is_karmasparse(self) and isinstance(other, np.ndarray):
+            return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(np.float, copy=False),
+                                                                       get_reducer('add'))
         elif is_karmasparse(self) and np.isscalar(other):
             return (<KarmaSparse?>self).scalar_add(other)
         elif is_karmasparse(other) and np.isscalar(self):

@@ -382,8 +382,6 @@ cdef class KarmaSparse:
 
     cpdef KarmaSparse minimum(self, KarmaSparse other)
 
-    cdef KarmaSparse add(self, KarmaSparse other)
-
     cdef KarmaSparse multiply(self, other)
 
     cdef KarmaSparse divide(self, other)
@@ -427,3 +425,5 @@ cdef class KarmaSparse:
     cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, DTYPE_t[::1] vector)
 
     cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other, binary_func fn)
+
+    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn)

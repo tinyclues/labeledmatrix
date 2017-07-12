@@ -588,7 +588,12 @@ class TestKarmaSparse(unittest.TestCase):
 
     def test_add(self):
         for matrix1, matrix2 in itertools.combinations(self.matrixes, 2):
-            self.assertTrue(eq((KarmaSparse(matrix1) + KarmaSparse(matrix2)).toarray(), matrix1 + matrix2))
+            self.assertTrue(eq(KarmaSparse(matrix1) + KarmaSparse(matrix2), matrix1 + matrix2))
+            self.assertTrue(eq(KarmaSparse(matrix1, format="csc") + matrix2, matrix1 + matrix2))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2, matrix1 + matrix2))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2.astype(np.float32), matrix1 + matrix2))
+            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2), matrix1 + matrix2))
+            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2, format="csc"), matrix1 + matrix2))
 
     def test_sum(self):
         axis = (0, 1, None)
