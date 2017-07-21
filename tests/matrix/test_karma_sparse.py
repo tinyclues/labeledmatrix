@@ -588,12 +588,17 @@ class TestKarmaSparse(unittest.TestCase):
 
     def test_add(self):
         for matrix1, matrix2 in itertools.combinations(self.matrixes, 2):
-            self.assertTrue(eq(KarmaSparse(matrix1) + KarmaSparse(matrix2), matrix1 + matrix2))
-            self.assertTrue(eq(KarmaSparse(matrix1, format="csc") + matrix2, matrix1 + matrix2))
-            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2, matrix1 + matrix2))
-            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2.astype(np.float32), matrix1 + matrix2))
-            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2), matrix1 + matrix2))
-            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2, format="csc"), matrix1 + matrix2))
+            result = matrix1 + matrix2
+            self.assertTrue(eq(KarmaSparse(matrix1) + KarmaSparse(matrix2), result))
+            self.assertTrue(eq(KarmaSparse(matrix1, format="csc") + matrix2, result))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2, result))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2.astype(np.float32), result))
+            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2), result))
+            self.assertTrue(eq(matrix1 + KarmaSparse(matrix2, format="csc"), result))
+
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2[0], matrix1 + matrix2[0]))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2[0:1,:], matrix1 + matrix2[0:1,:]))
+            self.assertTrue(eq(KarmaSparse(matrix1) + matrix2[:,0:1], matrix1 + matrix2[:,0:1]))
 
     def test_sum(self):
         axis = (0, 1, None)

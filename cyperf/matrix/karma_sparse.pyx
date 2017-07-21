@@ -3093,10 +3093,25 @@ cdef class KarmaSparse:
         if is_karmasparse(other) and is_karmasparse(self):
             return (<KarmaSparse?>self).generic_binary_operation(other, get_reducer('add'))
         elif is_karmasparse(self) and isinstance(other, np.ndarray):
-            return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(np.float, copy=False),
-                                                                       get_reducer('add'))
+            if other.ndim == 0:
+                return (<KarmaSparse?>self).scalar_add(float(other))
+            if other.ndim == 1:
+                check_shape_comptibility(self.shape[1], other.shape[0])
+                other = np.repeat(np.atleast_2d(other), self.shape[0], axis=0)
+            if other.ndim == 2:
+                if other.shape != self.shape:
+                    if other.shape == (self.shape[0], 1):
+                        other = np.repeat(other, self.shape[1], axis=1)
+                    if other.shape == (1, self.shape[1]):
+                        other = np.repeat(other, self.shape[0], axis=0)
+                return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(np.float, copy=False),
+                                                                           get_reducer('add'))
+            else:
+                raise ValueError('operands could not be broadcast together with shapes {} {}'
+                                 .format(self.shape, other.shape))
+
         elif is_karmasparse(self) and np.isscalar(other):
-            return (<KarmaSparse?>self).scalar_add(other)
+            return (<KarmaSparse?>self).scalar_add(other)  # XXX: it will make an addition only on nonzeros cells
         elif is_karmasparse(other) and np.isscalar(self):
             return (<KarmaSparse?>other).scalar_add(self)
         else:
@@ -3124,15 +3139,15 @@ cdef class KarmaSparse:
                 raise ValueError('operands could not be broadcast together with shapes {} {}'
                                  .format(self.shape, other.shape))
         elif is_karmasparse(self) and isinstance(other, np.ndarray):
-            if len(other.shape) == 0:
+            if other.ndim == 0:
                 return (<KarmaSparse?>self).scalar_multiply(float(other))
-            if len(other.shape) == 1:
+            if other.ndim == 1:
                 if other.shape[0] == self.shape[1]:
                     return (<KarmaSparse?>self).scale_along_axis(other, axis=0)
                 else:
                     raise ValueError('operands could not be broadcast together with shapes {} {}'
                                      .format(self.shape, other.shape))
-            if len(other.shape) == 2:
+            if other.ndim == 2:
                 if self.shape == other.shape:
                     return (<KarmaSparse?>self).multiply(other)
                 elif self.shape[0] == other.shape[0] and other.shape[1] == 1:
