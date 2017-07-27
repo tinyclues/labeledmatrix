@@ -1,0 +1,8 @@
+BAYES_PRIOR_COEF_MEAN_NAME = 'prior_coef_mean'
+BAYES_PRIOR_COEF_VAR_NAME = 'prior_coef_variance'
+BAYES_PRIOR_INTERCEPT_MEAN_NAME = 'prior_intercept_mean'
+BAYES_PRIOR_INTERCEPT_VAR_NAME = 'prior_intercept_variance'
+BAYES_POST_COEF_MEAN_NAME = 'posterior_coef_mean'
+BAYES_POST_COEF_VAR_NAME = 'posterior_coef_variance'
+BAYES_POST_INTERCEPT_MEAN_NAME = 'posterior_intercept_mean'
+BAYES_POST_INTERCEPT_VAR_NAME = 'posterior_intercept_variance'

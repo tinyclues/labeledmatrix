@@ -57,9 +57,11 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
                       'first': 'first'}
     from karma.core.labeledmatrix import LabeledMatrix
     if values is not None:
-        val = np.asarray(dataframe[values])
+        val = np.asarray(dataframe[values][:])
+        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
     else:
-        val = np.ones(len(dataframe), dtype=np.float)
+        val = np.ones(len(dataframe), dtype=np.float32)
+
     val_a, ind_a = dataframe[key].reversed_index()
     val_b, ind_b = dataframe[axis].reversed_index()
 

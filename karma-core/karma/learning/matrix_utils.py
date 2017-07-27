@@ -6,8 +6,8 @@ import numpy as np
 
 from scipy.stats.mstats import mquantiles
 from scipy.stats import threshold
-from scipy.linalg import block_diag
-from scipy.sparse import isspmatrix as is_scipysparse
+from scipy.linalg import block_diag, solve_triangular
+from scipy.sparse import isspmatrix as is_scipysparse, csr_matrix as scipy_csr_matrix
 from cyperf.tools import logit
 from cyperf.matrix.rank_dispatch import matrix_rank_dispatch
 from cyperf.matrix.argmax_dispatch import sparse_argmax_dispatch
@@ -15,6 +15,8 @@ from cyperf.matrix.karma_sparse import (KarmaSparse, is_karmasparse,
                                         truncate_by_count_axis1_dense,
                                         truncate_by_count_axis1_sparse, ks_hstack, ks_vstack)
 from cyperf.matrix.routine import idiv_2d, idiv_flat
+
+from karma.thread_setter import blas_threads, open_mp_threads
 
 
 class SparseUtilsException(Exception):
@@ -839,9 +841,9 @@ def safe_multiply(x, y, dense_output=False):
     True
     """
     if is_scipysparse(x):
-        x = KarmaSparse(x)
+        x = KarmaSparse(x, copy=False)
     if is_scipysparse(y):
-        y = KarmaSparse(y)
+        y = KarmaSparse(y, copy=False)
 
     if is_karmasparse(y) and not is_karmasparse(x):
         return y * x
@@ -1392,11 +1394,14 @@ def flatten_along_first_axis(data):
         return data.reshape(data.shape[0], -1)
 
 
-def to_array_if_needed(data):
+def to_array_if_needed(data, force_dim2=False, min_dtype=None):
     if is_karmasparse(data):
         return data
     else:
-        return np.asarray(data)
+        res = np.atleast_2d(data) if force_dim2 else np.asarray(data)
+        if min_dtype is not None:
+            res = res.astype(np.promote_types(res.dtype, min_dtype), copy=False)
+        return res
 
 
 def safe_hstack(args):
@@ -1417,3 +1422,33 @@ def types_promotion(args):
     return [np.asarray(X, dtype=np.promote_types(X.dtype, np.float32)) if isinstance(X, np.ndarray)
             else (np.asarray(X) if not is_karmasparse(X) and not is_scipysparse(X) else X)
             for X in args]
+
+
+def to_scipy_sparse(matrix):
+    if is_karmasparse(matrix):
+        return matrix.to_scipy_sparse(copy=False)
+    else:
+        return scipy_csr_matrix(matrix)
+
+
+def matrix_agg_by_buckets(matrix, buckets_reversed_indices, agg='mean'):
+    ks_buckets = KarmaSparse((buckets_reversed_indices, np.arange(len(buckets_reversed_indices))), format='csr')
+    if agg == 'mean':
+        ks_buckets = ks_buckets.normalize(axis=1, norm='l1')
+    elif agg != 'sum':
+        raise ValueError('{} aggregator is not supported'.format(agg))
+    return ks_buckets.dot(matrix)
+
+
+def diagonal_of_inverse_symposdef(mat, nb_threads=16):
+    """
+    Returns the diagonal of the inverse of mat
+    Args:
+        mat: square matrix, needs to be symmetric positive definite
+        nb_threads: number of threads
+    """
+    with blas_threads(nb_threads), open_mp_threads(nb_threads):
+        Ch_mat_inv = solve_triangular(np.linalg.cholesky(mat),
+                                      np.eye(mat.shape[0], dtype=np.float32),
+                                      lower=True)
+        return np.einsum('ji,ji->i', Ch_mat_inv, Ch_mat_inv)

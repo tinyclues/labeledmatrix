@@ -4,34 +4,32 @@
 from functools import wraps
 
 import numpy as np
-from cyperf.matrix.karma_sparse import is_karmasparse
+from lightfm import LightFM
 from sklearn.linear_model import Ridge
+
+from cyperf.matrix.karma_sparse import is_karmasparse
 
 from karma.core.curve import compute_mean_curve, gain_from_prediction, nonbinary_gain_from_prediction
 from karma.core.utils.array import is_binary
-from karma.learning.matrix_utils import safe_hstack
+from karma.learning.lasso import best_lasso_model_cv_from_moments
+from karma.learning.matrix_utils import to_scipy_sparse
+
+__all__ = ['regression_on_blocks', 'linear_regression_coefficients', 'sklearn_regression_model',
+           'lasso_cv_regression_coefficients', 'create_meta_of_regression']
 
 
 def regression_on_blocks(regression_method):
     @wraps(regression_method)
     def decorated_function(X, y, *args, **kwargs):
-        is_block = isinstance(X, (list, tuple))
-        if is_block:
-            dims = np.cumsum([0] + [x.shape[1] for x in X])
-            # FIXME Ridge and LogisticRegression classes doesn't support different regularizations
-            # for different features so if we want to do such selective regularization a workaround need to be found
-            # C = kwargs.get('C', 1e10)
-            # if isinstance(C, (list, tuple, np.ndarray)):
-            #     if len(C) == len(X):
-            #         kwargs['C'] = np.concatenate([np.full(x.shape[1], C[i]) for i, x in enumerate(X)])
-        XX = (X[0] if len(X) == 1 else safe_hstack(X)) if is_block else X
+        from karma.learning.utils import VirtualHStack
+        if not isinstance(X, VirtualHStack):
+            X = VirtualHStack(X)
 
-        result = regression_method(XX, y, *args, **kwargs)
+        result = regression_method(X.flatten_hstack(), y, *args, **kwargs)
+        X._close_pool()
         if isinstance(result, tuple) and len(result) == 3:
             y_hat, intercept, beta = result
-            if is_block:
-                beta = [beta[dims[i]:dims[i + 1]] for i in xrange(len(dims) - 1)]
-            return y_hat, intercept, beta
+            return y_hat, intercept, X.split_by_dims(beta)
         else:
             return result
 
@@ -39,17 +37,28 @@ def regression_on_blocks(regression_method):
 
 
 @regression_on_blocks
-def linear_regression_coefficients(X, y, intercept=True, C=1e10):
+def linear_regression_coefficients(X, y, intercept=True, C=1e10, sample_weight=None):
     lr = Ridge(fit_intercept=intercept, alpha=1 / np.asarray(C, dtype=np.float), tol=0.0001)
-    lr.fit(X, y)
+    lr.fit(X, y, sample_weight)
 
     return lr.predict(X), lr.intercept_, lr.coef_.T
 
 
 @regression_on_blocks
-def sklearn_regression_model(X, y, regression_class, **kwargs):
+def lasso_cv_regression_coefficients(X, y, max_features=None, cv=None,
+                                     n_jobs=None, granularity=None):
+    betas, intercept = best_lasso_model_cv_from_moments(X, y, max_features=max_features, cv=cv,
+                                                        n_jobs=n_jobs, granularity=granularity)
+    return X.dot(betas) + intercept, intercept, betas
+
+
+@regression_on_blocks
+def sklearn_regression_model(X, y, regression_class, classifier=False, **kwargs):
     if 'max_features' in kwargs:
         kwargs['max_features'] = min(X.shape[1], kwargs['max_features'])
+
+    if classifier:
+        y = y * 2 - 1
 
     if is_karmasparse(X):
         X = X.to_scipy_sparse(copy=False)
@@ -57,10 +66,50 @@ def sklearn_regression_model(X, y, regression_class, **kwargs):
     clf = regression_class(random_state=X.shape[0], **kwargs)
     clf.fit(X, y)
 
-    return clf.predict(X), clf
+    y_hat = clf.predict_proba(X) if classifier else clf.predict(X)
+
+    return y_hat, clf
 
 
-def create_meta_of_regression(prediction, y, test_curves=None, train_mse=None, test_mses=None):
+def lightfm_regression_model(user_features, item_features, interactions, sample_weight=None, **kwargs):
+    # user_features and item_features must respect order of users and items from interactions matrix
+    user_features = to_scipy_sparse(user_features)
+    item_features = to_scipy_sparse(item_features)
+    interactions = to_scipy_sparse(interactions)
+
+    if sample_weight is not None:
+        sample_weight = to_scipy_sparse(sample_weight)
+
+    clf = LightFM(no_components=kwargs['no_components'],
+                  k=kwargs.get('k', 5),
+                  n=kwargs.get('n', 10),
+                  learning_schedule=kwargs.get('learning_schedule', 'adagrad'),
+                  loss=kwargs.get('loss', 'logistic'),
+                  learning_rate=kwargs.get('learning_rate', 0.05),
+                  rho=kwargs.get('rho', 0.95),
+                  epsilon=kwargs.get('epsilon', 1e-6),
+                  item_alpha=kwargs.get('item_alpha', 0.0),
+                  user_alpha=kwargs.get('user_alpha', 0.0),
+                  max_sampled=kwargs.get('max_sampled', 10),
+                  random_state=user_features.shape[0])
+    clf.fit(interactions,
+            user_features=user_features, item_features=item_features,
+            sample_weight=sample_weight,
+            epochs=kwargs.get('epochs', 1),
+            num_threads=kwargs.get('num_threads', 1),
+            verbose=kwargs.get('verbose', False))
+    # We need to replace user and items labels by integers
+    user_ids, item_ids = interactions.nonzero()
+    y = np.ravel(interactions[user_ids, item_ids])
+
+    y_linear = clf.predict(user_ids=user_ids, item_ids=item_ids,
+                           item_features=item_features, user_features=user_features,
+                           num_threads=kwargs.get('num_threads', 1))
+
+    return y, y_linear, clf
+
+
+def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, test_mses=None):
     binary_prediction = is_binary(y) and np.max(prediction) <= 1. and np.min(prediction) >= 0.
     if binary_prediction:
         curve_method = gain_from_prediction
@@ -69,19 +118,19 @@ def create_meta_of_regression(prediction, y, test_curves=None, train_mse=None, t
     else:
         curve_method = None
 
-    meta = {}
+    meta = {'train_MSE': np.mean((y - prediction) ** 2)}
     if curve_method is not None:
         curves = curve_method(prediction, y)
-        if binary_prediction:
+        if with_guess and binary_prediction:
             curves.guess = gain_from_prediction(prediction)
 
         if test_curves is not None:
-            curves.tests = test_curves
+            if len(test_curves) > 1:
+                curves.tests = test_curves
             curves.test = compute_mean_curve(test_curves)
 
         meta['curves'] = curves
-    if train_mse is not None:
-        meta['train_MSE'] = train_mse
+
     if test_mses is not None:
         meta['test_MSEs'] = test_mses
 

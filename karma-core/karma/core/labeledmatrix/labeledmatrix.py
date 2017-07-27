@@ -2717,7 +2717,7 @@ class LabeledMatrix(object):
         return self + cogroup.exclude_row(self.row).dot(
             (cogroup.sum(axis=0) + eps).power(-specificity)).truncate(nb_h=1).nonzero_mask()
 
-    def pairwise_overlap(self, top, axis=0, renorm=True):
+    def pairwise_overlap(self, top, axis=0, renorm=True, potential=False):
         """
         * top can by either int (number) either float in [0, 1]
         * axis in {0, 1}, default is 0
@@ -2749,17 +2749,21 @@ class LabeledMatrix(object):
             [0, 1, 2, 3]
         """
         if axis != 0:
-            return self.transpose().pairwise_overlap(top, axis=co(axis), renorm=renorm)
+            return self.transpose().pairwise_overlap(top, axis=co(axis), renorm=renorm, potential=potential)
 
         if 0 <= top < 1:
             top = int(top * len(self.row))
 
-        top_lm = self.truncate(nb_v=top).nonzero_mask()
-        result = top_lm.transpose()._dot(top_lm)
-        if renorm:
-            return result.normalize(axis=1, norm='linf')
+        top_lm = self.truncate(nb_v=top)
+        top_lm_mask = top_lm.nonzero_mask()
+        if potential:
+            overlap_lm = top_lm.transpose()._dot(top_lm_mask)
         else:
-            return result
+            overlap_lm = top_lm_mask.transpose()._dot(top_lm_mask)
+        if renorm:
+            return overlap_lm.normalize(axis=1, norm='linf')
+        else:
+            return overlap_lm
 
     def _rank_dispatch(self, maximum_pressure, max_ranks, max_volumes):
         """
