@@ -6,8 +6,8 @@ from libc.string cimport strncmp, memcpy
 
 
 cdef extern from "farmhash.cc" nogil:
-    inline unsigned int Hash32(const char* s, size_t len)
-    inline unsigned int Hash32WithSeed(const char* s, size_t len, unsigned int seed)
+    unsigned int Hash32(const char* s, size_t len)
+    unsigned int Hash32WithSeed(const char* s, size_t len, unsigned int seed)
 
 
 cdef inline long python_string_length(char* ch, long size) nogil:

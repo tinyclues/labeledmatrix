@@ -1,4 +1,5 @@
 cimport numpy as np
+import numpy as np
 
 from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool
 from cyperf.matrix.routine cimport all_equal

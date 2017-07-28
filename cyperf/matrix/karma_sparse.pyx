@@ -51,7 +51,7 @@ cpdef np.ndarray[ndim=1, dtype=DTYPE_t] cython_power(DTYPE_t[::1] a, const doubl
     with nogil:
         for i in xrange(nb):
             result[i] = cpow(a[i], p)
-    return np.array(result)
+    return np.asarray(result)
 
 
 cdef Shape_t pair_swap(Shape_t x):
@@ -455,8 +455,8 @@ cdef class KarmaSparse:
         return ', '.join([('%s : %s' % t) for t in zip(list(zip(row, col)), data)])
 
     def __reduce__(self):
-        return new_karmasparse, ((np.array(self.data), np.array(self.indices),
-                                 np.array(self.indptr)), self.shape, self.format)
+        return new_karmasparse, ((np.asarray(self.data), np.asarray(self.indices),
+                                 np.asarray(self.indptr)), self.shape, self.format)
 
     cdef bool aligned_axis(self, axis) except? 0:
         if not is_int(axis):
@@ -1196,7 +1196,7 @@ cdef class KarmaSparse:
         return self.apply_pointwise_function(np.log)
 
     cpdef KarmaSparse truncate_with_cutoff(self, DTYPE_t cutoff):
-        data = np.array(self.data).copy()
+        data = np.array(self.data, copy=True)
         data[data < cutoff] = 0.
         cdef KarmaSparse res = KarmaSparse((data, np.array(self.indices, copy=True),
                                            np.array(self.indptr, copy=True)),
@@ -3540,7 +3540,7 @@ cdef class KarmaSparse:
             else:
                 kronii_dot[double](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
                                    &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0], power)
-        return np.array(result)
+        return np.asarray(result)
 
     def kronii_sparse_dot(self, KarmaSparse other, np.ndarray factor, double power=1.):
         check_shape_comptibility(self.shape[0], other.shape[0])
@@ -3560,4 +3560,4 @@ cdef class KarmaSparse:
                               &other.indptr[0], &other.indices[0], &other.data[0],
                               &_factor[0], &result[0], power)
 
-        return np.array(result)
+        return np.asarray(result)

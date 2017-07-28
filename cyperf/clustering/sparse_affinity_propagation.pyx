@@ -150,13 +150,13 @@ cdef class SAFP:
         cdef DTYPE_t[::1] pp
         cdef ITYPE_t u
         if preference is None:
-            preference = np.mean(np.array(self.similarity))
+            preference = np.mean(np.asarray(self.similarity))
             # preference = np.median(np.array(self.similarity))
         if isinstance(preference, np.ndarray):
             if preference.shape[0] != self.nrows:
                 raise ValueError("Wrong shape {} != {}".format(self.nrows,
                                                                preference.shape[0]))
-            pp = np.array(preference, dtype=DTYPE)
+            pp = np.asarray(preference, dtype=DTYPE)
         else:
             pp = np.full(self.nrows, preference, dtype=DTYPE)
 

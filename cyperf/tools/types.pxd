@@ -6,8 +6,6 @@ ctypedef np.int32_t ITYPE_t
 ctypedef np.int64_t LTYPE_t
 ctypedef DTYPE_t (*binary_func)(DTYPE_t, DTYPE_t) nogil
 
-cdef DTYPE_t INF = np.inf
-
 
 from libcpp cimport bool
 from libcpp.string cimport string

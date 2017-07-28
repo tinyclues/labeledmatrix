@@ -21,7 +21,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray key
         for k in xrange(n):
             ch = &keys_str[k, 0]
             result[k] = Hash32WithSeed(ch, python_string_length(ch, size), seed)
-    return np.array(result)
+    return np.asarray(result)
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, unsigned int seed):
@@ -41,7 +41,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, u
         ch = PyString_AsString(x)
         size = len(x)
         result[k] = Hash32WithSeed(ch, size, seed)
-    return np.array(result)
+    return np.asarray(result)
 
 
 cpdef np.ndarray[np.uint32_t, ndim=2, mode="c"] hash_numpy_string_with_many_seeds(np.ndarray keys,
@@ -56,7 +56,7 @@ cpdef np.ndarray[np.uint32_t, ndim=2, mode="c"] hash_numpy_string_with_many_seed
             ch = &keys_str[k, 0]
             for i in xrange(s):
                 result[k, i] = Hash32WithSeed(ch, size, seed[i])
-    return np.array(result)
+    return np.asarray(result)
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hasher_numpy_string(np.ndarray keys,
@@ -69,7 +69,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hasher_numpy_string(np.ndarray k
     with nogil:
         for k in xrange(n):
             result[k] = Hash32WithSeed(&keys_str[k, 0], size, seed) % nb_feature
-    return np.array(result)
+    return np.asarray(result)
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_numpy_string(np.ndarray keys,
@@ -78,12 +78,12 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_numpy_string(np.ndarr
     cdef char[:,::1] keys_str = safe_convertor(keys)
     cdef long k, n = len(keys), size = keys.dtype.itemsize
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
-    cdef signed int total = np.array(composition).sum()
+    cdef signed int total = np.asarray(composition).sum()
 
     with nogil:
         for k in prange(n):
             result[k] = composition_part(Hash32WithSeed(&keys_str[k, 0], size, seed) % total, &composition[0])
-    return np.array(result)
+    return np.asarray(result)
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list keys,
@@ -91,7 +91,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list ke
                                                                          unsigned int seed):
     cdef long k, n = len(keys)
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
-    cdef signed int total = np.array(composition).sum()
+    cdef signed int total = np.asarray(composition).sum()
     cdef char* ch
     cdef object x
 
@@ -106,7 +106,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list ke
         ch = PyString_AsString(x)
         size = len(x)
         result[k] = composition_part(Hash32WithSeed(ch, size, seed) % total, &composition[0])
-    return np.array(result)
+    return np.asarray(result)
 
 
 def increment_over_numpy_string(np.ndarray keys,
@@ -116,16 +116,16 @@ def increment_over_numpy_string(np.ndarray keys,
                                 np.uint32_t[::1] composition,
                                 int nb_segments):
     assert len(keys) == segments.shape[0] == values.shape[0]
-    assert np.array(segments).min() >= 0
+    assert np.asarray(segments).min() >= 0
     assert len(composition) == 2
-    assert nb_segments >= np.array(segments).max() + 1
+    assert nb_segments >= np.asarray(segments).max() + 1
 
     cdef char[:,::1] keys_str = safe_convertor(keys)
     cdef long n = len(keys), size = keys.dtype.itemsize
     cdef long d = values.shape[1]
     cdef long nb_seeds = len(seeds)
     cdef long k, i, j, seg, group
-    cdef signed int total = np.array(composition).sum()
+    cdef signed int total = np.asarray(composition).sum()
     cdef A val
     cdef double ratio = composition[0] * 1. / composition[1], extrapolate = (ratio + 1.) / ratio
     cdef double[:, :, ::1] increment = np.zeros((nb_segments, nb_seeds, d), dtype='float64')
@@ -142,4 +142,4 @@ def increment_over_numpy_string(np.ndarray keys,
                         increment[seg, i, j] -= val * ratio * extrapolate
                     else:
                         increment[seg, i, j] += val * extrapolate
-    return np.array(increment)
+    return np.asarray(increment)

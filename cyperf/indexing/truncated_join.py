@@ -1,13 +1,24 @@
 
 from cyperf.indexing.indexed_list import is_increasing
-from cyperf.matrix.routine import indices_truncation, first_indices, last_indices
+from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sorted, last_indices_sorted,
+                                   indices_truncation_lookup, first_indices_lookup, last_indices_lookup)
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse
 from pandas.hashtable import Int64HashTable
 
 
+def create_truncated_index(user_index, date_values):
+    if is_increasing(date_values):
+        return SortedTruncatedIndex(user_index, date_values)
+    else:
+        return LookUpTruncatedIndex(user_index, date_values)
+
+
 def safe_datetime64_cast(date_values):
-    return np.asarray(np.asarray(date_values, dtype="S10"), dtype="datetime64[D]")
+    if isinstance(date_values, np.ndarray) and date_values.dtype.kind == 'M':
+        return np.asarray(date_values, dtype="datetime64[D]")
+    else:
+        return np.asarray(np.asarray(date_values, dtype="S10"), dtype="datetime64[D]")
 
 
 def sorted_unique(array):
@@ -24,7 +35,32 @@ def sorted_unique(array):
     return array[index], index
 
 
-class SortedDateIndex(object):
+class DateIndex(object):
+
+    def decay(self, d, half_life):
+        d = safe_datetime64_cast(d)
+
+        min_date = min(d.min(), self.min_date)
+        max_date = max(d.max(), self.max_date)
+        delta = (max_date - min_date + 1).astype(int)
+
+        unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
+        ind_d = (d - min_date).view(np.int)
+        ind_self = (self.date_values - min_date).view(np.int)
+        row_decay = unique_decayed[ind_d]
+        column_decay = (1. / unique_decayed)[ind_self]
+        return row_decay, column_decay
+
+
+class LookUpDateIndex(DateIndex):
+
+    def __init__(self, date_values):
+        self.date_values = safe_datetime64_cast(date_values)
+        self.min_date = np.min(self.date_values)
+        self.max_date = np.max(self.date_values)
+
+
+class SortedDateIndex(DateIndex):
 
     def __init__(self, date_values):
         self.date_values = safe_datetime64_cast(date_values)
@@ -73,91 +109,77 @@ class SortedDateIndex(object):
         upper_bound = self.interval_indices[d_upper]
         return lower_bound, upper_bound
 
-    def decay(self, d, half_life):
-        d = safe_datetime64_cast(d)
 
-        min_date = min(d.min(), self.min_date)
-        max_date = max(d.max(), self.max_date)
-        delta = (max_date - min_date + 1).astype(int)
+class BaseTruncatedIndex(object):
 
-        unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
-        ind_d = (d - min_date).view(np.int)
-        ind_self = (self.date_values - min_date).view(np.int)
-        row_decay = unique_decayed[ind_d]
-        column_decay = (1. / unique_decayed)[ind_self]
-        return row_decay, column_decay
-
-
-class PastTruncatedIndex(object):
-
-    def __init__(self, user_index, sorted_date_index):
+    def __init__(self, user_index, date_index):
         self.user_index = user_index
-        self.sorted_date_index = sorted_date_index
+        self.date_index = date_index
 
-    def get_batch_window_indices(self, u, d, lower=-1, upper=0):
-        assert len(d) == len(u)
-        lower_bound, upper_bound = self.sorted_date_index.get_window_indices(d, lower, upper)
+    def ks_get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all', half_life=None):
+        indices, indptr = self.get_batch_window_indices(u, d, lower, upper, truncation)
 
-        # This query can be factorized by unique users !
-        indices, indptr = self.user_index.get_batch_indices(u)
-        # individual indices are ordered !
-        truncated_indices, truncated_indptr = indices_truncation(indices, indptr,
-                                                                 lower_bound, upper_bound)
-        return truncated_indices, truncated_indptr
-
-    def get_first_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
-        assert len(d) == len(u)
-        lower_bound, upper_bound = self.sorted_date_index.get_window_indices(d, lower, upper)
-
-        # This query can be factorized by unique users !
-        indices, indptr = self.user_index.get_batch_indices(u)
-        # individual indices are ordered !
-        indices, indptr = first_indices(indices, indptr, lower_bound, upper_bound)
         data = np.ones(len(indices), dtype=np.float64)
         ks = KarmaSparse((data, indices, indptr), format="csr",
                          shape=(len(u), self.user_index.indptr[-1]),
-                         copy=False, has_sorted_indices=True,
-                         has_canonical_format=True)
-
+                         copy=False, has_sorted_indices=True, has_canonical_format=True)
         if half_life is not None:
-            row_decay, column_decay = self.sorted_date_index.decay(d, half_life=half_life)
+            row_decay, column_decay = self.date_index.decay(d, half_life=half_life)
             ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
                    .scale_along_axis_inplace(column_decay, axis=0)
-        return compactify_on_right(ks)
 
-    def get_last_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
-        assert len(d) == len(u)
-        lower_bound, upper_bound = self.sorted_date_index.get_window_indices(d, lower, upper)
-
-        # This query can be factorized by unique users !
-        indices, indptr = self.user_index.get_batch_indices(u)
-        # individual indices are ordered !
-        indices, indptr = last_indices(indices, indptr, lower_bound, upper_bound)
-        data = np.ones(len(indices), dtype=np.float64)
-        ks = KarmaSparse((data, indices, indptr), format="csr",
-                         shape=(len(u), self.user_index.indptr[-1]),
-                         copy=False, has_sorted_indices=True,
-                         has_canonical_format=True)
-
-        if half_life is not None:
-            row_decay, column_decay = self.sorted_date_index.decay(d, half_life=half_life)
-            ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
-                   .scale_along_axis_inplace(column_decay, axis=0)
         return compactify_on_right(ks)
 
     def get_batch_window_indices_with_intensity(self, u, d, lower=-1, upper=0, half_life=None):
-        indices, indptr = self.get_batch_window_indices(u, d, lower, upper)
-        data = np.ones(len(indices), dtype=np.float64)
-        ks = KarmaSparse((data, indices, indptr), format="csr",
-                         shape=(len(u), self.user_index.indptr[-1]),
-                         copy=False, has_sorted_indices=True,
-                         has_canonical_format=True)
+        return self.ks_get_batch_window_indices(u, d, lower, upper,
+                                                truncation='all', half_life=half_life)
 
-        if half_life is not None:
-            row_decay, column_decay = self.sorted_date_index.decay(d, half_life=half_life)
-            ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
-                   .scale_along_axis_inplace(column_decay, axis=0)
-        return compactify_on_right(ks)
+    def get_first_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
+        return self.ks_get_batch_window_indices(u, d, lower, upper,
+                                                truncation='first', half_life=half_life)
+
+    def get_last_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
+        return self.ks_get_batch_window_indices(u, d, lower, upper,
+                                                truncation='last', half_life=half_life)
+
+
+class LookUpTruncatedIndex(BaseTruncatedIndex):
+
+    _truncation_method_map = {'first': first_indices_lookup,
+                              'last': last_indices_lookup,
+                              'all': indices_truncation_lookup}
+
+    def get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
+        assert len(d) == len(u)
+        assert lower < upper
+        truncation_method = self._truncation_method_map[truncation]
+
+        # This query can be factorized by unique users !
+        indices, indptr = self.user_index.get_batch_indices(u)
+        local_dates = np.ascontiguousarray(self.date_index.date_values.view(np.int))
+        indices, indptr = truncation_method(indices, indptr, local_dates,
+                                            safe_datetime64_cast(d).view(np.int), lower, upper)
+        # XXX : hack to resize memory in place !
+        indices.resize(indptr[-1])
+        return indices, indptr
+
+
+class SortedTruncatedIndex(BaseTruncatedIndex):
+
+    _truncation_method_map = {'first': first_indices_sorted,
+                              'last': last_indices_sorted,
+                              'all': indices_truncation_sorted}
+
+    def get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
+        assert len(d) == len(u)
+        truncation_method = self._truncation_method_map[truncation]
+
+        # This query can be factorized by unique users !
+        indices, indptr = self.user_index.get_batch_indices(u)
+        lower_bound, upper_bound = self.date_index.get_window_indices(d, lower, upper)
+        indices, indptr = truncation_method(indices, indptr, lower_bound, upper_bound)
+        indices.resize(indptr[-1])
+        return indices, indptr
 
 
 def compactify_on_right(ks):
