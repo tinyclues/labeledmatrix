@@ -9,9 +9,9 @@ from pandas.hashtable import Int64HashTable
 
 def create_truncated_index(user_index, date_values):
     if is_increasing(date_values):
-        return SortedTruncatedIndex(user_index, date_values)
+        return SortedTruncatedIndex(user_index, SortedDateIndex(date_values))
     else:
-        return LookUpTruncatedIndex(user_index, date_values)
+        return LookUpTruncatedIndex(user_index, LookUpDateIndex(date_values))
 
 
 def safe_datetime64_cast(date_values):
