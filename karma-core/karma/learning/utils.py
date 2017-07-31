@@ -2,7 +2,7 @@ from itertools import izip
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
-from sklearn.model_selection import ShuffleSplit, StratifiedShuffleSplit, train_test_split
+from sklearn.model_selection import ShuffleSplit, StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit
 
@@ -131,7 +131,7 @@ def validate_regression_model(blocks_x, y, cv, method, **kwargs):
         * ShuffleSplit or StratifiedShuffleSplit object -> train/test split will be obtained by its split method
         * tuple of size two corresponding to train_idx, test_idx
     """
-    train_idx, test_idx = get_train_test_idx(cv, y)
+    train_idx, test_idx = get_indices_from_cv(cv, y)
     X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
     method_output = method(X_stacked[train_idx], y[train_idx], **kwargs)
     intercept, betas = method_output[1:3]
@@ -146,7 +146,7 @@ def validate_regression_model(blocks_x, y, cv, method, **kwargs):
     return (test_curve, test_mse) + method_output
 
 
-def get_train_test_idx(cv, y, groups=None):
+def get_indices_from_cv(cv, y, groups=None, seed=None):
     """
     Return a split of a range(len(y)) into train and test in respect to `cv` parameter
     Args:
@@ -156,21 +156,26 @@ def get_train_test_idx(cv, y, groups=None):
             * tuple of size two (in this case method does nothing)
         y: target variable values
         groups: groups to stratify a sample
+        seed: seed for the stratified shuffle split
     """
     if isinstance(cv, tuple) and len(cv) == 2:
         return cv
-    n = len(y)
-    if not is_binary(y):
-        y = np.zeros(n)
+
     if isinstance(cv, float) and 0 < cv < 1:
-        cv = StratifiedShuffleSplit(n_splits=1, test_size=cv, random_state=n)
-    if isinstance(cv, (StratifiedShuffleSplit, ShuffleSplit)):
-        train_idx, test_idx = next(cv.split(np.arange(n), y, groups=groups))
+        cv = StratifiedShuffleSplit(n_splits=1, test_size=cv,
+                                    random_state=seed if seed is not None else len(y))
+
+    if isinstance(cv, StratifiedShuffleSplit):
+        classes = y if is_binary(y) else np.zeros(len(y))
+        if groups is not None:
+            classes = np.char.asarray(classes) + '_' + np.char.asarray(groups)
+
+        return next(cv.split(y, classes))
+    elif isinstance(cv, ShuffleSplit):
+        return cv.split(y)
     else:
         raise ValueError('Unknown cv type: {} must be float in (0, 1) or '
                          'ShuffleSplit object or tuple (train_idx, test_idx)'.format(cv))
-
-    return np.unique(train_idx), np.unique(test_idx)
 
 
 def check_axis_values(y):
