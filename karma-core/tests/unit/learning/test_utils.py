@@ -1,56 +1,71 @@
 import unittest
 
 import numpy as np
-from numpy.testing import assert_equal
-from sklearn.model_selection import StratifiedShuffleSplit
 
+from karma import create_column_from_data
 from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
-from karma.learning.utils import get_indices_from_cv
+from karma.learning.utils import CrossValidationWrapper
+from karma.lib.logistic_regression import logistic_regression
 
 
-class LearningUtilsGetTrainTestIdxTestCase(unittest.TestCase):
+class CrossValidationWrapperTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         n = 10 ** 4
         with use_seed(1234567):
             df = DataFrame(
-                {'x': np.arange(n), 'y': np.random.randint(2, size=n)})
-        df['group'] = df['str({x} % 10)']
+                {'i': np.arange(n), 'x': np.random.rand(n), 'y': np.random.randint(2, size=n)})
+        df['group'] = df['str({i} % 10)']
         df['y_group'] = df['str({y}) + "_" + {group}']
         cls.df = df
-        cls.cv_fraction = 0.2
-        cls.ref_split = get_indices_from_cv(cls.cv_fraction, df['y'][:], groups=df['group'][:], seed=140191)
 
-    def test_unicity(self):
-        for indices in self.ref_split:
-            assert_equal(np.sort(indices), np.unique(indices))
+    def test_basic(self):
+        df = self.df.copy()
+        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=6, seed=123)
+        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
 
-    def test_fallback_logic(self):
-        assert_equal(self.ref_split, get_indices_from_cv(self.ref_split, np.random.rand(len(self.df))))
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=140191)
-        assert_equal(self.ref_split, next(sss.split(np.arange(len(self.df)),
-                                                    self.df['str({y}) + "_" + {group}'][:])))
+        self.assertEquals(cv.test_size, 2000)
+        self.assertEquals(len(cv.test_indices), 12000)
+        self.assertEquals(len(cv.test_y_hat), 12000)
+
+        self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
 
     def test_stratified_shuffle_split(self):
         df = self.df.copy()
-        split = get_indices_from_cv(self.cv_fraction, df['y'][:], seed=140191)
+        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=1, seed=123)
+        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
+
         train_test = np.full(len(df), 'train')
-        train_test[split[1]] = 'test'
+        train_test[cv.test_indices] = 'test'
         df['tt'] = train_test
         res = df.group_by(('y', 'tt'), '#').pivot('y', 'tt', aggregate_by='sum(#)')
         count_ratios = res['divide(sum(#):test, add(sum(#):test, sum(#):train))'][:]
 
-        self.assertGreater(min(count_ratios), self.cv_fraction - 0.0010)
-        self.assertLess(max(count_ratios), self.cv_fraction + 0.0010)
+        self.assertGreater(min(count_ratios), cv.test_fraction - 0.0010)
+        self.assertLess(max(count_ratios), cv.test_fraction + 0.0010)
 
     def test_stratified_shuffle_split_with_groups(self):
         df = self.df.copy()
+        cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
+        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
+
         train_test = np.full(len(df), 'train')
-        train_test[self.ref_split[1]] = 'test'
+        train_test[cv.test_indices] = 'test'
         df['tt'] = train_test
         res = df.group_by(('y_group', 'tt'), '#').pivot('y_group', 'tt', aggregate_by='sum(#)')
         count_ratios = res['divide(sum(#):test, add(sum(#):test, sum(#):train))'][:]
 
-        self.assertGreater(min(count_ratios), self.cv_fraction - 0.0010)
-        self.assertLess(max(count_ratios), self.cv_fraction + 0.0010)
+        self.assertGreater(min(count_ratios), cv.test_fraction - 0.0010)
+        self.assertLess(max(count_ratios), cv.test_fraction + 0.0010)
+
+    def test_metrics(self):
+        df = self.df.copy()
+        df['dummy' ] = create_column_from_data( np.random.rand(len(df), 2))
+        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=2, seed=123)
+        df += logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
+
+        metrics = cv.calculate_train_test_metrics(df, ['group'], 'pred_y', 'y')
+        self.assertEquals(metrics.keys(), ['group'])
+        self.assertEquals(metrics['group'].column_names, ['group', 'AUC train', 'AUC test', 'NLL train', 'NLL test',
+                                                          'Calibration train', 'Calibration test'])

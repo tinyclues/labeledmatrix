@@ -2,9 +2,11 @@ from itertools import izip
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
-from sklearn.model_selection import ShuffleSplit, StratifiedShuffleSplit
+from math import ceil
 
-from cyperf.tools import take_indices, logit
+from sklearn.model_selection import StratifiedShuffleSplit
+
+from cyperf.tools import take_indices, logit_inplace
 
 from karma.core.utils import is_iterable
 from karma.core.utils.array import is_binary
@@ -124,58 +126,67 @@ class VirtualHStack(object):
             return self.X
 
 
-def validate_regression_model(blocks_x, y, cv, method, **kwargs):
-    """
-    Evaluates model constructed in method on a test set given by cv which can be
-        * float in (0, 1) -> new train/test split will be generated
-        * ShuffleSplit or StratifiedShuffleSplit object -> train/test split will be obtained by its split method
-        * tuple of size two corresponding to train_idx, test_idx
-    """
-    train_idx, test_idx = get_indices_from_cv(cv, y)
-    X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
-    method_output = method(X_stacked[train_idx], y[train_idx], **kwargs)
-    intercept, betas = method_output[1:3]
-    y_test_hat = X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept
-    if method.func_name.startswith('logistic'):
-        y_test_hat = logit(np.asarray(y_test_hat))
-    X_stacked._close_pool()  # Warning should called manually at the exit from class
-    metas = create_meta_of_regression(y_test_hat, y[test_idx], with_guess=False)
-    test_curve = metas['curves']
-    test_mse = metas['train_MSE']
-
-    return (test_curve, test_mse) + method_output
+def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, **kwargs):
+    if not isinstance(cv, CrossValidationWrapper):
+        cv = CrossValidationWrapper(cv, y)
+    cv.validate(blocks_x, y, method, warmup_key, **kwargs)
+    return cv
 
 
-def get_indices_from_cv(cv, y, groups=None, seed=None):
-    """
-    Return a split of a range(len(y)) into train and test in respect to `cv` parameter
-    Args:
-        cv: one of:
-            * test fraction float in (0, 1)
-            * ShuffleSplit or StratifiedShuffleSplit object
-            * tuple of size two (in this case method does nothing)
-        y: target variable values
-        groups: groups to stratify a sample
-        seed: seed for the stratified shuffle split
-    """
-    if isinstance(cv, tuple) and len(cv) == 2:
-        return cv
+class CrossValidationWrapper(object):
+    method_output = None
+    meta = None
 
-    if isinstance(cv, float) and 0 < cv < 1:
-        cv = StratifiedShuffleSplit(n_splits=1, test_size=cv,
-                                    random_state=seed if seed is not None else len(y))
+    def __init__(self, cv, y, groups=None, n_splits=1, seed=None):
+        if not (isinstance(cv, float) and 0 < cv < 1):
+            raise ValueError('CvIterator only support cv to be a float in (0, 1)')
+        self.test_fraction = cv
+        self.test_size = int(ceil(cv * len(y)))  # sklearn/model_selection/_split.py l.1379
 
-    if isinstance(cv, StratifiedShuffleSplit):
-        classes = y if is_binary(y) else np.zeros(len(y))
+        self.classes = y if is_binary(y) else np.zeros(len(y))
         if groups is not None:
-            classes = np.char.asarray(classes) + '_' + np.char.asarray(groups)
+            self.classes = np.char.asarray(self.classes) + '_' + np.char.asarray(groups)
 
-        return next(cv.split(y, classes))
-    elif isinstance(cv, ShuffleSplit):
-        return cv.split(y)
-    else:
-        raise ValueError('Unknown cv type: {} must be float in (0, 1) or '
-                         'ShuffleSplit object or tuple (train_idx, test_idx)'.format(cv))
+        self.n_splits = n_splits
+        self.seed = seed if seed is not None else len(y)
+
+        self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
+        self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
+
+    def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
+        cv = StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
+
+        X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
+        i = 0
+        for (train_idx, test_idx) in cv.split(self.classes, self.classes):
+            self.method_output = method(X_stacked[train_idx], y[train_idx], **kwargs)
+            intercept, betas = self.method_output[1:3]
+            self.test_y_hat[i:i + self.test_size] = np.asarray(
+                X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
+            self.test_indices[i:i + self.test_size] = test_idx
+            i += self.test_size
+            if warmup_key is not None:
+                kwargs[warmup_key] = np.hstack(betas + [intercept])
+        X_stacked._close_pool()  # Warning should called manually at the exit from class
+
+        if method.func_name.startswith('logistic'):
+            logit_inplace(self.test_y_hat)
+
+        self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)
+
+    def calculate_train_test_metrics(self, trained_dataframe, group_by_cols, pred_col, response_col):
+        from karma.core.column import create_column_from_data
+        from karma.macros import squash
+
+        test_dataframe = trained_dataframe.copy(response_col, *group_by_cols)[self.test_indices]
+        test_dataframe[pred_col] = create_column_from_data(self.test_y_hat)
+
+        dataframe = squash({'train': trained_dataframe.copy(response_col, pred_col, *group_by_cols),
+                            'test': test_dataframe}, lazy=True, label='label')
+        res = {}
+        for col in group_by_cols:
+            res[col] = calculate_train_test_metrics(dataframe, col, pred_col, response_col, split_col='label')
+        return res
 
 
 def check_axis_values(y):
