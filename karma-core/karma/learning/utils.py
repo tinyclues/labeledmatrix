@@ -133,6 +133,28 @@ def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, **kwargs
     return cv
 
 
+def _prepare_and_check_classes(y, groups):
+    if is_binary(y):
+        classes = y
+        if groups is not None:
+            groups = np.char.asarray(groups)
+            classes = np.char.asarray(classes) + '_' + groups
+            unique, counts = np.unique(classes, return_counts=True)
+
+            groups_to_clean = set()
+            for _class in unique[counts == 1]:
+                groups_to_clean.add(groups[classes == _class][0])
+            for group in groups_to_clean:
+                classes[groups == group] = group
+    else:
+        classes = groups if groups is not None else np.zeros(len(y))
+
+    _, counts = np.unique(classes, return_counts=True)
+    if not np.all(counts > 1):
+        raise ValueError("StratifiedShuffleSplit doesn't support classes of size 1")
+    return classes
+
+
 class CrossValidationWrapper(object):
     method_output = None
     meta = None
@@ -143,9 +165,7 @@ class CrossValidationWrapper(object):
         self.test_fraction = cv
         self.test_size = int(ceil(cv * len(y)))  # sklearn/model_selection/_split.py l.1379
 
-        self.classes = y if is_binary(y) else np.zeros(len(y))
-        if groups is not None:
-            self.classes = np.char.asarray(self.classes) + '_' + np.char.asarray(groups)
+        self.classes = _prepare_and_check_classes(y, groups)
 
         self.n_splits = n_splits
         self.seed = seed if seed is not None else len(y)

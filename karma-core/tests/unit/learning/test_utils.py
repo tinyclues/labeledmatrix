@@ -7,7 +7,7 @@ from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
 from karma.learning.utils import CrossValidationWrapper
 from karma.lib.logistic_regression import logistic_regression
-
+from numpy.testing import assert_equal
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
     @classmethod
@@ -69,3 +69,26 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         self.assertEquals(metrics.keys(), ['group'])
         self.assertEquals(metrics['group'].column_names, ['group', 'AUC train', 'AUC test', 'NLL train', 'NLL test',
                                                           'Calibration train', 'Calibration test'])
+
+    def test_classes(self):
+        cv = CrossValidationWrapper(0.2,
+                                    [1, 1, 0, 1, 1, 0],
+                                    [2, 2, 1, 1, 1, 1], n_splits=1, seed=None)
+        assert_equal(cv.classes, ['1_2', '1_2', '0_1', '1_1', '1_1', '0_1'])
+
+        # class of size 1
+        cv = CrossValidationWrapper(0.2,
+                                    [1, 0, 0, 1, 1, 0],
+                                    [2, 2, 1, 1, 1, 1], n_splits=1, seed=None)
+        assert_equal(cv.classes, ['2', '2', '0_1', '1_1', '1_1', '0_1'])
+
+        cv = CrossValidationWrapper(0.2,
+                                    [1, 0, 0, 1, 1, 0, 0],
+                                    [2, 2, 1, 1, 1, 1, 2], n_splits=1, seed=None)
+        assert_equal(cv.classes, ['2', '2', '0_1', '1_1', '1_1', '0_1', '2'])
+
+        with self.assertRaises(ValueError) as e:
+            _ = CrossValidationWrapper(0.2,
+                                        [1, 0, 0, 1, 1, 0],
+                                        [3, 2, 1, 1, 1, 1], n_splits=1, seed=None)
+        self.assertEquals(e.exception.message, "StratifiedShuffleSplit doesn't support classes of size 1")
