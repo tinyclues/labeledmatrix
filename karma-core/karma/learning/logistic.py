@@ -104,7 +104,7 @@ def logistic_coefficients_fall_back(X, y, max_iter, solver='liblinear', C=1e10, 
     lr = LogisticRegression(C=C, tol=1e-5, solver=solver, fit_intercept=True, max_iter=max_iter,
                             random_state=X.shape[0])
     lr.fit(X, y, sample_weight=sample_weight)
-    return lr.predict_proba(X)[:, 1], lr.intercept_[0], lr.coef_[0]
+    return logit(lr.decision_function(X)), lr.intercept_[0], lr.coef_[0]
 
 
 def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
