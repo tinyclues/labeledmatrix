@@ -1,13 +1,16 @@
 import unittest
 
 import numpy as np
+from numpy.testing import assert_equal
 
 from karma import create_column_from_data
 from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
-from karma.learning.utils import CrossValidationWrapper
+from karma.learning.logistic import logistic_coefficients
+from karma.learning.matrix_utils import as_vector_batch
+from karma.learning.utils import CrossValidationWrapper, validate_regression_model
 from karma.lib.logistic_regression import logistic_regression
-from numpy.testing import assert_equal
+
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
     @classmethod
@@ -92,3 +95,13 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
                                         [1, 0, 0, 1, 1, 0],
                                         [3, 2, 1, 1, 1, 1], n_splits=1, seed=None)
         self.assertEquals(e.exception.message, "StratifiedShuffleSplit doesn't support classes of size 1")
+
+    def test_sample_weight(self):
+        df = self.df.copy()
+        with use_seed(1516):
+            kwargs = {'max_iter': 150, 'solver': 'lbfgs', 'C': 1e10,
+                      'sample_weight': np.random.rand(len(df)), 'w_warm': np.zeros(2)}
+        cv = validate_regression_model([as_vector_batch(df['x'][:])], df['y'][:], 0.2, logistic_coefficients,
+                                       warmup_key='w_warm', **kwargs)
+        self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
+        self.assertEqual(cv.meta['curves'].auc, 0.0062)
