@@ -105,3 +105,13 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
                                        warmup_key='w_warm', **kwargs)
         self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
         self.assertEqual(cv.meta['curves'].auc, 0.0062)
+
+    def test_np_array_kwargs(self):
+        df = self.df.copy()
+        with use_seed(1516):
+            kwargs = {'max_iter': 150, 'solver': 'lbfgs', 'C': np.array(1e10),
+                      'sample_weight': np.random.rand(len(df)), 'w_warm': np.zeros(2)}
+        cv = validate_regression_model([as_vector_batch(df['x'][:])], df['y'][:], 0.2, logistic_coefficients,
+                                       warmup_key='w_warm', **kwargs)
+        self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
+        self.assertEqual(cv.meta['curves'].auc, 0.0062)

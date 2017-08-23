@@ -179,7 +179,7 @@ class CrossValidationWrapper(object):
         X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
         i = 0
         for (train_idx, test_idx) in cv.split(self.classes, self.classes):
-            train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape[0] == y.shape[0] else v
+            train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
                             for k, v in kwargs.items()}
             self.method_output = method(X_stacked[train_idx], y[train_idx], **train_kwargs)
             intercept, betas = self.method_output[1:3]
