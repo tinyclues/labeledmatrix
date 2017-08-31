@@ -234,14 +234,14 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
     ...     df = DataFrame({'topic': np.random.randint(0, 5, 1000), 'pred': np.random.rand(1000),
     ...         'obs': np.random.randint(0, 2, 1000), 'label': ['Train'] * 800 + ['Test'] * 200})
     >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs', 'label').preview() #doctest: +NORMALIZE_WHITESPACE
-    ------------------------------------------------------------------------------------------
-    topic | AUC Train | AUC Test | NLL Train | NLL Test | Calibration Train | Calibration Test
-    ------------------------------------------------------------------------------------------
-    0       -0.1117     -0.0053    1.6616      1.3572     1.1391              1.03
-    1       -0.1439     -0.0945    1.5192      1.6478     0.945               1.0744
-    2       0.1419      -0.1164    1.3041      1.5429     0.9598              0.9852
-    3       -0.0042     -0.0929    1.4236      1.5821     0.9673              1.0748
-    4       -0.026      -0.2707    1.4532      1.674      1.0984              0.8872
+    ------------------------------------------------------------------------------------
+    topic | #   | AUC Train | AUC Test | NLL Train | NLL Test | Calib Train | Calib Test
+    ------------------------------------------------------------------------------------
+    0       207   -0.1117     -0.0053    1.6616      1.3572     1.1391        1.03
+    1       187   -0.1439     -0.0945    1.5192      1.6478     0.945         1.0744
+    2       207   0.1419      -0.1164    1.3041      1.5429     0.9598        0.9852
+    3       197   -0.0042     -0.0929    1.4236      1.5821     0.9673        1.0748
+    4       202   -0.026      -0.2707    1.4532      1.674      1.0984        0.8872
     """
 
     if is_binary(dataframe[response_col][:]):
@@ -251,14 +251,15 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
 
     group_by = (group_by_col, split_col) if split_col is not None else group_by_col
     agg_args = '{}, {}'.format(pred_col, response_col)
-    agg_tuple = ('auc({}) as AUC'.format(agg_args),
+    agg_tuple = ('#',
+                 'auc({}) as AUC'.format(agg_args),
                  '{}({}) as {}'.format(err_agg, agg_args, err_agg_name),
-                 'calibration_ratio({}) as Calibration'.format(agg_args))
+                 'calibration_ratio({}) as Calib'.format(agg_args))
     metrics = dataframe.group_by(group_by, agg_tuple)
     if split_col is not None:
-        res_df = metrics.copy(group_by_col).deduplicate_by(group_by_col).sort_by(group_by_col)
+        res_df = dataframe.group_by(group_by_col, '#')
         metrics_by_label = metrics.split_by(split_col)
-        for col in ['AUC', err_agg_name, 'Calibration']:
+        for col in ['AUC', err_agg_name, 'Calib']:
             for label in sorted(metrics_by_label.keys())[::-1]:
                 df = metrics_by_label[label]
                 res_df.add_relation('rel', df, group_by_col, group_by_col)
