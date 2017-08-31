@@ -126,9 +126,10 @@ class VirtualHStack(object):
             return self.X
 
 
-def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, **kwargs):
+def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
+                              **kwargs):
     if not isinstance(cv, CrossValidationWrapper):
-        cv = CrossValidationWrapper(cv, y)
+        cv = CrossValidationWrapper(cv, y, cv_groups, cv_n_splits, cv_seed)
     cv.validate(blocks_x, y, method, warmup_key, **kwargs)
     return cv
 
