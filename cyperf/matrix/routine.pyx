@@ -25,10 +25,21 @@ REDUCERLIST['complement'] = complement
 REDUCERLIST['truncated_difference'] = trunc_diff
 
 
+ctypedef fused ITERbis:
+    list
+    tuple
+    np.ndarray[dtype=int, ndim=1]
+    np.ndarray[dtype=long, ndim=1]
+    np.ndarray[dtype=float, ndim=1]
+    np.ndarray[dtype=double, ndim=1]
+    np.ndarray[dtype=object, ndim=1]
+    object
+
+
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.cdivision(True)
-cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITER x):
+cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITERbis x):
     """Return the index where to insert item x in list a, assuming a is sorted.
 
     The return value i is such that all e in a[:i] have e < x, and all e in
