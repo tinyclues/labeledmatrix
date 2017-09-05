@@ -4,7 +4,7 @@ from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sort
                                    indices_truncation_lookup, first_indices_lookup, last_indices_lookup)
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse
-from pandas.hashtable import Int64HashTable
+from pandas.core.algorithms import htable
 
 
 def create_truncated_index(user_index, date_values):
@@ -205,7 +205,7 @@ def compactify_on_right(ks):
     if nb_unique_indices < ks.shape[1]:
         if ks.format == "csr":
             # apply mapping
-            ii = Int64HashTable(nb_unique_indices * 2)
+            ii = htable.Int64HashTable(nb_unique_indices * 2)
             ii.map_locations(required_indices.astype(np.int, copy=False))
             ks_compact = KarmaSparse((ks.data, ii.lookup(ks.indices.astype(np.int)), ks.indptr),
                                      format='csr', shape=(ks.shape[0], nb_unique_indices), copy=False,
