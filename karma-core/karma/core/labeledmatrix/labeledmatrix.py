@@ -2938,3 +2938,35 @@ class LabeledMatrix(object):
             pot_allocation = pot_allocation.normalize(norm=norm)
 
         return pot_allocation
+
+    def heatmap(self, row_name='row', col_name='col', ordering=None, **kwargs):
+        """
+
+        :param col_name:
+        :param row_name:
+        :param ordering: None, hierarchical or naive (sort both row and col)
+        :param kwargs:
+        :return:
+
+        >>> from karma.core.karmaplot import KarmaPlot
+        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd', 'e'], [42]), KarmaSparse(np.arange(5).reshape((5, 1))))
+        >>> kplot = lm.heatmap(col_name='toto', renorm='%', backend=None)
+        >>> isinstance(kplot, KarmaPlot)
+        True
+        >>> kplot.data['matrix']
+        array([[  0.],
+               [ 10.],
+               [ 20.],
+               [ 30.],
+               [ 40.]])
+        >>> kplot.data['vmax']
+        100.0
+        """
+        if ordering == 'hierarchical':
+            lm = self.sort_by_hierarchical_clustering()
+        elif ordering == 'naive':
+            lm = self.sort()
+        else:
+            lm = self
+        kwargs.pop('column', None)
+        return lm.to_dense().to_vectorial_dataframe(row_name, col_name).heatmap(**kwargs)
