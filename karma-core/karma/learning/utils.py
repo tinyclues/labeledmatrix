@@ -24,9 +24,9 @@ class VirtualHStack(object):
             assert all(X[0].shape[0] == x.shape[0] for x in X[1:])
             self.dims = np.cumsum([0] + [x.shape[1] for x in X])
 
-            self.nb_threads = min(nb_threads, len(X), 32)
+            self.nb_threads = min(nb_threads, len(X), 16)
             self.pool = ThreadPool(self.nb_threads)
-            self.nb_inner_threads = max(1, int(2 * 32. / self.nb_threads))
+            self.nb_inner_threads = min(16, max(1, int(2 * 32. / self.nb_threads)))
             self.order = np.argsort(map(self._block_priority, X))[::-1]
             self.reverse_order = np.argsort(self.order)
         else:
