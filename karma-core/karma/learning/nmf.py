@@ -314,6 +314,8 @@ def nmf_fold(matrix, right_factor, max_iter=30):
 
     if is_karmasparse(matrix) and matrix.format != "csr":
         matrix = matrix.tocsr()  # taking a good alignment
+    elif not is_karmasparse(matrix):
+        matrix = KarmaSparse(matrix)
 
     for _ in xrange(max_iter):
         error = safe_dot(left_factor, right_factor, matrix, mask_mode="divide")
