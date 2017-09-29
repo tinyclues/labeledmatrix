@@ -2,7 +2,7 @@ import unittest
 from bisect import bisect_left as bisect_left_old
 
 import numpy as np
-from cyperf.matrix.routine import kronii, bisect_left
+from cyperf.matrix.routine import kronii, bisect_left, batch_contains_mask
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 
 
@@ -30,6 +30,17 @@ class RoutineTestCase(unittest.TestCase):
                                                        [0, 2, 0, -2, 0, 5]]))
         np.testing.assert_array_almost_equal(result1, result2)
         np.testing.assert_array_almost_equal(result2, result3)
+
+    def test_batch_contains_mask(self):
+        a = set(['a', 'b', 3])
+
+        pr1 = (np.array(['r', 'a', 'f', 'gg']), np.array([False, True, False, False]))
+        pr2 = (np.array([1, 2, 3, 4, 5]), np.array([False, False, True, False, False]))
+        pr3 = ([], np.array([], dtype=np.bool))
+
+        for pr in [pr1, pr2, pr3]:
+            np.testing.assert_array_equal(batch_contains_mask(pr[0], a), pr[1])
+            np.testing.assert_array_equal(batch_contains_mask(pr[0], frozenset(a)), pr[1])
 
     def test_kronii_random(self):
         for _ in xrange(30):

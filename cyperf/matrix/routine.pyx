@@ -4,6 +4,7 @@
 #cython: unraisable_tracebacks=True
 
 cimport cython
+from cpython.set cimport PySet_Contains
 from libc.math cimport tanh
 from cyperf.tools.sort_tools cimport partial_sort
 from libc.string cimport memcpy
@@ -35,6 +36,10 @@ ctypedef fused ITERbis:
     np.ndarray[dtype=object, ndim=1]
     object
 
+ctypedef fused SET_FRSET:
+    frozenset
+    set
+
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
@@ -61,6 +66,25 @@ cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITERbis x):
                 hi = mid
         out[i] = lo
     return np.asarray(out)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def batch_contains_mask(ITER values, SET_FRSET kt):
+    cdef:
+        long i, nb = len(values)
+        np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
+        object x
+
+    for i in xrange(nb):
+        x = values[i]
+        try:
+            if PySet_Contains(kt, x) == 1:
+                result[i] = 1
+        except TypeError:
+            pass
+    return np.asarray(result).view(np.bool)
+
 
 
 cdef binary_func get_reducer(string x) nogil except *:
