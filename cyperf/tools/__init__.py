@@ -161,6 +161,8 @@ def take_indices(iterable, indices, length=None):
         # boolean slicing
         if isinstance(indices, np.ndarray) and np.issubdtype(indices.dtype, np.bool_):
             assert len(indices) == len(iterable)
+            if isinstance(iterable, np.ndarray):
+                return iterable[indices]  # shorter way for numpy.array
             indices = np.nonzero(indices)[0]
         try:
             return take_indices_on_iterable(iterable, indices)

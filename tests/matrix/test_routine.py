@@ -2,7 +2,7 @@ import unittest
 from bisect import bisect_left as bisect_left_old
 
 import numpy as np
-from cyperf.matrix.routine import kronii, bisect_left, batch_contains_mask
+from cyperf.matrix.routine import kronii, bisect_left, batch_contains_mask, batch_is_exceptional_mask
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 
 
@@ -41,6 +41,23 @@ class RoutineTestCase(unittest.TestCase):
         for pr in [pr1, pr2, pr3]:
             np.testing.assert_array_equal(batch_contains_mask(pr[0], a), pr[1])
             np.testing.assert_array_equal(batch_contains_mask(pr[0], frozenset(a)), pr[1])
+
+    def test_batch_is_exceptional_mask(self):
+        a = set(['a', 'b', 3, np.iinfo(np.int).min, KarmaSparse])
+        expectional_char = 'f'
+
+        pr1 = (np.array(['r', 'af', 'f', 'gg']),
+               np.array([False, False, True, False]))
+        pr2 = (np.array([1, 2, 3, 4, 5, np.nan, np.iinfo(np.int).min]),
+               np.array([False, False, True, False, False, True, True]))
+        pr3 = (np.array([1, 'ff', 3, KarmaSparse, -np.nan, np.iinfo(np.int).max]),
+               np.array([False, True, True, True, True, False]))
+        pr4 = (np.array([]), np.array([], dtype=np.bool))
+
+        for pr in [pr1, pr2, pr3, pr4]:
+            for b in [a, frozenset(a)]:
+                np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0], b, expectional_char), pr[1])
+                np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0].tolist(), b, expectional_char), pr[1])
 
     def test_kronii_random(self):
         for _ in xrange(30):

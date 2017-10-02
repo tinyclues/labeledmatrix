@@ -5,6 +5,9 @@
 
 cimport cython
 from cpython.set cimport PySet_Contains
+from cpython.string cimport PyString_Check
+from cpython.number cimport PyNumber_Check
+
 from libc.math cimport tanh
 from cyperf.tools.sort_tools cimport partial_sort
 from libc.string cimport memcpy
@@ -85,6 +88,36 @@ def batch_contains_mask(ITER values, SET_FRSET kt):
             pass
     return np.asarray(result).view(np.bool)
 
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def batch_is_exceptional_mask(ITER values, SET_FRSET exceptional_set, str exceptional_char):
+    cdef:
+        long i, nb = len(values)
+        np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
+        object x
+        str y
+
+    for i in xrange(nb):
+        x = values[i]
+
+        try:
+            if PySet_Contains(exceptional_set, x) == 1:
+                result[i] = 1
+                continue
+        except TypeError:
+            continue
+
+        if PyString_Check(x):
+            y = <str>x
+            if y.startswith(exceptional_char):
+                result[i] = 1
+            continue
+
+        if PyNumber_Check(x) and x != x:  # np.nan
+            result[i] = 1
+
+    return np.asarray(result).view(np.bool_)
 
 
 cdef binary_func get_reducer(string x) nogil except *:
