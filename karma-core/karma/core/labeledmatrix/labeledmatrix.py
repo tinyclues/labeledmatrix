@@ -12,9 +12,10 @@ from sklearn.linear_model.logistic import LogisticRegression
 
 from karma.core.column import Column, create_column_from_data
 from karma.core.dataframe import DataFrame
-from karma.core.instructions import Map
-from karma.core.karmacode import KarmaCode, KarmaSequence
+from karma.core.instructions import Map, Dot, KroneckerVector
+from karma.core.karmacode import KarmaCode
 from karma.core.utils import is_integer, use_seed
+from karma.core.method import enforce_lib_closure
 
 from cyperf.tools import logit, logit_inplace, take_indices
 from cyperf.clustering.hierarchical import WardTree
@@ -1728,18 +1729,52 @@ class LabeledMatrix(object):
         lm_nonzero = self.without_zeros()
         return dict(zip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
 
-    def to_karmacode(self, inputs, output, default="uniform"):
-        if default == "uniform":
-            v_default = np.repeat(1. / self.matrix.shape[1], self.matrix.shape[1])
-        elif default == "zero":
-            v_default = np.zeros(self.matrix.shape[1])
-        else:
-            raise LabeledMatrixException("Unknown default {}".format(default))
-        if self.is_sparse:
-            v_default = KarmaSparse(v_default).tocsr()
+    @enforce_lib_closure
+    def to_karmacode(self, inp, output, default="zero"):
+        """
+        >>> lm = LabeledMatrix((['a', 'b'], ['x', 'y', 'z']), np.arange(6).reshape(2,3))
+        >>> df = DataFrame({'col': ['c', 'b', 'b', 'a']})
+        >>> kc_dense = lm.to_dense().to_karmacode('col', 'dense_vector')
+        >>> kc_sparse = lm.to_sparse().to_karmacode('col', 'sparse_vector')
+        >>> df += kc_dense
+        >>> df += kc_sparse
+        >>> aeq(df['dense_vector'][:], df['sparse_vector'][:])
+        True
+        >>> df['dense_vector'][:].shape
+        (4, 3)
+        >>> df['dense_vector'].coordinates
+        ['x', 'y', 'z']
+        >>> df['dense_vector'][:]
+        array([[ 0.,  0.,  0.],
+               [ 3.,  4.,  5.],
+               [ 3.,  4.,  5.],
+               [ 0.,  1.,  2.]])
+        """
+        kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
+        if not self.is_sparse:
+            if default == "uniform":
+                v_default = np.repeat(1. / self.matrix.shape[1], self.matrix.shape[1])
+            elif default == "zero":
+                v_default = np.zeros(self.matrix.shape[1])
+            elif default == "mean":
+                v_default = self.matrix.mean(axis=0)
+            else:
+                raise LabeledMatrixException("Unknown default {}".format(default))
 
-        instruction = Map(inputs, output, dict(zip(self.row, self.matrix)), v_default, coordinates=self.column)
-        return KarmaCode(instructions=[instruction], outputs=(output,))
+            kc += Map(inputs, output, (self.row, self.matrix),
+                      v_default, coordinates=coordinates)
+        else:
+            if default != 'zero':
+                raise ValueError('Sparse LabeledMatrix supports only *zero* default values')
+
+            vector_size = len(self.row)
+            kc += Map(inputs, '_indices', mapping=self.row._index.copy(), default=vector_size)
+            kc += KroneckerVector(('_indices',), '_one_hot_vector',
+                                  vector_size=vector_size, output_format='sparse',
+                                  coordinates=self.row.list)
+            kc += Dot(('_one_hot_vector',), output,
+                      rightfactor=self.matrix, coordinates=coordinates)
+        return kc
 
     def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
         """
