@@ -13,8 +13,7 @@ from scipy.linalg.lapack import get_lapack_funcs
 from sklearn.utils import arrayfuncs
 
 
-def lasso_gram(Xy, XX, max_features=None, max_iter=500,
-               alpha_min=0, method='lasso'):
+def lasso_gram(Xy, XX, max_features=None, max_iter=500, alpha_min=0, method='lasso'):
 
     """ Compute Least Angle Regression and LASSO path
 
@@ -98,7 +97,6 @@ Exemple :
     swap, nrm2 = linalg.get_blas_funcs(('swap', 'nrm2'), (Gram,))
     solve_cholesky, = get_lapack_funcs(('potrs',), (Gram,))
 
-    tiny = np.finfo(np.float).tiny  # to avoid division by 0 warning
     tiny32 = np.finfo(np.float32).tiny  # to avoid division by 0 warning
 
     while True:
@@ -200,8 +198,8 @@ Exemple :
         corr_eq_dir = np.dot(Gram[:n_active, n_active:].T,
                              least_squares)
 
-        g1 = arrayfuncs.min_pos((C - Cov) / (AA - corr_eq_dir + tiny))
-        g2 = arrayfuncs.min_pos((C + Cov) / (AA + corr_eq_dir + tiny))
+        g1 = arrayfuncs.min_pos((C - Cov) / (AA - corr_eq_dir + tiny32))
+        g2 = arrayfuncs.min_pos((C + Cov) / (AA + corr_eq_dir + tiny32))
         gamma_ = min(g1, g2, C / AA)
 
         # TODO: better names for these variables: z
