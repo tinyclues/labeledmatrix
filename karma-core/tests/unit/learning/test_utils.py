@@ -70,7 +70,7 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
         metrics = cv.calculate_train_test_metrics(df, ['group'], 'pred_y', 'y')
         self.assertEquals(metrics.keys(), ['group'])
-        self.assertEquals(metrics['group'].column_names, ['group', '#', 'AUC train', 'AUC test',
+        self.assertEquals(metrics['group'].column_names, ['group', '#', '# test', 'AUC train', 'AUC test',
                                                           'NLL train', 'NLL test', 'Calib train', 'Calib test'])
 
     def test_classes(self):
