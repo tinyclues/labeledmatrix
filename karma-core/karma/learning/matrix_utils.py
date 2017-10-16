@@ -1431,13 +1431,52 @@ def to_scipy_sparse(matrix):
         return scipy_csr_matrix(matrix)
 
 
-def matrix_agg_by_buckets(matrix, buckets_reversed_indices, agg='mean'):
-    ks_buckets = KarmaSparse((buckets_reversed_indices, np.arange(len(buckets_reversed_indices))), format='csr')
-    if agg == 'mean':
+def matrix_group_by(matrix, group_by_key_column, aggregator='mean'):
+    """
+    Returns: grouped matrix in respect to grp_column using aggregator
+    Args:
+        matrix: np.ndarray 2D-shape or KarmaSparse
+        group_by_key_column: Column or array of reversed_indices to use as group_by key
+        aggregator: type of aggregation from [first, 'sum', 'mean', 'max', 'shadow']
+    >>> matrix = np.arange(9).reshape(3, 3)
+    >>> matrix[0, 1] = 10
+    >>> matrix
+    array([[ 0, 10,  2],
+           [ 3,  4,  5],
+           [ 6,  7,  8]])
+    >>> reversed_indices = [0, 0, 1]
+    >>> matrix_group_by(matrix, reversed_indices, aggregator='sum')
+    array([[  3.,  14.,   7.],
+           [  6.,   7.,   8.]])
+    >>> mat = np.array([-6.9, 5.4, -9.4, 0.4, -4.6, 6.2, -2.0, 5.6, 0.1]).reshape(3,3)
+    >>> matrix_group_by(mat, reversed_indices, aggregator='sum')
+    array([[-6.5,  0.8, -3.2],
+           [-2. ,  5.6,  0.1]])
+    """
+    from karma.core.column import Column, AliasColumn
+    if isinstance(group_by_key_column, (Column, AliasColumn)):
+        initial_order_indices = group_by_key_column.deduplicate_indices(take='first')
+        if aggregator == 'first':
+            return matrix[initial_order_indices]
+        _, reversed_indices = group_by_key_column.reversed_index()
+    else:
+        reversed_indices = group_by_key_column
+        initial_order_indices = None
+
+    ks_buckets = KarmaSparse((reversed_indices, np.arange(len(reversed_indices))), format='csr')
+    if aggregator == 'mean':
         ks_buckets = ks_buckets.normalize(axis=1, norm='l1')
-    elif agg != 'sum':
-        raise ValueError('{} aggregator is not supported'.format(agg))
-    return ks_buckets.dot(matrix)
+    if aggregator in ['sum', 'mean']:
+        res = ks_buckets.dot(matrix)
+    elif aggregator in ['max', 'shadow']:
+        res = ks_buckets.shadow(matrix, reducer='max')
+    else:
+        raise ValueError('{} aggregator is not supported'.format(aggregator))
+
+    if initial_order_indices is not None:
+        return res[reversed_indices[initial_order_indices]]
+    else:
+        return res
 
 
 def diagonal_of_inverse_symposdef(mat, nb_threads=16):
