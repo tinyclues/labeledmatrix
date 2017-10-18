@@ -7,12 +7,13 @@ from cpython.sequence cimport PySequence_Check
 from cpython.list cimport PyList_New, PyList_SET_ITEM
 from cpython.ref cimport Py_INCREF, PyObject
 from cpython.dict cimport PyDict_GetItem
+from cpython.number cimport PyNumber_Check, PyNumber_Float, PyNumber_Long
 from cpython.sequence cimport PySequence_Check
+from cpython.unicode cimport PyUnicode_Check, PyUnicode_AsEncodedString, PyUnicode_FromEncodedObject
+from cpython.string cimport PyString_Check
 
 import numpy as np
-from types import DTYPE
-
-cdef DTYPE_t Nan = np.nan
+from types import DTYPE, LTYPE
 
 
 cdef bool check_values(ITER values, dtype=np.int32) except? False:
@@ -91,7 +92,8 @@ cpdef list apply_python_dict(dict mapping, ITER indices, object default, bool ke
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=1] cast_to_float_array(ITER values, str casting):
+cpdef np.ndarray[dtype=DTYPE_t, ndim=1] cast_to_float_array(ITER values, str casting="unsafe",
+                                                            DTYPE_t default=np.nan):
     """
     >>> x = [4, 3, '3']
 
@@ -106,59 +108,152 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] cast_to_float_array(ITER values, str cas
     >>> cast_to_float_array(x, 'unsafe')
     array([ 4.,  3.,  3.])
 
-    >>> x = np.array(x, dtype=np.int)
-    >>> cast_to_float_array(x, 'safe')
-    array([ 4.,  3.,  3.])
-
-    >>> x = (4, 're', 3)
-    >>> cast_to_float_array(x, 'safe')
-    Traceback (most recent call last):
-    ...
-    TypeError: a float is required
-
-    >>> cast_to_float_array(x, 'same_kind')
-    array([  4.,  nan,   3.])
-
-    >>> cast_to_float_array(x, 'unsafe')
-    array([  4.,  nan,   3.])
-
-    >>> x = np.array(x, dtype=np.object)
-    >>> cast_to_float_array(x, 'safe')
-    Traceback (most recent call last):
-    ...
-    TypeError: a float is required
-
-    >>> cast_to_float_array(np.array([4, 3]), 'safe')
-    array([ 4.,  3.])
-
     """
     check_values(values)
-    if isinstance(values, np.ndarray) and 'O' not in values.dtype.str:
-        return values.astype(DTYPE, casting=casting, copy=False)
+    if isinstance(values, np.ndarray) and values.dtype.kind != 'O':
+        try:
+            return values.astype(DTYPE, casting=casting, copy=False)
+        except (ValueError, TypeError):
+            pass
 
     cdef long i, size = len(values)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] result = np.empty(size, dtype=DTYPE)
-    cdef DTYPE_t x
 
     if casting == 'unsafe':
         for i in xrange(size):
-            try:
-                x = float(values[i])
-            except:
-                x = Nan
-            result[i] = x
+            if PyNumber_Check(values[i]):
+                result[i] = <DTYPE_t>values[i]
+            else:
+                try:
+                    result[i] = PyNumber_Float(values[i])
+                except:
+                    result[i] = default
     elif casting == 'same_kind':
         for i in xrange(size):
             try:
-                x = values[i]
+                result[i] = <DTYPE_t>values[i]
             except:
-                x = Nan
-            result[i] = x
+                result[i] = default
     elif casting == 'safe':
         for i in xrange(size):
-            result[i] = values[i]
+            result[i] = <DTYPE_t>values[i]
     else:
         raise ValueError('casting should be one of {"unsafe", "safe", "same_kind"}')
+
+    return result
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef np.ndarray[dtype=LTYPE_t, ndim=1] cast_to_long_array(ITER values, str casting="unsafe",
+                                                           LTYPE_t default=np.iinfo(LTYPE).min):
+    """
+    >>> x = [4, 3, '3']
+
+    >>> cast_to_long_array(x, 'safe') #doctest: +ELLIPSIS
+    Traceback (most recent call last):
+    ...
+    TypeError: an integer is required
+
+    >>> cast_to_long_array(x, 'unsafe')
+    array([4, 3, 3])
+
+    """
+    check_values(values)
+    if isinstance(values, np.ndarray) and values.dtype.kind != 'O':
+        try:
+            return values.astype(LTYPE, casting=casting, copy=False)
+        except (ValueError, TypeError):
+            pass
+
+    cdef long i, size = len(values)
+    cdef np.ndarray[dtype=LTYPE_t, ndim=1] result = np.empty(size, dtype=LTYPE)
+
+    if casting == 'unsafe':
+        for i in xrange(size):
+            if PyNumber_Check(values[i]):
+                result[i] = <LTYPE_t>values[i]
+            else:
+                try:
+                    result[i] = PyNumber_Long(PyNumber_Float(values[i]))
+                except:
+                    result[i] = default
+    elif casting == 'same_kind':
+        for i in xrange(size):
+            try:
+                result[i] = <LTYPE_t>values[i]
+            except:
+                result[i] = default
+    elif casting == 'safe':
+        for i in xrange(size):
+            result[i] =  <LTYPE_t>values[i]
+    else:
+        raise ValueError('casting should be one of {"unsafe", "safe", "same_kind"}')
+
+    return result
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def cast_to_ascii(ITER values, str default='`!#CoercerError'):
+    """
+    Equivalent (up to default value in case of error) to
+    x: x.encode('ascii', errors='ignore') \
+                if isinstance(x, unicode) \
+                else str(unicode(x, 'ascii', errors='ignore')) \
+                if isinstance(x, basestring) else str(x)
+
+    """
+    cdef:
+        long i, nb = len(values)
+        object x
+        str sx
+        list result = []
+
+    for i in xrange(nb):
+        x = values[i]
+        if PyUnicode_Check(x):
+            sx = PyUnicode_AsEncodedString(x, 'ascii', 'ignore')
+        elif PyString_Check(x):
+            sx = str(PyUnicode_FromEncodedObject(x, 'ascii', 'ignore'))
+        else:
+            try:
+                sx = str(x)
+            except:
+                sx = default
+        result.append(sx)
+
+    return result
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def cast_to_unicode(ITER values, input_encoding='utf-8', unicode default=u'`!#CoercerError'):
+    """
+    Equivalent (up to default value in case of error) to
+    (unicode(string, self.input_encoding, errors='ignore') if isinstance(string, str) else string)\
+          .encode('utf-8', errors='ignore') if isinstance(string, basestring) else unicode(string)
+
+    """
+    cdef:
+        long i, nb = len(values)
+        object x, sx
+        list result = []
+        char * ie = input_encoding
+
+    for i in xrange(nb):
+        x = values[i]
+        if PyString_Check(x):
+            sx = PyUnicode_AsEncodedString(PyUnicode_FromEncodedObject(x, ie, 'ignore'),
+                                           'utf-8', 'ignore')
+        elif PyUnicode_Check(x):
+            sx = PyUnicode_AsEncodedString(x, 'utf-8', 'ignore')
+        else:
+            try:
+                sx = unicode(x)
+            except:
+                sx = default
+        result.append(sx)
 
     return result
 
@@ -191,3 +286,29 @@ cpdef np.ndarray[dtype=np.int32_t, ndim=1] python_feature_hasher(ITER inp, int n
     for i in xrange(nb):
         result[i] = <long>(hash(inp[i])) % nb_feature
     return np.asarray(result)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef list inplace_default_setter(list inp,
+                                  np.ndarray[dtype=np.int8_t, ndim=1, mode='c', cast=True] mask,
+                                  object default):
+    """
+        Replace mask elements in list in place by default value:
+        --------
+        >>> x = ['a'] * 10
+        >>> mask = np.arange(10) % 2
+        >>> inplace_default_setter(x, mask.astype(np.int8), 'b')
+        ['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b', 'a', 'b']
+
+    """
+    assert len(inp) == len(mask)
+
+    cdef:
+        long i, nb = len(inp)
+
+    for i in xrange(nb):
+        if mask[i]:
+            inp[i] = default
+
+    return inp
