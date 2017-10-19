@@ -5,20 +5,49 @@ from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sort
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse
 from pandas.core.algorithms import htable
+from pandas import to_datetime
 
 
 def create_truncated_index(user_index, date_values):
-    if is_increasing(date_values):
+    assert user_index.indices.shape[0] == len(date_values)
+
+    date_values = safe_datetime64_cast(date_values)
+    mask = np.logical_not(np.isnat(date_values))
+
+    if len(date_values) == 0:
+        raise ValueError('Empty data is not supported')
+
+    if not np.any(mask):
+        raise ValueError('Date conversion failed')
+
+    if np.all(mask) and is_increasing(date_values):
         return SortedTruncatedIndex(user_index, SortedDateIndex(date_values))
     else:
         return LookUpTruncatedIndex(user_index, LookUpDateIndex(date_values))
 
 
 def safe_datetime64_cast(date_values):
+    """
+    >>> d = safe_datetime64_cast(['2014-01-14', np.nan, 'DD', None, '2014-01-14 - bug'])
+    >>> d
+    array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
+    >>> np.isnat(d)
+    array([False,  True,  True,  True, False], dtype=bool)
+    >>> safe_datetime64_cast(['2014/01/14', np.nan, 'DD', None, '2014/01/14 - 5 hahha'])
+    array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
+    """
     if isinstance(date_values, np.ndarray) and date_values.dtype.kind == 'M':
         return np.asarray(date_values, dtype="datetime64[D]")
     else:
-        return np.asarray(np.asarray(date_values, dtype="S10"), dtype="datetime64[D]")
+        try:
+            date_values = np.asarray(date_values, dtype="S10")
+        except:
+            pass
+        try:
+            return np.asarray(date_values, dtype="datetime64[D]")
+        except ValueError:
+            return to_datetime(date_values, errors='coerce', infer_datetime_format=True, box=False)\
+                        .astype("datetime64[D]")
 
 
 def sorted_unique(array):
@@ -35,37 +64,39 @@ def sorted_unique(array):
     return array[index], index
 
 
-class DateIndex(object):
+class LookUpDateIndex(object):
+    def __init__(self, date_values):
+        self.date_values = safe_datetime64_cast(date_values)
+        self.min_date = np.min(self.date_values)  # this will ignore NaT
+        self.max_date = np.max(self.date_values)
+        self.mask = np.logical_not(np.isnat(self.date_values))
 
     def decay(self, d, half_life):
         d = safe_datetime64_cast(d)
+        d_mask = np.logical_not(np.isnat(d))
 
         min_date = min(d.min(), self.min_date)
         max_date = max(d.max(), self.max_date)
         delta = (max_date - min_date + 1).astype(int)
 
         unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
-        ind_d = (d - min_date).view(np.int)
-        ind_self = (self.date_values - min_date).view(np.int)
-        row_decay = unique_decayed[ind_d]
-        column_decay = (1. / unique_decayed)[ind_self]
+
+        column_decay = np.zeros(len(self.date_values), dtype=np.float)
+        ind_self = (self.date_values[self.mask] - min_date).view(np.int)
+        column_decay[self.mask] = (1. / unique_decayed)[ind_self]
+
+        row_decay = np.zeros(len(d), dtype=np.float)
+        ind_d = (d[d_mask] - min_date).view(np.int)
+        row_decay[d_mask] = unique_decayed[ind_d]
+
         return row_decay, column_decay
 
 
-class LookUpDateIndex(DateIndex):
+class SortedDateIndex(LookUpDateIndex):
 
     def __init__(self, date_values):
-        self.date_values = safe_datetime64_cast(date_values)
-        self.min_date = np.min(self.date_values)
-        self.max_date = np.max(self.date_values)
-
-
-class SortedDateIndex(DateIndex):
-
-    def __init__(self, date_values):
-        self.date_values = safe_datetime64_cast(date_values)
+        super(SortedDateIndex, self).__init__(date_values)
         assert is_increasing(self.date_values)
-        self.min_date, self.max_date = self.date_values[0], self.date_values[-1]
         self._create_index()
 
     @property
@@ -157,9 +188,17 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
         # This query can be factorized by unique users !
         indices, indptr = self.user_index.get_batch_indices(u)
         local_dates = np.ascontiguousarray(self.date_index.date_values.view(np.int))
+        local_dates[np.logical_not(self.date_index.mask)] -= max(lower, upper) + 1  # to avoid overflow
+
+        d = safe_datetime64_cast(d)
+        d_mask_dirty = np.isnat(d)
+        d = d.astype(np.int)
+        d[d_mask_dirty] -= max(lower, upper) + 1  # to avoid overflow
+
         indices, indptr = truncation_method(indices, indptr, local_dates,
-                                            safe_datetime64_cast(d).view(np.int), lower, upper)
-        # XXX : hack to resize memory in place !
+                                            d, lower, upper)
+
+        # # XXX : hack to resize memory in place !
         indices.resize(indptr[-1])
         return indices, indptr
 
