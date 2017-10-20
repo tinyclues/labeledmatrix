@@ -133,6 +133,7 @@ class GetterTestCase(unittest.TestCase):
             cast_to_float_array(np.array([4, 're', 3.1], dtype=np.object), 'safe')
         np.testing.assert_equal(cast_to_float_array([4, 're', 3.1]), [4., np.nan, 3.1])
         np.testing.assert_equal(cast_to_float_array(np.array([4, 3]), 'safe'), [4.,  3.])
+        np.testing.assert_equal(cast_to_float_array(['3', np.nan, '5.4']), [3, np.nan, 5.4])
 
     def test_coerse_long(self):
         np.testing.assert_equal(cast_to_long_array([]), [])
@@ -152,6 +153,8 @@ class GetterTestCase(unittest.TestCase):
         np.testing.assert_equal(cast_to_long_array([4, 're', 3], 'same_kind'), [4, -9223372036854775808, 3])
         np.testing.assert_equal(cast_to_long_array([4, 're', 3], 'unsafe'), [4, -9223372036854775808, 3])
         np.testing.assert_equal(cast_to_long_array(np.array([4.4, 3.1]), 'safe'), [4, 3])
+        np.testing.assert_equal(cast_to_long_array(['3', np.nan, '5.4']), [3, -9223372036854775808, 5])
+        np.testing.assert_equal(cast_to_long_array(np.array([[3, np.nan, 5.4]])), [[3, -9223372036854775808, 5]])
 
     def test_coerse_ascii(self):
         self.assertEqual(cast_to_ascii(['camelCase', '\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan]),

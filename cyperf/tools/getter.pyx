@@ -92,8 +92,7 @@ cpdef list apply_python_dict(dict mapping, ITER indices, object default, bool ke
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=1] cast_to_float_array(ITER values, str casting="unsafe",
-                                                            DTYPE_t default=np.nan):
+def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.nan):
     """
     >>> x = [4, 3, '3']
 
@@ -145,8 +144,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] cast_to_float_array(ITER values, str cas
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=LTYPE_t, ndim=1] cast_to_long_array(ITER values, str casting="unsafe",
-                                                           LTYPE_t default=np.iinfo(LTYPE).min):
+def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iinfo(LTYPE).min):
     """
     >>> x = [4, 3, '3']
 
@@ -172,7 +170,10 @@ cpdef np.ndarray[dtype=LTYPE_t, ndim=1] cast_to_long_array(ITER values, str cast
     if casting == 'unsafe':
         for i in xrange(size):
             if PyNumber_Check(values[i]):
-                result[i] = <LTYPE_t>values[i]
+                if values[i] != values[i]:
+                    result[i] = default
+                else:
+                    result[i] = <LTYPE_t>values[i]
             else:
                 try:
                     result[i] = PyNumber_Long(PyNumber_Float(values[i]))
@@ -312,3 +313,22 @@ cpdef list inplace_default_setter(list inp,
             inp[i] = default
 
     return inp
+
+
+def build_safe_decorator(default, exceptions=(Exception, )):
+    """
+    Pure python function but x2 faster when used from cython space
+
+    >>> safe_int = build_safe_decorator(default=0)(int)
+    >>> map(safe_int, ['4', '4.1', 'RRRR', 5.4])
+    [4, 0, 0, 5]
+    """
+    def decorator(func):
+        def new_func(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except exceptions:
+                return default
+        return new_func
+
+    return decorator
