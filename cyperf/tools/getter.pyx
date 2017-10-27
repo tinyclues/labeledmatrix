@@ -89,6 +89,40 @@ cpdef list apply_python_dict(dict mapping, ITER indices, object default, bool ke
 
     return result
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def apply_python_dict_int(dict mapping, ITER indices, long default):
+    """
+        Apply `mapping` (python dict) over iterable `indices`, equivalent (with about x4 speed factor) to
+
+        ll = lambda x: mapping.get(x, default)
+        map(ll, indices)
+
+        >>> mapping = {'X': 1, 'y': 4}
+        >>> iterable = ['X', 3, np.arange(4), 'y', 'y']
+        >>> apply_python_dict_int(mapping, iterable, -1)
+        array([ 1, -1, -1,  4,  4])
+        >>> apply_python_dict_int(mapping, tuple(iterable), -1)
+        array([ 1, -1, -1,  4,  4])
+        >>> apply_python_dict_int({'X': 'b'}, tuple(iterable), -1) #doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        TypeError: an integer is required
+    """
+    assert PySequence_Check(indices)
+
+    cdef long nb = len(indices), i
+    cdef long[::1] result = np.empty(nb, dtype=np.long)
+
+    for i in xrange(nb):
+        obj = PyDict_GetItem(mapping, indices[i])
+        if obj is not NULL:
+            result[i] = <long>(<object>obj)
+        else:
+            result[i] = default
+
+    return np.asarray(result)
+
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
