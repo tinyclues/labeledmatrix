@@ -26,11 +26,12 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
     def test_basic(self):
         df = self.df.copy()
         cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=6, seed=123)
-        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
+        _ = df.build_lib_column('logistic_regression', 'x', parameters={'axis': 'y', 'cv': cv}, output='pred_y')
 
         self.assertEquals(cv.test_size, 2000)
         self.assertEquals(len(cv.test_indices), 12000)
         self.assertEquals(len(cv.test_y_hat), 12000)
+        self.assertIsNotNone(cv.method_output)
 
         self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
 
