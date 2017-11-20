@@ -50,11 +50,15 @@ class RoutineTestCase(unittest.TestCase):
                np.array([False, False, True, False]))
         pr2 = (np.array([1, 2, 3, 4, 5, np.nan, np.iinfo(np.int).min]),
                np.array([False, False, True, False, False, True, True]))
+
+        pr2_tuple = (np.array([(1,), (2, 'a'), (3,), [3, 3], (), (np.nan, 'rr', 3), (3, 'fa'), [3, 'fa', 1]]),
+                     np.array([False, False,  True,  True, False, False,  True, False]))
+
         pr3 = (np.array([1, 'ff', 3, KarmaSparse, -np.nan, np.iinfo(np.int).max]),
                np.array([False, True, True, True, True, False]))
         pr4 = (np.array([]), np.array([], dtype=np.bool))
 
-        for pr in [pr1, pr2, pr3, pr4]:
+        for pr in [pr1, pr2, pr2_tuple, pr3, pr4]:
             for b in [a, frozenset(a)]:
                 np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0], b, expectional_char), pr[1])
                 np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0].tolist(), b, expectional_char), pr[1])
