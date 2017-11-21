@@ -91,9 +91,19 @@ def batch_contains_mask(ITER values, SET_FRSET kt):
     return np.asarray(result).view(np.bool)
 
 
-
 cdef char is_exceptional(object x, SET_FRSET exceptional_set, str exceptional_char):
     cdef str y
+    cdef long k, l
+
+    if PyTuple_Check(x) or PyList_Check(x):
+        l = len(x)
+        if l == 0:
+            return 0
+        for k in xrange(l):  # all should be exception to get 1
+            if not is_exceptional(x[k], exceptional_set, exceptional_char):
+                return 0
+        return 1
+
     try:
         if PySet_Contains(exceptional_set, x) == 1:
             return 1
@@ -120,17 +130,7 @@ def batch_is_exceptional_mask(ITER values, SET_FRSET exceptional_set, str except
         object x
 
     for i in xrange(nb):
-        x = values[i]
-
-        if PyTuple_Check(x) or PyList_Check(x):
-            for k in xrange(len(x)):  # all should be exception to get 1
-                if not is_exceptional(x[k], exceptional_set, exceptional_char):
-                    result[i] = 0
-                    break
-                else:
-                    result[i] = 1
-        else:
-            result[i] = is_exceptional(x, exceptional_set, exceptional_char)
+        result[i] = is_exceptional(values[i], exceptional_set, exceptional_char)
 
     return np.asarray(result).view(np.bool_)
 

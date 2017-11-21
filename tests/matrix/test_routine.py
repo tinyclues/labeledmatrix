@@ -51,8 +51,9 @@ class RoutineTestCase(unittest.TestCase):
         pr2 = (np.array([1, 2, 3, 4, 5, np.nan, np.iinfo(np.int).min]),
                np.array([False, False, True, False, False, True, True]))
 
-        pr2_tuple = (np.array([(1,), (2, 'a'), (3,), [3, 3], (), (np.nan, 'rr', 3), (3, 'fa'), [3, 'fa', 1]]),
-                     np.array([False, False,  True,  True, False, False,  True, False]))
+        pr2_tuple = (np.array([(1,), (2, 'a'), (3,), [3, 3], (),
+                               (np.nan, 'rr', 3), (3, 'fa'), [3, 'fa', 1], (3, ('fa', 'a'))]),
+                     np.array([False, False,  True,  True, False, False,  True, False, True]))
 
         pr3 = (np.array([1, 'ff', 3, KarmaSparse, -np.nan, np.iinfo(np.int).max]),
                np.array([False, True, True, True, True, False]))
