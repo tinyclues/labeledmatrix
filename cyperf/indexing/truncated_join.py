@@ -33,16 +33,12 @@ def safe_datetime64_cast(date_values):
     array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
     >>> np.isnat(d)
     array([False,  True,  True,  True, False], dtype=bool)
-    >>> safe_datetime64_cast(['2014/01/14', np.nan, 'DD', None, '2014/01/14 - 5 hahha'])
+    >>> safe_datetime64_cast(['2014/01/14', np.nan, 'DD', None, '2014/01/14'])
     array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
     """
     if isinstance(date_values, np.ndarray) and date_values.dtype.kind == 'M':
         return np.asarray(date_values, dtype="datetime64[D]")
     else:
-        try:
-            date_values = np.asarray(date_values, dtype="S10")
-        except:
-            pass
         try:
             return np.asarray(date_values, dtype="datetime64[D]")
         except ValueError:
