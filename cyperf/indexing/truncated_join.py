@@ -36,14 +36,11 @@ def safe_datetime64_cast(date_values):
     >>> safe_datetime64_cast(['2014/01/14', np.nan, 'DD', None, '2014/01/14'])
     array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
     """
-    if isinstance(date_values, np.ndarray) and date_values.dtype.kind == 'M':
+    try:
         return np.asarray(date_values, dtype="datetime64[D]")
-    else:
-        try:
-            return np.asarray(date_values, dtype="datetime64[D]")
-        except ValueError:
-            return to_datetime(date_values, errors='coerce', infer_datetime_format=True, box=False)\
-                        .astype("datetime64[D]")
+    except ValueError:
+        return to_datetime(date_values, errors='coerce', infer_datetime_format=True, box=False)\
+                    .astype("datetime64[D]")
 
 
 def sorted_unique(array):
@@ -183,14 +180,8 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
 
         # This query can be factorized by unique users !
         indices, indptr = self.user_index.get_batch_indices(u)
-        local_dates = np.ascontiguousarray(self.date_index.date_values.view(np.int))
-        local_dates[np.logical_not(self.date_index.mask)] -= max(lower, upper) + 1  # to avoid overflow
-
-        d = safe_datetime64_cast(d)
-        d_mask_dirty = np.isnat(d)
-        d = d.astype(np.int)
-        d[d_mask_dirty] -= max(lower, upper) + 1  # to avoid overflow
-
+        local_dates = self.date_index.date_values.view(np.int)
+        d = safe_datetime64_cast(d).view(np.int)
         indices, indptr = truncation_method(indices, indptr, local_dates,
                                             d, lower, upper)
 

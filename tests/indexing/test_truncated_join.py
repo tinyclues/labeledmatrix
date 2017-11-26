@@ -299,3 +299,98 @@ class TruncatedIndexUnsortedDirtyTestCase(unittest.TestCase):
         self.assertEqual(len(indices), 3)
         self.assertEqual(intensities.nnz, 3)
         np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0., 0.93303299])
+
+
+class TruncatedIndexSortedDirtyTestCase2(unittest.TestCase):
+
+    def setUp(self):
+        uu = ColumnIndex(['u1', 'u2', 'u3', 'u1', 'u2'])
+        dd = ['2017-03-31', '2017-04-01', '2017-04-01', '2017-04-12', '2017-04-22']
+        self.ii_sorted = create_truncated_index(uu, dd)
+
+    def test_dirty_get_case1(self):
+        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
+                                                                  [None, '2017-04-22', None],
+                                                                  lower=0, upper=1)
+        np.testing.assert_array_equal(indices, [4])
+        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+
+        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
+                                                                  [None, '2017-04-22', None],
+                                                                  lower=-100, upper=0)
+        np.testing.assert_array_equal(indices, [1])
+        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+
+        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
+                                                                  [None, '2017-04-22', None],
+                                                                  lower=-100, upper=0)
+        np.testing.assert_array_equal(indices, [1])
+        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+
+    def test_dirty_get_case_all_dirty(self):
+        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
+                                                              [None, '', None],
+                                                              lower=0, upper=1)
+        np.testing.assert_array_equal(indices, [])
+        np.testing.assert_array_equal(indptr, [0, 0, 0, 0])
+
+
+class TruncatedIndexUnsortedDirtyTestCase2(unittest.TestCase):
+
+    def setUp(self):
+        uu = ColumnIndex(['u1', 'u2', 'u3', 'u1', 'u2', 'u1'])
+        dd = ['2017-03-31', '2017-04-22', '', '2017-04-12', '2017-04-01', '']
+        self.ii_lookup = create_truncated_index(uu, dd)
+
+    def test_dirty_get_case1_all(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
+                                                                  lower=-1000, upper=1000,
+                                                                  truncation='all')
+
+        np.testing.assert_array_equal(indices, [])
+        np.testing.assert_array_equal(indptr, [0, 0])
+
+        # no modification on data
+        np.testing.assert_array_equal(self.ii_lookup.date_index.date_values,
+                                      np.array(['2017-03-31', '2017-04-22', 'NaT',
+                                                '2017-04-12', '2017-04-01', 'NaT'], dtype='M'))
+
+    def test_dirty_get_case1_first(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
+                                                                  lower=-1000, upper=1000,
+                                                                  truncation='first')
+
+        np.testing.assert_array_equal(indices, [])
+        np.testing.assert_array_equal(indptr, [0, 0])
+
+    def test_dirty_get_case1_last(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
+                                                                  lower=-1000, upper=1000,
+                                                                  truncation='last')
+
+        np.testing.assert_array_equal(indices, [])
+        np.testing.assert_array_equal(indptr, [0, 0])
+
+    def test_dirty_get_case2_all(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u3', 'u1'], ['2017-04-01', '2017-04-01'],
+                                                                  lower=10, upper=1000,
+                                                                  truncation='all')
+
+        np.testing.assert_array_equal(indices, [3])
+        np.testing.assert_array_equal(indptr, [0, 0, 1])
+
+    def test_dirty_get_case2_first(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u2', 'u1'], [None, '2017-04-01'],
+                                                                  lower=-100, upper=1000,
+                                                                  truncation='first')
+
+        np.testing.assert_array_equal(indices, [0])
+        np.testing.assert_array_equal(indptr, [0, 0, 1])
+
+    def test_dirty_get_case2_last(self):
+        indices, indptr = self.ii_lookup.get_batch_window_indices(['u2', 'u1'], [None, '2017-04-01'],
+                                                                  lower=-100, upper=1000,
+                                                                  truncation='last')
+
+        np.testing.assert_array_equal(indices, [3])
+        np.testing.assert_array_equal(indptr, [0, 0, 1])

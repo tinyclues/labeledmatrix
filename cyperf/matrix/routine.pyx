@@ -16,6 +16,7 @@ from libc.string cimport memcpy
 from libc.stdlib cimport malloc, free
 import numpy as np
 cimport numpy as np
+from cyperf.tools.types import LTYPE
 
 from cython.parallel import prange
 
@@ -389,6 +390,7 @@ def last_indices_sorted(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_
 def indices_truncation_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                               LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
     cdef LTYPE_t nrows = indptr.shape[0] - 1
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
 
@@ -403,18 +405,22 @@ def indices_truncation_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] 
 
     with nogil:
         for i in prange(nrows):
-            ll = boundary_dates[i]
-            uu = ll + upper
-            ll = ll + lower
             pos = indptr[i]
+            ll = boundary_dates[i]
+            if ll != NAT:
+                uu = ll + upper
+                ll = ll + lower
 
-            for j in xrange(indptr[i], indptr[i+1]):
-                ind = indices[j]
-                date = local_dates[ind]
-                if date >= ll and date < uu:
-                    truncated_indices[pos] = ind
-                    pos = pos + 1
+                for j in xrange(indptr[i], indptr[i+1]):
+                    ind = indices[j]
+                    date = local_dates[ind]
+                    if date == NAT:
+                        continue
+                    if date >= ll and date < uu:
+                        truncated_indices[pos] = ind
+                        pos = pos + 1
             truncated_indptr[i + 1] = pos - indptr[i]
+
         pos = 0
         for i in xrange(nrows):
             for j in xrange(indptr[i], indptr[i] + truncated_indptr[i + 1]):
@@ -430,6 +436,7 @@ def indices_truncation_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] 
 def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                         LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
     cdef LTYPE_t nrows = indptr.shape[0] - 1
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
 
@@ -439,12 +446,14 @@ def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_
     cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind
     cdef INT1 ind
 
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
+    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.full(nrows, -1, dtype=np.asarray(indices).dtype)
     cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
 
     with nogil:
         for i in prange(nrows):
             ll = boundary_dates[i]
+            if ll == NAT:
+                continue
             uu = ll + upper
             ll = ll + lower
 
@@ -452,12 +461,12 @@ def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_
             for j in xrange(indptr[i], indptr[i + 1]):
                 ind = indices[j]
                 date = local_dates[ind]
+                if date == NAT:
+                    continue
                 if date >= ll and date < uu and date >= max_date:
                     max_date, max_ind = date, ind
             if max_date >= ll:
                 truncated_indices[i] = max_ind
-            else:
-                truncated_indices[i] = -1
 
         for i in xrange(nrows):
             if truncated_indices[i] != -1:
@@ -474,6 +483,8 @@ def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_
 def first_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                          LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
     cdef LTYPE_t nrows = indptr.shape[0] - 1
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
+
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
 
@@ -483,12 +494,14 @@ def first_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local
     cdef LTYPE_t j, i, ll, uu, date, min_date, min_ind
     cdef INT1 ind
 
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
+    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.full(nrows, -1, dtype=np.asarray(indices).dtype)
     cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
 
     with nogil:
         for i in prange(nrows):
             ll = boundary_dates[i]
+            if ll == NAT:
+                continue
             uu = ll + upper
             ll = ll + lower
 
@@ -496,12 +509,12 @@ def first_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local
             for j in xrange(indptr[i], indptr[i + 1]):
                 ind = indices[j]
                 date = local_dates[ind]
+                if date == NAT:
+                    continue
                 if date >= ll and date < uu and date < min_date:
                     min_date, min_ind = date, ind
             if min_date < uu:
                 truncated_indices[i] = min_ind
-            else:
-                truncated_indices[i] = -1
 
         for i in xrange(nrows):
             if truncated_indices[i] != -1:
