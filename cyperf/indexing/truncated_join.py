@@ -28,7 +28,7 @@ def create_truncated_index(user_index, date_values):
 
 def safe_datetime64_cast(date_values):
     """
-    >>> d = safe_datetime64_cast(['2014-01-14', np.nan, 'DD', None, '2014-01-14 - bug'])
+    >>> d = safe_datetime64_cast(['2014-01-14', np.nan, 'DD', None, '2014-01-14'])
     >>> d
     array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
     >>> np.isnat(d)
@@ -58,6 +58,7 @@ def sorted_unique(array):
 
 
 class LookUpDateIndex(object):
+
     def __init__(self, date_values):
         self.date_values = safe_datetime64_cast(date_values)
         self.min_date = np.min(self.date_values)  # this will ignore NaT

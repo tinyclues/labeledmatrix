@@ -69,7 +69,6 @@ def factorize(values):
 class ColumnIndex(object):
     def __init__(self, *args):
         """
-        >>> from karma.core.column import Column
         >>> key_position, reversed_indices, n_keys = factorize(['c', 'b', 'a', 'a', 'b', 'b', 'd'])
         >>> sorted(key_position.keys())
         ['a', 'b', 'c', 'd']
@@ -145,16 +144,15 @@ class ColumnIndex(object):
 
     def __getitem__(self, value):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index['b']
         array([0, 4], dtype=int32)
         >>> my_index['e']
         array([], dtype=int32)
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select['a']
         array([0], dtype=int32)
         >>> index_select['c']
@@ -168,11 +166,10 @@ class ColumnIndex(object):
     @property
     def compression_rate(self):
         """
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'b'])._backend.__getitem__)
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'b'])
         >>> my_index.compression_rate
         0.5
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'a', 'a'])._backend.__getitem__)
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'a', 'a'])
         >>> round(my_index.compression_rate, 3)
         0.4
         """
@@ -183,16 +180,14 @@ class ColumnIndex(object):
 
     def __len__(self):
         """
-        >>> from karma.core.column import Column
-        >>> len(ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__))
+        >>> len(ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd']))
         4
         """
         return len(self.position)
 
     def __contains__(self, value):
         """
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__)
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd'])
         >>> 'i' in my_index
         False
         >>> 'a' in my_index
@@ -212,16 +207,15 @@ class ColumnIndex(object):
 
     def get_size(self, value):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index.get_size('b')
         2
         >>> my_index.get_size(4)
         0
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select.get_size('c')
         0
         """
@@ -232,14 +226,13 @@ class ColumnIndex(object):
 
     def get_size_batch(self, values):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index.get_size_batch(['b', 'f', 'a', 'e'])
         array([2, 0, 2, 0], dtype=int32)
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select.get_size_batch(['b', 'c'])
         array([1, 0], dtype=int32)
         """
@@ -248,16 +241,15 @@ class ColumnIndex(object):
 
     def get_batch_indices(self, values):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index.get_batch_indices(['b', 'f', 'a', 'e'])
         (array([0, 4, 1, 2], dtype=int32), array([0, 2, 2, 4, 4], dtype=int32))
         >>> my_index.get_batch_indices(['b', 'b', 'b'])
         (array([0, 4, 0, 4, 0, 4], dtype=int32), array([0, 2, 4, 6], dtype=int32))
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select.get_batch_indices(['a', 'f', 'b', 'c'])
         (array([0, 1], dtype=int32), array([0, 1, 1, 2, 2], dtype=int32))
         """
@@ -268,8 +260,8 @@ class ColumnIndex(object):
     def get_unique_indices(self, values):
         """
         return unique sorted indices that map to "values"
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a',  'c', 'b', 'd'])._backend.__getitem__)
+
+        >>> my_index = ColumnIndex(['b', 'a', 'a',  'c', 'b', 'd'])
         >>> my_index.get_unique_indices(['c', 'b'])
         array([0, 3, 4], dtype=int32)
         >>> my_index.get_unique_indices(['d', 'a', 'a', 'a'])
@@ -282,16 +274,15 @@ class ColumnIndex(object):
 
     def get_first(self, value):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index.get_first('b')
         0
         >>> my_index.get_first('e')
         -1
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select.get_first('c')
         -1
         """
@@ -302,14 +293,13 @@ class ColumnIndex(object):
 
     def get_first_batch(self, values):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'a', 'c', 'b', 'd']
+        >>> my_index = ColumnIndex(col)
         >>> my_index.get_first_batch(['b', 'f', 'a', 'e'])
         array([ 0, -1,  1, -1], dtype=int32)
         >>> selection = [2, 4, 5]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = my_index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = my_index.select(selection, select_col)
         >>> index_select.get_first_batch(['a', 'c', 'h'])
         array([ 0, -1, -1], dtype=int32)
         """
@@ -318,8 +308,7 @@ class ColumnIndex(object):
 
     def count(self):
         """
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__)
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd'])
         >>> my_index.count()
         {'a': 2, 'c': 1, 'b': 2, 'd': 1}
         """
@@ -328,8 +317,7 @@ class ColumnIndex(object):
 
     def deduplicate_indices(self, take='first'):
         """
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__)
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd'])
         >>> my_index.deduplicate_indices('first')
         array([0, 1, 3, 5], dtype=int32)
         >>> my_index.deduplicate_indices('last')
@@ -341,8 +329,8 @@ class ColumnIndex(object):
         """
         Get factorised column representation; used as pivot primitive
         Returns: list of keys and np.array of reversed indices
-        >>> from karma.core.column import Column
-        >>> my_index = ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__)
+
+        >>> my_index = ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd'])
         >>> u, ind = my_index.reversed_index()
         >>> u
         ['b', 'a', 'c', 'd']
@@ -359,20 +347,18 @@ class ColumnIndex(object):
 
     def keys(self):
         """
-        >>> from karma.core.column import Column
-        >>> ColumnIndex(Column(['b', 'a', 'a', 'c', 'b', 'd'])._backend.__getitem__).keys()
+        >>> ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd']).keys()
         ['a', 'c', 'b', 'd']
         """
         return self.position.keys()
 
     def sorted_indices(self):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column([4, 3, 5, 1, 8, 10, 0, 1, 10, 8, 7, 6, 2, 2, 9, 2, 5, 1, 5, 4])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+        >>> col = [4, 3, 5, 1, 8, 10, 0, 1, 10, 8, 7, 6, 2, 2, 9, 2, 5, 1, 5, 4]
+        >>> index = ColumnIndex(col)
         >>> selection = [0, 2, 3, 7, 9, 12, 13, 14, 15, 16, 17, 18, 19]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> index_select.sorted_indices()
         array([ 2,  3, 10,  5,  6,  8,  0, 12,  1,  9, 11,  4,  7], dtype=int32)
         """
@@ -394,8 +380,7 @@ class ColumnIndex(object):
 
     def quantiles(self, nb, label=None):
         """
-        >>> from karma.core.column import Column
-        >>> index = ColumnIndex(Column([0.78, 0.78, 0.5, 0.87, 0.87, 0.9, 0.6, 0.6, 0.9, 0.9])._backend.__getitem__)
+        >>> index = ColumnIndex([0.78, 0.78, 0.5, 0.87, 0.87, 0.9, 0.6, 0.6, 0.9, 0.9])
         >>> index.quantiles(4, label='most_common')
         ([0.6, 0.78, 0.9], [0.6, 0.78, 0.87, 0.9])
         >>> index.quantiles(4, label='first')
@@ -413,12 +398,11 @@ class ColumnIndex(object):
     def select(self, indices, selection_values_method):
         """
         Creates a new SelectIndex for a given iterable of indices or slice
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'c', 'a', 'c', 'b', 'b']
+        >>> index = ColumnIndex(col)
         >>> selection = [3, 5, 6]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> index_select.parent_values(slice(None, None, None))
         ['b', 'a', 'c', 'a', 'c', 'b', 'b']
         >>> id(index.position) == id(index_select.position)
@@ -430,8 +414,8 @@ class ColumnIndex(object):
         >>> index_select.reversed_indices
         array([1, 0, 0], dtype=int32)
         >>> selection = slice(None, None, 2)
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> slice_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> slice_select = index.select(selection, select_col)
         >>> slice_select.keys()
         ['b', 'c']
         >>> slice_select.reversed_indices
@@ -491,12 +475,11 @@ class SelectIndex(ColumnIndex):
 
     def count(self):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'c', 'a', 'c', 'b', 'b']
+        >>> index = ColumnIndex(col)
         >>> selection = [3, 5, 6]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> index_select.count()
         {'a': 1, 'b': 2}
         """
@@ -506,12 +489,11 @@ class SelectIndex(ColumnIndex):
 
     def deduplicate_indices(self, take='first'):
         """
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+        >>> col = ['b', 'a', 'c', 'a', 'c', 'b', 'b']
+        >>> index = ColumnIndex(col)
         >>> selection = [3, 5, 6]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> index_select.deduplicate_indices(take='last')
         array([0, 2], dtype=int32)
         """
@@ -521,15 +503,16 @@ class SelectIndex(ColumnIndex):
         """
         Returns: list of keys and np.array of reversed indices.
         Order of keys is that of parent ColumnIndex
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+
+        >>> col = np.array(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
+        >>> index = ColumnIndex(col.__getitem__)
         >>> selection = [3, 5, 6]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> u, ind = index_select.reversed_index()
         >>> u
-        ['b', 'a']
+        array(['b', 'a'],
+              dtype='|S1')
         >>> ind
         array([1, 0, 0], dtype=int32)
         >>> [u[x] for x in ind]
@@ -545,12 +528,12 @@ class SelectIndex(ColumnIndex):
     def keys(self):
         """
         Returns: list of keys. Order of keys is that of parent ColumnIndex
-        >>> from karma.core.column import Column, create_column_from_selection
-        >>> col = Column(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
-        >>> index = ColumnIndex(col._backend.__getitem__)
+
+        >>> col = ['b', 'a', 'c', 'a', 'c', 'b', 'b']
+        >>> index = ColumnIndex(col)
         >>> selection = [3, 5, 6]
-        >>> select_col = create_column_from_selection(col, selection)
-        >>> index_select = index.select(selection, select_col._backend.__getitem__)
+        >>> select_col = take_indices(col, selection)
+        >>> index_select = index.select(selection, select_col)
         >>> index_select.keys()
         ['b', 'a']
         """
@@ -596,16 +579,11 @@ class MultiIndex(ColumnIndex):
 
     Examples
     --------
-    >>> from karma.core.column import Column, create_column_from_instruction
-    >>> from karma.core.instructions.sequence import AsTuple
-    >>> col_0 = Column(['c', 'b', 'a', 'a', 'b', 'b', 'd'])
-    >>> col_1 = Column(['toto', 'toto', 'tutu', 'toto', 'tutu', 'toto', 'toto'])
-    >>> index_0 = ColumnIndex(col_0._backend.__getitem__)
-    >>> index_1 = ColumnIndex(col_1._backend.__getitem__)
-    >>> col_01 = create_column_from_instruction(instruction=AsTuple(('a', 'b'), 'ab'),
-    ...         dependencies=[('a', col_0), ('b', col_1)],
-    ...         length=len(col_0))
-    >>> mi = MultiIndex(index_0, index_1, col_01._backend.__getitem__)
+    >>> col_0 = ['c', 'b', 'a', 'a', 'b', 'b', 'd']
+    >>> col_1 = ['toto', 'toto', 'tutu', 'toto', 'tutu', 'toto', 'toto']
+    >>> index_0 = ColumnIndex(col_0)
+    >>> index_1 = ColumnIndex(col_1)
+    >>> mi = MultiIndex(index_0, index_1, zip(col_0, col_1).__getitem__)
     >>> mi[('c', 'tutu')]
     array([], dtype=int32)
     >>> mi[('bobo', 'tutuu')]

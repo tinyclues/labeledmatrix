@@ -43,3 +43,11 @@ class testDoctest(unittest.TestCase):
     def test_doctest_types(self):
         import cyperf.tools.types
         self.assertEqual(doctest.testmod(cyperf.tools.types).failed, 0)
+
+    def test_doctest_truncated_join(self):
+        import cyperf.indexing.truncated_join
+        self.assertEqual(doctest.testmod(cyperf.indexing.truncated_join).failed, 0)
+
+    def test_doctest_indexing(self):
+        import cyperf.indexing
+        self.assertEqual(doctest.testmod(cyperf.indexing).failed, 0)
