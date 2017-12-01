@@ -16,7 +16,6 @@ from karma.thread_setter import blas_threads, open_mp_threads
 
 
 class VirtualHStack(object):
-
     def __init__(self, X, nb_threads=1):
         self.is_block = isinstance(X, (list, tuple))
         if self.is_block:
@@ -105,7 +104,7 @@ class VirtualHStack(object):
             elif self.is_block and len(arr) == len(self.X):
                 exp_arr = [np.full(x.shape[1], elt) if not is_iterable(elt) else elt for elt, x in izip(arr, self.X)]
                 res = np.concatenate(exp_arr)
-                assert(len(res) == self.shape[1])
+                assert (len(res) == self.shape[1])
                 return res
             else:
                 assert False
@@ -209,9 +208,10 @@ class CrossValidationWrapper(object):
         res = {}
         for col in group_by_cols:
             res[col] = calculate_train_test_metrics(dataframe, col, pred_col, response_col, split_col='label')
-            renaming_dict = {'# train': '#'}
+            renaming_dict = {'# train': '#', '# positive train': '# positive'}
+            exclude = ['# test', '# positive test']
             cols = [name if name not in renaming_dict else '{} as {}'.format(name, renaming_dict[name])
-                    for name in res[col].column_names]
+                    for name in res[col].column_names if name not in exclude]
             res[col] = res[col].copy(*cols)
         return res
 
@@ -238,14 +238,24 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
     ...     df = DataFrame({'topic': np.random.randint(0, 5, 1000), 'pred': np.random.rand(1000),
     ...         'obs': np.random.randint(0, 2, 1000), 'label': ['Train'] * 800 + ['Test'] * 200})
     >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs', 'label').preview() #doctest: +NORMALIZE_WHITESPACE
-    -------------------------------------------------------------------------------------------------
-    topic | # Train | # Test | AUC Train | AUC Test | NLL Train | NLL Test | Calib Train | Calib Test
-    -------------------------------------------------------------------------------------------------
-    0       168       39       -0.1117     -0.0053    1.6616      1.3572     1.1391        1.03
-    1       140       47       -0.1439     -0.0945    1.5192      1.6478     0.945         1.0744
-    2       160       47       0.1419      -0.1164    1.3041      1.5429     0.9598        0.9852
-    3       163       34       -0.0042     -0.0929    1.4236      1.5821     0.9673        1.0748
-    4       169       33       -0.026      -0.2707    1.4532      1.674      1.0984        0.8872
+    --------------------------------------------------------------------------------------------------------------------------------------
+    topic | # Train | # Test | # positive Train | # positive Test | AUC Train | AUC Test | NLL Train | NLL Test | Calib Train | Calib Test
+    --------------------------------------------------------------------------------------------------------------------------------------
+    0       168       39       96                 22                -0.1117     -0.0053    1.6616      1.3572     1.1391        1.03
+    1       140       47       76                 25                -0.1439     -0.0945    1.5192      1.6478     0.945         1.0744
+    2       160       47       76                 22                0.1419      -0.1164    1.3041      1.5429     0.9598        0.9852
+    3       163       34       78                 20                -0.0042     -0.0929    1.4236      1.5821     0.9673        1.0748
+    4       169       33       92                 14                -0.026      -0.2707    1.4532      1.674      1.0984        0.8872
+    >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs').preview() #doctest: +NORMALIZE_WHITESPACE
+    ----------------------------------------------------
+    topic | #   | # positive | AUC     | NLL    | Calib
+    ----------------------------------------------------
+    0       207   118          -0.091    1.6041   1.117
+    1       187   101          -0.117    1.5515   0.974
+    2       207   98           0.0813    1.3582   0.9654
+    3       197   98           -0.0155   1.4433   0.9875
+    4       202   106          -0.0631   1.4804   1.0649
+
     """
     if is_binary(dataframe[response_col][:]):
         err_agg, err_agg_name = ('normalized_log_loss', 'NLL')
@@ -254,21 +264,25 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
 
     group_by = (group_by_col, split_col) if split_col is not None else group_by_col
     agg_args = '{}, {}'.format(pred_col, response_col)
-    agg_tuple = ('# as _N',
+    agg_tuple = ('#',
+                 'sum({}) as # positive'.format(response_col),
                  'auc({}) as AUC'.format(agg_args),
                  '{}({}) as {}'.format(err_agg, agg_args, err_agg_name),
                  'calibration_ratio({}) as Calib'.format(agg_args))
     metrics = dataframe.group_by(group_by, agg_tuple)
+    cols = metrics.column_names[len(group_by):]
     if split_col is not None:
         res_df = dataframe.deduplicate_by(group_by_col, take='first').sort_by(group_by_col).copy(group_by_col)
         metrics_by_label = metrics.split_by(split_col)
-        for col in ['#', 'AUC', err_agg_name, 'Calib']:
+        for col in cols:
             for label in sorted(metrics_by_label.keys())[::-1]:
-                df = metrics_by_label[label]
+                df = metrics_by_label[label].copy(group_by_col, col)
+                _name = df.temporary_column_name()
+                df[_name] = df['alias({})'.format(col)]
                 res_df.add_relation('rel', df, group_by_col, group_by_col)
                 res_df['{} {}'.format(col, label)] = \
-                    res_df['round(translate(translate(!rel.{}, mapping={{RelationalMissing: -1}}), '
-                           'mapping={{np.inf: -1}}), precision=4)'.format('_N' if col == '#' else col)]
+                    res_df['round(translate(translate(!rel.{}, mapping={{RelationalMissing: -1}}), ' \
+                           'mapping={{np.inf: -1}}), precision=4)'.format(_name)]
     else:
         res_df = metrics
     return res_df
