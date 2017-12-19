@@ -18,6 +18,10 @@ import numpy as np
 cimport numpy as np
 from cyperf.tools.types import LTYPE
 
+from cyperf.where.indices_where_long cimport Vector
+from cyperf.where.indices_where_long import Vector
+
+
 from cython.parallel import prange
 
 REDUCERLIST['max'] = mmax
@@ -244,221 +248,232 @@ def kronii(A[:,:] a, B[:,:] b):
 # That can be viewed as new KarmaSparse operation
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def indices_truncation_sorted(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+def indices_truncation_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+                              LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
+    >>> positions = np.array([0, 1], dtype=np.int32)
     >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
     ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
     >>> indptr = np.array([0, 13, 23])
     >>> ll = np.array([3, 5])
     >>> bb = np.array([14, 19])
-    >>> indices, indptr = indices_truncation_sorted(indices, indptr, ll, bb)
-    >>> indices.resize(indptr[-1])
+    >>> indices, indptr = indices_truncation_sorted(positions, indices, indptr, ll, bb)
     >>> indices, indptr
-    (array([ 3,  6,  7,  8,  9, 10, 11,  5,  8, 10, 12, 13, 15, 18], dtype=int32), array([ 0,  7, 14]))
+    (array([ 3,  6,  7,  8,  9, 10, 11,  5,  8, 10, 12, 13, 15, 18]), array([ 0,  7, 14]))
     """
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
+    cdef LTYPE_t nrows = len(positions)
 
-    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
+    assert len(lower_bound) == len(lower_bound) == nrows
+    assert indptr[len(indptr) - 1] == len(indices)
 
-    cdef LTYPE_t j, i, pos = 0, ll, uu
-    cdef INT1 ind
+    cdef LTYPE_t j, i, ll, uu
+    cdef INT1 ind, p
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros_like(np.asarray(indices))
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+    cdef Vector truncated_indices = Vector(2 * nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
 
     with nogil:
         for i in xrange(nrows):
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll >= uu:
-                truncated_indptr[i + 1] = truncated_indptr[i]
+            truncated_indptr[i] = truncated_indices.size()
+            p = positions[i]
+            if p == -1:
                 continue
-            for j in xrange(indptr[i], indptr[i+1]):
+
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll == NAT or uu == NAT or ll >= uu:
+                continue
+
+            for j in xrange(indptr[p], indptr[p + 1]):
                 ind = indices[j]
-                if ind < ll:
-                    continue
+                if ind >= ll and ind < uu:
+                    truncated_indices.append(ind)
                 elif ind >= uu:
                     break
-                else:
-                    truncated_indices[pos] = ind
-                    pos += 1
-            truncated_indptr[i + 1] = pos
 
-    return truncated_indices, np.asarray(truncated_indptr)
+        truncated_indptr[nrows] = truncated_indices.size()
+
+    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def first_indices_sorted(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+def first_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+                         LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
+    >>> positions = np.array([0, 1], dtype=np.int32)
     >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
     ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
     >>> indptr = np.array([0, 13, 23])
     >>> ll = np.array([3, 5])
     >>> bb = np.array([14, 19])
-    >>> indices, indptr = first_indices_sorted(indices, indptr, ll, bb)
-    >>> indices.resize(indptr[-1])
+    >>> indices, indptr = first_indices_sorted(positions, indices, indptr, ll, bb)
     >>> indices, indptr
-    (array([3, 5], dtype=int32), array([0, 1, 2]))
+    (array([3, 5]), array([0, 1, 2]))
     """
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
+    cdef LTYPE_t nrows = len(positions)
 
-    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
+    assert len(lower_bound) == len(lower_bound) == nrows
+    assert indptr[len(indptr) - 1] == len(indices)
 
-    cdef LTYPE_t j, i, pos = 0, ll, uu
-    cdef INT1 ind
 
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+    cdef LTYPE_t j, i, ll, uu
+    cdef INT1 ind, p
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
+
+    cdef Vector truncated_indices = Vector(nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
 
     with nogil:
         for i in xrange(nrows):
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll >= uu:
-                truncated_indptr[i + 1] = truncated_indptr[i]
+            truncated_indptr[i] = truncated_indices.size()
+            p = positions[i]
+            if p == -1:
                 continue
-            for j in xrange(indptr[i], indptr[i + 1]):
+
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll == NAT or uu == NAT or ll >= uu:
+                continue
+
+            for j in xrange(indptr[p], indptr[p + 1]):
                 ind = indices[j]
-                if ind < ll:
-                    continue
+                if ind >= ll and ind < uu:
+                    truncated_indices.append(ind)
+                    break
                 elif ind >= uu:
                     break
-                else:
-                    truncated_indices[pos] = ind
-                    pos += 1
-                    break
-            truncated_indptr[i + 1] = pos
 
-    return truncated_indices, np.asarray(truncated_indptr)
+        truncated_indptr[nrows] = truncated_indices.size()
+    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def last_indices_sorted(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+def last_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+                        LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
+    >>> positions = np.array([0, 1], dtype=np.int32)
     >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
     ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
     >>> indptr = np.array([0, 13, 23])
     >>> ll = np.array([3, 5])
     >>> bb = np.array([14, 19])
-    >>> indices, indptr = last_indices_sorted(indices, indptr, ll, bb)
-    >>> indices.resize(indptr[-1])
+    >>> indices, indptr = last_indices_sorted(positions, indices, indptr, ll, bb)
     >>> indices, indptr
-    (array([11, 18], dtype=int32), array([0, 1, 2]))
+    (array([11, 18]), array([0, 1, 2]))
     """
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
+    cdef LTYPE_t nrows = len(positions)
 
-    assert lower_bound.shape[0] == lower_bound.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
+    assert len(lower_bound) == len(lower_bound) == nrows
+    assert indptr[len(indptr) - 1] == len(indices)
 
-    cdef LTYPE_t j, i, pos = 0, ll, uu
-    cdef INT1 ind
 
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros(nrows, dtype=np.asarray(indices).dtype)
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+    cdef LTYPE_t j, i, ll, uu
+    cdef INT1 ind, p
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
+
+    cdef Vector truncated_indices = Vector(nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
 
     with nogil:
         for i in xrange(nrows):
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll >= uu:
-                truncated_indptr[i + 1] = truncated_indptr[i]
+            truncated_indptr[i] = truncated_indices.size()
+            p = positions[i]
+            if p == -1:
                 continue
-            for j in xrange(indptr[i + 1] - 1, indptr[i] - 1, -1):
-                ind = indices[j]
-                if ind < ll:
-                    break
-                elif ind >= uu:
-                    continue
-                else:
-                    truncated_indices[pos] = ind
-                    pos += 1
-                    break
-            truncated_indptr[i + 1] = pos
 
-    return truncated_indices, np.asarray(truncated_indptr)
+            ll, uu = lower_bound[i], upper_bound[i]
+            if ll == NAT or uu == NAT or ll >= uu:
+                continue
+
+            for j in xrange(indptr[p + 1] - 1, indptr[p] - 1, -1):
+                ind = indices[j]
+                if ind >= ll and ind < uu:
+                    truncated_indices.append(ind)
+                    break
+                elif ind < ll:
+                    break
+
+        truncated_indptr[nrows] = truncated_indices.size()
+    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def indices_truncation_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
+def indices_truncation_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+                              LTYPE_t[::1] local_dates,
                               LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
+    assert len(positions) == len(boundary_dates)
+    assert indptr[len(indptr) - 1] == len(indices)
+
+    cdef LTYPE_t nrows = len(positions)
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
 
-    assert boundary_dates.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
+    cdef Vector truncated_indices = Vector(2 * nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
 
-    cdef LTYPE_t j, i, pos = 0, ll, uu, date
-    cdef INT1 ind
-
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.zeros_like(np.asarray(indices))
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+    cdef LTYPE_t j, i, ll, uu, date
+    cdef INT1 ind, p
 
     with nogil:
-        for i in prange(nrows):
-            pos = indptr[i]
-            ll = boundary_dates[i]
-            if ll != NAT:
-                uu = ll + upper
-                ll = ll + lower
-
-                for j in xrange(indptr[i], indptr[i+1]):
-                    ind = indices[j]
-                    date = local_dates[ind]
-                    if date == NAT:
-                        continue
-                    if date >= ll and date < uu:
-                        truncated_indices[pos] = ind
-                        pos = pos + 1
-            truncated_indptr[i + 1] = pos - indptr[i]
-
-        pos = 0
         for i in xrange(nrows):
-            for j in xrange(indptr[i], indptr[i] + truncated_indptr[i + 1]):
-                truncated_indices[pos] = truncated_indices[j]
-                pos += 1
-            truncated_indptr[i + 1] += truncated_indptr[i]
+            truncated_indptr[i] = truncated_indices.size()
 
-    return truncated_indices, np.asarray(truncated_indptr)
+            p = positions[i]
+            if p == -1:
+                continue
 
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
-                        LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
-
-    assert boundary_dates.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
-
-    cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind
-    cdef INT1 ind
-
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.full(nrows, -1, dtype=np.asarray(indices).dtype)
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
-
-    with nogil:
-        for i in prange(nrows):
             ll = boundary_dates[i]
             if ll == NAT:
                 continue
+
+            uu = ll + upper
+            ll = ll + lower
+            for j in xrange(indptr[p], indptr[p + 1]):
+                ind = indices[j]
+                date = local_dates[ind]
+                if date == NAT:
+                    continue
+                if date >= ll and date < uu:
+                    truncated_indices.append(ind)
+
+        truncated_indptr[nrows] = truncated_indices.size()
+
+    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def last_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
+                        LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
+    assert len(positions) == len(boundary_dates)
+    assert indptr[len(indptr) - 1] == len(indices)
+
+    cdef LTYPE_t nrows = len(positions)
+    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
+
+    cdef Vector truncated_indices = Vector(nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+
+    cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind
+    cdef INT1 ind, p
+
+    with nogil:
+        for i in xrange(nrows):
+            truncated_indptr[i] = truncated_indices.size()
+            p = positions[i]
+            if p == -1:
+                continue
+
+            ll = boundary_dates[i]
+            if ll == NAT:
+                continue
+
             uu = ll + upper
             ll = ll + lower
 
             max_date = ll - 1
-            for j in xrange(indptr[i], indptr[i + 1]):
+            for j in xrange(indptr[p], indptr[p + 1]):
                 ind = indices[j]
                 date = local_dates[ind]
                 if date == NAT:
@@ -466,47 +481,48 @@ def last_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_
                 if date >= ll and date < uu and date >= max_date:
                     max_date, max_ind = date, ind
             if max_date >= ll:
-                truncated_indices[i] = max_ind
+                truncated_indices.append(max_ind)
+        truncated_indptr[nrows] = truncated_indices.size()
 
-        for i in xrange(nrows):
-            if truncated_indices[i] != -1:
-                truncated_indices[truncated_indptr[i]] = truncated_indices[i]
-                truncated_indptr[i + 1] = truncated_indptr[i] + 1
-            else:
-                truncated_indptr[i + 1] = truncated_indptr[i]
-
-    return truncated_indices, np.asarray(truncated_indptr)
+    return np.array(truncated_indices), np.asarray(truncated_indptr)
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def first_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
+def first_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                          LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-    cdef LTYPE_t nrows = indptr.shape[0] - 1
+
+    assert len(positions) == len(boundary_dates)
+    assert indptr[len(indptr) - 1] == len(indices)
+
+    cdef LTYPE_t nrows = len(positions)
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
+
+    cdef Vector truncated_indices = Vector(nrows)
+    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
 
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
 
-    assert boundary_dates.shape[0] == nrows
-    assert indptr[nrows] == indices.shape[0]
-
     cdef LTYPE_t j, i, ll, uu, date, min_date, min_ind
-    cdef INT1 ind
-
-    cdef np.ndarray[INT1, ndim=1, mode='c'] truncated_indices = np.full(nrows, -1, dtype=np.asarray(indices).dtype)
-    cdef INT2[::1] truncated_indptr = np.zeros_like(np.asarray(indptr))
+    cdef INT1 ind, p
 
     with nogil:
-        for i in prange(nrows):
+        for i in xrange(nrows):
+            truncated_indptr[i] = truncated_indices.size()
+            p = positions[i]
+            if p == -1:
+                continue
+
             ll = boundary_dates[i]
             if ll == NAT:
                 continue
+
             uu = ll + upper
             ll = ll + lower
-
             min_date = uu
-            for j in xrange(indptr[i], indptr[i + 1]):
+
+            for j in xrange(indptr[p], indptr[p + 1]):
                 ind = indices[j]
                 date = local_dates[ind]
                 if date == NAT:
@@ -514,13 +530,8 @@ def first_indices_lookup(INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local
                 if date >= ll and date < uu and date < min_date:
                     min_date, min_ind = date, ind
             if min_date < uu:
-                truncated_indices[i] = min_ind
+                truncated_indices.append(min_ind)
 
-        for i in xrange(nrows):
-            if truncated_indices[i] != -1:
-                truncated_indices[truncated_indptr[i]] = truncated_indices[i]
-                truncated_indptr[i + 1] = truncated_indptr[i] + 1
-            else:
-                truncated_indptr[i + 1] = truncated_indptr[i]
+        truncated_indptr[nrows] = truncated_indices.size()
 
-    return truncated_indices, np.asarray(truncated_indptr)
+    return np.array(truncated_indices), np.asarray(truncated_indptr)

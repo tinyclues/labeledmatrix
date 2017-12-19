@@ -179,15 +179,13 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
         assert lower < upper
         truncation_method = self._truncation_method_map[truncation]
 
-        # This query can be factorized by unique users !
-        indices, indptr = self.user_index.get_batch_indices(u)
+        positions = self.user_index._get_positions(u)
         local_dates = self.date_index.date_values.view(np.int)
-        d = safe_datetime64_cast(d).view(np.int)
-        indices, indptr = truncation_method(indices, indptr, local_dates,
-                                            d, lower, upper)
 
-        # # XXX : hack to resize memory in place !
-        indices.resize(indptr[-1])
+        d = safe_datetime64_cast(d).view(np.int)
+        indices, indptr = truncation_method(positions, self.user_index.indices,
+                                            self.user_index.indptr, local_dates,
+                                            d, lower, upper)
         return indices, indptr
 
 
@@ -199,13 +197,13 @@ class SortedTruncatedIndex(BaseTruncatedIndex):
 
     def get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
         assert len(d) == len(u)
+        assert lower < upper
         truncation_method = self._truncation_method_map[truncation]
 
-        # This query can be factorized by unique users !
-        indices, indptr = self.user_index.get_batch_indices(u)
+        positions = self.user_index._get_positions(u)
         lower_bound, upper_bound = self.date_index.get_window_indices(d, lower, upper)
-        indices, indptr = truncation_method(indices, indptr, lower_bound, upper_bound)
-        indices.resize(indptr[-1])
+        indices, indptr = truncation_method(positions, self.user_index.indices,
+                                            self.user_index.indptr, lower_bound, upper_bound)
         return indices, indptr
 
 

@@ -24,8 +24,14 @@ cdef class Vector:
     def __len__(Vector self):
         return self.vector_buffer.size()
 
+    cdef long size(Vector self) nogil:
+        return self.vector_buffer.size()
+
     cdef inline void append(Vector self, ITYPE_t x) nogil:
         self.vector_buffer.push_back(x)
+
+    def __array__(self):
+        return self.asarray()
 
     cpdef np.ndarray[dtype=ITYPE_t, ndim=1] asarray(Vector self):
         self.vector_buffer.shrink_to_fit()  # this needs c++11
