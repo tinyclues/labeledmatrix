@@ -5,10 +5,13 @@
 
 cimport cython
 from cpython.set cimport PySet_Contains
+from cpython.sequence cimport PySequence_Check
 from cpython.string cimport PyString_Check
 from cpython.number cimport PyNumber_Check
 from cpython.tuple cimport PyTuple_Check
 from cpython.list cimport PyList_Check
+from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject
+
 
 from libc.math cimport tanh
 from cyperf.tools.sort_tools cimport partial_sort
@@ -21,8 +24,9 @@ from cyperf.tools.types import LTYPE
 from cyperf.where.indices_where_long cimport Vector
 from cyperf.where.indices_where_long import Vector
 
-
 from cython.parallel import prange
+from collections import defaultdict
+
 
 REDUCERLIST['max'] = mmax
 REDUCERLIST['min'] = mmin
@@ -78,9 +82,84 @@ cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITERbis x):
     return np.asarray(out)
 
 
+cpdef str ESCAPE_CHARS = ' "\''
+cpdef object TRANSLATION_TABLE = defaultdict(lambda :63,
+                                            {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8:
+                                             8, 9: 9, 10: 10, 11: 11, 12: 12, 13: 13, 14: 14, 15: 15,
+                                             16: 16, 17: 17, 18: 18, 19: 19, 20: 20, 21: 21, 22: 22, 23: 23,
+                                             24: 24, 25: 25, 26: 26, 27: 27, 28: 28, 29: 29, 30: 30, 31: 31,
+                                             32: 95, 33: 33, 34: 95, 35: 35, 36: 36, 37: 37, 38: 38, 39: 95,
+                                             40: 40, 41: 41, 42: 42, 43: 43, 44: 44, 45: 45, 46: 46, 47: 47,
+                                             48: 48, 49: 49, 50: 50, 51: 51, 52: 52, 53: 53, 54: 54, 55: 55,
+                                             56: 56, 57: 57, 58: 58, 59: 59, 60: 60, 61: 61, 62: 62, 63: 63,
+                                             64: 64, 65: 65, 66: 66, 67: 67, 68: 68, 69: 69, 70: 70, 71: 71,
+                                             72: 72, 73: 73, 74: 74, 75: 75, 76: 76, 77: 77, 78: 78, 79: 79,
+                                             80: 80, 81: 81, 82: 82, 83: 83, 84: 84, 85: 85, 86: 86, 87: 87,
+                                             88: 88, 89: 89, 90: 90, 91: 91, 92: 92, 93: 93, 94: 94, 95: 95,
+                                             96: 96, 97: 97, 98: 98, 99: 99, 100: 100, 101: 101, 102: 102,
+                                             103: 103, 104: 104, 105: 105, 106: 106, 107: 107, 108: 108,
+                                             109: 109, 110: 110, 111: 111, 112: 112, 113: 113, 114: 114,
+                                             115: 115, 116: 116, 117: 117, 118: 118, 119: 119, 120: 120,
+                                             121: 121, 122: 122, 123: 123, 124: 124, 125: 125, 126: 126,
+                                             127: 127, 224: 97, 225: 97, 226: 97, 227: 97, 228: 97, 229: 97,
+                                             231: 99, 232: 101, 233: 101, 234: 101, 235: 101, 236: 105,
+                                             237: 105, 238: 105, 239: 105, 241: 110, 242: 111, 243: 111,
+                                             244: 111, 245: 111, 246: 111, 249: 117, 250: 117, 251: 117,
+                                             252: 117, 253: 121, 255: 121, 65533: 63, 3333333333: 63})
+
+
+cpdef str cy_safe_slug(basestring chars):
+    if PyUnicode_Check(chars):
+        chars_ = chars
+    else:
+        chars_ = PyUnicode_FromEncodedObject(chars, 'utf-8', 'replace')
+    slug = chars_.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE)
+    return intern(str(slug))
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef basestring cy_domain_from_email_lambda(basestring x, str delimiter='@', str missing=''):
+    cdef list l = x.rsplit(delimiter, 1)
+
+    if len(l) <= 1:
+        return missing
+    else:
+        res = l[1]
+        if PyString_Check(res):
+            return intern(res)
+        else:
+            return res
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef list batch_domain_from_email(ITER values, str missing, object error_value,
+                                   SET_FRSET exceptional_set, str exceptional_char, str delimiter="@"):
+    """
+    Apply domain_from_email_lambda on values. It returns `error_value` for exceptional values
+    defined by exceptional_set and exceptional_char.
+    """
+    PySequence_Check(values)
+    missing = intern(missing)
+
+    cdef list result = []
+    cdef long i, nb = len(values)
+    cdef object x
+
+    for i in xrange(nb):
+        x = values[i]
+        if not (PyString_Check(x) or PyUnicode_Check(x)) or cy_is_exceptional(x, exceptional_set, exceptional_char):
+            result.append(error_value)
+        else:
+            result.append(cy_domain_from_email_lambda(x, delimiter, missing))
+    return result
+
+
 @cython.wraparound(False)
 @cython.boundscheck(False)
 def batch_contains_mask(ITER values, SET_FRSET kt):
+    PySequence_Check(values)
     cdef:
         long i, nb = len(values)
         np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
@@ -96,7 +175,9 @@ def batch_contains_mask(ITER values, SET_FRSET kt):
     return np.asarray(result).view(np.bool)
 
 
-cdef char is_exceptional(object x, SET_FRSET exceptional_set, str exceptional_char):
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef char cy_is_exceptional(object x, SET_FRSET exceptional_set, str exceptional_char):
     cdef str y
     cdef long k, l
 
@@ -105,7 +186,7 @@ cdef char is_exceptional(object x, SET_FRSET exceptional_set, str exceptional_ch
         if l == 0:
             return 0
         for k in xrange(l):  # all should be exception to get 1
-            if not is_exceptional(x[k], exceptional_set, exceptional_char):
+            if not cy_is_exceptional(x[k], exceptional_set, exceptional_char):
                 return 0
         return 1
 
@@ -129,13 +210,13 @@ cdef char is_exceptional(object x, SET_FRSET exceptional_set, str exceptional_ch
 @cython.wraparound(False)
 @cython.boundscheck(False)
 def batch_is_exceptional_mask(ITER values, SET_FRSET exceptional_set, str exceptional_char):
+    PySequence_Check(values)
     cdef:
         long i, k, nb = len(values)
         np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
         object x
-
     for i in xrange(nb):
-        result[i] = is_exceptional(values[i], exceptional_set, exceptional_char)
+        result[i] = cy_is_exceptional(values[i], exceptional_set, exceptional_char)
 
     return np.asarray(result).view(np.bool_)
 

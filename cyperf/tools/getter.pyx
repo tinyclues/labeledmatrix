@@ -8,7 +8,6 @@ from cpython.list cimport PyList_New, PyList_SET_ITEM
 from cpython.ref cimport Py_INCREF, PyObject
 from cpython.dict cimport PyDict_GetItem
 from cpython.number cimport PyNumber_Check, PyNumber_Float, PyNumber_Long
-from cpython.sequence cimport PySequence_Check
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_AsEncodedString, PyUnicode_FromEncodedObject
 from cpython.string cimport PyString_Check
 

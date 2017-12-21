@@ -2,11 +2,56 @@ import unittest
 from bisect import bisect_left as bisect_left_old
 
 import numpy as np
-from cyperf.matrix.routine import kronii, bisect_left, batch_contains_mask, batch_is_exceptional_mask
+from cyperf.matrix.routine import (kronii, bisect_left, batch_contains_mask, batch_is_exceptional_mask,
+                                   cy_safe_slug, cy_domain_from_email_lambda, batch_domain_from_email)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 
 
 class RoutineTestCase(unittest.TestCase):
+
+    def test_safe_slug(self):
+        self.assertEqual(cy_safe_slug(' "Foo bar q"u"x " '), 'foo_bar_q_u_x')
+        self.assertEqual(cy_safe_slug('\xc3\xa9'), 'e')
+        self.assertEqual(cy_safe_slug('\xe9'), '?')
+        self.assertEqual(cy_safe_slug('\xc3foo!'), '?foo!')
+        self.assertEqual(cy_safe_slug('t\xb0st'), 't?st'),
+        self.assertEquals(cy_safe_slug(u'foo\xe8@_-'), 'fooe@_-')
+
+        self.assertTrue(cy_safe_slug('foo!intern') is cy_safe_slug('foo!intern'))
+        self.assertEquals(cy_safe_slug('`Error!'), '`error!')
+        self.assertEquals(cy_safe_slug('5454'), '5454')
+
+        self.assertEquals(cy_safe_slug(u'`Error!'), '`error!')
+        self.assertEquals(cy_safe_slug(u'5454'), '5454')
+
+        self.assertEquals(cy_safe_slug(u'\xc3\xa9'), 'a?')
+        self.assertEquals(cy_safe_slug(u'\xe9'), 'e')
+        self.assertEquals(cy_safe_slug('`Error!'), '`error!')
+
+    def test_domain_from_email_lambda(self):
+        self.assertEqual(cy_domain_from_email_lambda('x', missing='RR'), 'RR')
+        self.assertEqual(cy_domain_from_email_lambda('xRy', missing=''), '')
+        self.assertEqual(cy_domain_from_email_lambda('xRy', missing='', delimiter='R'), 'y')
+        self.assertEqual(cy_domain_from_email_lambda('x@y.com'), 'y.com')
+        self.assertEqual(cy_domain_from_email_lambda('qdfd@rrr@x@y.com'), 'y.com')
+        self.assertEqual(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), u'y.com')
+        self.assertEqual(type(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com')), unicode)
+
+        with self.assertRaises(TypeError) as e:
+            _ = cy_domain_from_email_lambda(33)
+
+    def test_batch_domain_from_email(self):
+        missing = 'Mis'
+        error_value = 'Error'
+        exceptional_set = set('XX')
+        exceptional_char = '#'
+        delimiter = '@'  # default
+
+        values = ['NoDomain', '#exc@do', 'XX', 'x@XX.com', 'qdfd@rrr@x@YY', u'qdfd@rrr@x@y.com', 4, '']
+        result = batch_domain_from_email(values,
+                                         missing, error_value,
+                                         exceptional_set, exceptional_char, delimiter)
+        self.assertEqual(result, ['Mis', 'Error', 'Mis', 'XX.com', 'YY', u'y.com', 'Error', 'Mis'])
 
     def test_kronii(self):
         x, y = np.array([[1, 10, 3]]), np.array([[5, 6], [0, 1]])
