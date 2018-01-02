@@ -142,7 +142,7 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
 
     """
     check_values(values)
-    if isinstance(values, np.ndarray) and values.dtype.kind != 'O':
+    if isinstance(values, np.ndarray) and values.dtype.kind not in ['O', 'S', 'U']:
         try:
             return values.astype(DTYPE, casting=casting, copy=False)
         except (ValueError, TypeError):
@@ -191,7 +191,7 @@ def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iin
 
     """
     check_values(values)
-    if isinstance(values, np.ndarray) and values.dtype.kind != 'O':
+    if isinstance(values, np.ndarray) and values.dtype.kind not in ['O', 'S', 'U']:
         try:
             return values.astype(LTYPE, casting=casting, copy=False)
         except (ValueError, TypeError):
