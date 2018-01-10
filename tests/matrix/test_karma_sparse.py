@@ -1062,3 +1062,13 @@ class TestKarmaSparse(unittest.TestCase):
 
             for b in [sparse, dense, dense.astype(np.float32)]:
                 self.assertTrue(eq(expected_result, linear_error(b, regressor, intercept, target)))
+
+    def test_apply_apply_pointwise_function(self):
+        for dense in self.mf.iterator(dense=True):
+            sparse = KarmaSparse(dense, copy=False)
+            for method, args, kwargs in [(np.exp, [], {}), (np.power, [2], {}),
+                                         (np.clip, [], {'a_min': 0, 'a_max': 1})]:
+                expected = method(dense, *args, **kwargs)
+                expected[dense == 0] = 0
+                actual = sparse.apply_pointwise_function(method, args, kwargs)
+                np.testing.assert_array_equal(actual, expected)

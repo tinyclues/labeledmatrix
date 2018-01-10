@@ -232,7 +232,7 @@ cdef class KarmaSparse:
 
     cdef bool scale_columns(self, np.ndarray factor) except 0
 
-    cpdef KarmaSparse apply_pointwise_function(self, function, function_args=*)
+    cpdef KarmaSparse apply_pointwise_function(self, function, function_args=*, function_kwargs=*)
 
     cdef KarmaSparse scalar_multiply(self, DTYPE_t factor)
 

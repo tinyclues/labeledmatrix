@@ -1142,8 +1142,8 @@ cdef class KarmaSparse:
         self.eliminate_zeros()
         return self
 
-    cpdef KarmaSparse apply_pointwise_function(self, function, function_args=[]):
-        cdef KarmaSparse res = KarmaSparse((function(np.asarray(self.data), *function_args),
+    cpdef KarmaSparse apply_pointwise_function(self, function, function_args=[], function_kwargs={}):
+        cdef KarmaSparse res = KarmaSparse((function(np.asarray(self.data), *function_args, **function_kwargs),
                                             np.array(self.indices, copy=True),
                                             np.array(self.indptr, copy=True)),
                                            self.shape, self.format, copy=False,
