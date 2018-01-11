@@ -10,7 +10,7 @@ from cpython.string cimport PyString_Check
 from cpython.number cimport PyNumber_Check
 from cpython.tuple cimport PyTuple_Check
 from cpython.list cimport PyList_Check
-from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject
+from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject, PyUnicode_AsUTF8String
 
 
 from libc.math cimport tanh
@@ -108,52 +108,30 @@ cpdef object TRANSLATION_TABLE = defaultdict(lambda :63,
                                              252: 117, 253: 121, 255: 121, 65533: 63, 3333333333: 63})
 
 
-cpdef str cy_safe_slug(basestring chars):
-    if PyUnicode_Check(chars):
-        chars_ = chars
+cpdef str cy_safe_slug(object x, unify=True):
+    if PyUnicode_Check(x):
+        x_u = x
     else:
-        chars_ = PyUnicode_FromEncodedObject(chars, 'utf-8', 'replace')
-    slug = chars_.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE)
-    return intern(str(slug))
+        x_u = PyUnicode_FromEncodedObject(x, 'utf-8', 'replace')
+    slug = PyUnicode_AsUTF8String(x_u.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE))
+    if unify:
+        slug = intern(slug)
+    return slug
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef basestring cy_domain_from_email_lambda(basestring x, str delimiter='@', str missing=''):
+cpdef cy_domain_from_email_lambda(x, str delimiter='@', str missing='', bool unify=True):
     cdef list l = x.rsplit(delimiter, 1)
 
     if len(l) <= 1:
         return missing
     else:
         res = l[1]
-        if PyString_Check(res):
+        if PyString_Check(res) and unify:
             return intern(res)
         else:
             return res
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-cpdef list batch_domain_from_email(ITER values, str missing, object error_value,
-                                   SET_FRSET exceptional_set, str exceptional_char, str delimiter="@"):
-    """
-    Apply domain_from_email_lambda on values. It returns `error_value` for exceptional values
-    defined by exceptional_set and exceptional_char.
-    """
-    PySequence_Check(values)
-    missing = intern(missing)
-
-    cdef list result = []
-    cdef long i, nb = len(values)
-    cdef object x
-
-    for i in xrange(nb):
-        x = values[i]
-        if not (PyString_Check(x) or PyUnicode_Check(x)) or cy_is_exceptional(x, exceptional_set, exceptional_char):
-            result.append(error_value)
-        else:
-            result.append(cy_domain_from_email_lambda(x, delimiter, missing))
-    return result
 
 
 @cython.wraparound(False)

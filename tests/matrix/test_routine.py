@@ -3,7 +3,7 @@ from bisect import bisect_left as bisect_left_old
 
 import numpy as np
 from cyperf.matrix.routine import (kronii, bisect_left, batch_contains_mask, batch_is_exceptional_mask,
-                                   cy_safe_slug, cy_domain_from_email_lambda, batch_domain_from_email)
+                                   cy_safe_slug, cy_domain_from_email_lambda)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 
 
@@ -37,21 +37,8 @@ class RoutineTestCase(unittest.TestCase):
         self.assertEqual(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), u'y.com')
         self.assertEqual(type(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com')), unicode)
 
-        with self.assertRaises(TypeError) as e:
+        with self.assertRaises(AttributeError) as e:
             _ = cy_domain_from_email_lambda(33)
-
-    def test_batch_domain_from_email(self):
-        missing = 'Mis'
-        error_value = 'Error'
-        exceptional_set = set('XX')
-        exceptional_char = '#'
-        delimiter = '@'  # default
-
-        values = ['NoDomain', '#exc@do', 'XX', 'x@XX.com', 'qdfd@rrr@x@YY', u'qdfd@rrr@x@y.com', 4, '']
-        result = batch_domain_from_email(values,
-                                         missing, error_value,
-                                         exceptional_set, exceptional_char, delimiter)
-        self.assertEqual(result, ['Mis', 'Error', 'Mis', 'XX.com', 'YY', u'y.com', 'Error', 'Mis'])
 
     def test_kronii(self):
         x, y = np.array([[1, 10, 3]]), np.array([[5, 6], [0, 1]])
