@@ -342,6 +342,15 @@ class TruncatedIndexUnsortedDirtyTestCase2(unittest.TestCase):
         dd = ['2017-03-31', '2017-04-22', '', '2017-04-12', '2017-04-01', '']
         self.ii_lookup = create_truncated_index(uu, dd)
 
+    def test_dirty_get_case1_all_decay(self):
+        ind, ks = self.ii_lookup.ks_get_batch_window_indices(['u1', 'u2'], ['', 'Nn'],
+                                                             lower=-1000, upper=1000,
+                                                             truncation='all', half_life=2)
+
+        np.testing.assert_array_equal(ind, [0])
+        np.testing.assert_array_equal(ks.shape, (2, 1))
+        np.testing.assert_array_equal(ks.nnz, 0)
+
     def test_dirty_get_case1_all(self):
         indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
                                                                   lower=-1000, upper=1000,

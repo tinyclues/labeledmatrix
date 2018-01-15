@@ -69,19 +69,22 @@ class LookUpDateIndex(object):
         d = safe_datetime64_cast(d)
         d_mask = np.logical_not(np.isnat(d))
 
-        min_date = min(d.min(), self.min_date)
-        max_date = max(d.max(), self.max_date)
-        delta = (max_date - min_date + 1).astype(int)
-
-        unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
-
         column_decay = np.zeros(len(self.date_values), dtype=np.float)
-        ind_self = (self.date_values[self.mask] - min_date).view(np.int)
-        column_decay[self.mask] = (1. / unique_decayed)[ind_self]
-
         row_decay = np.zeros(len(d), dtype=np.float)
-        ind_d = (d[d_mask] - min_date).view(np.int)
-        row_decay[d_mask] = unique_decayed[ind_d]
+
+        if np.any(d_mask):  # not all d values are dirty
+
+            min_date = min(d.min(), self.min_date)
+            max_date = max(d.max(), self.max_date)
+            delta = (max_date - min_date + 1).astype(int)
+
+            unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
+
+            ind_self = (self.date_values[self.mask] - min_date).view(np.int)
+            column_decay[self.mask] = (1. / unique_decayed)[ind_self]
+
+            ind_d = (d[d_mask] - min_date).view(np.int)
+            row_decay[d_mask] = unique_decayed[ind_d]
 
         return row_decay, column_decay
 
