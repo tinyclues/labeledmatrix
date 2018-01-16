@@ -330,7 +330,7 @@ def indices_truncation_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] 
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(2 * nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     with nogil:
         for i in xrange(nrows):
@@ -381,7 +381,7 @@ def first_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indpt
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     with nogil:
         for i in xrange(nrows):
@@ -432,7 +432,7 @@ def last_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     with nogil:
         for i in xrange(nrows):
@@ -469,7 +469,7 @@ def indices_truncation_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] 
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(2 * nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     cdef LTYPE_t j, i, ll, uu, date
     cdef INT1 ind, p
@@ -512,7 +512,7 @@ def last_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind
     cdef INT1 ind, p
@@ -558,7 +558,7 @@ def first_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indpt
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
-    cdef INT2[::1] truncated_indptr = np.zeros(nrows + 1, dtype=np.asarray(indptr).dtype)
+    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
