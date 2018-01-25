@@ -3358,7 +3358,7 @@ cdef class KarmaSparse:
                             = 0 otherwise
         """
         cdef ITYPE_t dim, i, row, size
-        cdef np.ndarray[ITYPE_t, ndim=1, mode="c"] indices = np.asarray(my_indices, dtype=ITYPE)
+        cdef np.ndarray[ITYPE_t, ndim=1, mode="c"] indices = np.ascontiguousarray(my_indices, dtype=ITYPE)
         cdef ITYPE_t[::1] new_indices
         cdef ITYPE_t length = indices.shape[0]
         cdef LTYPE_t[::1] indptr
@@ -3561,3 +3561,82 @@ cdef class KarmaSparse:
                               &_factor[0], &result[0], power)
 
         return np.asarray(result)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def kronii_dense_dot_transpose(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
+        check_shape_comptibility(self.shape[0], matrix.shape[0])
+        check_shape_comptibility(factor.shape[0], self.shape[0])
+
+        if self.format == 'csc':
+            return self.swap_slicing().kronii_dense_dot_transpose(matrix, factor, power)
+
+        cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
+        cdef int ti, n_th
+
+        for ti in prange(1, nogil=True):
+            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+
+        cdef int batch_size = self.nrows / n_th, start, stop
+        cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * matrix.shape[1]), dtype=DTYPE)
+
+        if self.nnz > 0:
+            if np.asarray(matrix).dtype == np.float32:
+                with nogil, parallel(num_threads=n_th):
+                    ti = threadid()
+                    start = batch_size * ti
+                    stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
+                    kronii_dot_transpose[float](start, stop, matrix.shape[1],
+                                                &self.indptr[0], &self.indices[0], &self.data[0],
+                                                <float*>&matrix[0, 0],
+                                                &_factor[0], &out_tmp[ti, 0], power)
+            else:
+                with nogil, parallel(num_threads=n_th):
+                    ti = threadid()
+                    start = batch_size * ti
+                    stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
+                    kronii_dot_transpose[double](start, stop, matrix.shape[1],
+                                                &self.indptr[0], &self.indices[0], &self.data[0],
+                                                <double*>&matrix[0, 0],
+                                                &_factor[0], &out_tmp[ti, 0], power)
+        return np.asarray(out_tmp).sum(axis=0)
+
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def kronii_sparse_dot_transpose(self, KarmaSparse other, np.ndarray factor, double power=1.):
+        check_shape_comptibility(self.shape[0], other.shape[0])
+        check_shape_comptibility(factor.shape[0], self.shape[0])
+
+        if self.format == 'csc':
+            return self.swap_slicing().kronii_sparse_dot_transpose(other, factor, power)
+
+        if other.format == 'csc':
+            return self.kronii_sparse_dot_transpose(other.swap_slicing(), factor, power)
+
+        cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
+        cdef int ti, n_th
+
+        for ti in prange(1, nogil=True):
+            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+
+        cdef int batch_size = self.nrows / n_th, start, stop
+        cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * other.shape[1]), dtype=DTYPE)
+
+        if self.nnz > 0 and other.nnz > 0:
+            with nogil, parallel(num_threads=n_th):
+                ti = threadid()
+                start = batch_size * ti
+                stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
+                kronii_sparse_dot_transpose(start, stop, other.ncols,
+                                            &self.indptr[0], &self.indices[0], &self.data[0],
+                                            &other.indptr[0], &other.indices[0], &other.data[0],
+                                            &_factor[0], &out_tmp[ti, 0], power)
+
+        return np.asarray(out_tmp).sum(axis=0)
+
+    def kronii_dot_transpose(self, matrix, factor, power=1):
+        if is_karmasparse(matrix):
+            return self.kronii_sparse_dot_transpose(matrix, factor, power)
+        else:
+            return self.kronii_dense_dot_transpose(matrix, factor, power)

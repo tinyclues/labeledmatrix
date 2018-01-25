@@ -1047,6 +1047,17 @@ class TestKarmaSparse(unittest.TestCase):
                 self.assertTrue(eq(expected_result, sparse.kronii_dot(b, factor)))
                 self.assertTrue(eq(expected_result2, sparse.kronii_dot(b, factor, 2)))
 
+    def test_kronii_test_transpose(self):
+        for a in self.mf.iterator(dense=True):
+            sparse = KarmaSparse(a, copy=False)
+            dense = np.random.rand(a.shape[0], np.random.randint(1, 30))
+            factor = np.random.rand(a.shape[0])
+            expected_result = sparse.kronii(dense).dense_vector_dot_left(factor)
+            expected_result2 = (sparse.kronii(dense) ** 2).dense_vector_dot_left(factor)
+            for b in [dense, dense.astype(np.float32), KarmaSparse(dense)]:
+                self.assertTrue(eq(expected_result, sparse.kronii_dot_transpose(b, factor)))
+                self.assertTrue(eq(expected_result2, sparse.kronii_dot_transpose(b, factor, 2)))
+
     def test_linear_error(self):
         for dense in self.mf.iterator(dense=True):
             sparse = KarmaSparse(dense, copy=False)

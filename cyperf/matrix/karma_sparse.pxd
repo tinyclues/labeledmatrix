@@ -91,6 +91,49 @@ cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_
                     out = out + dd * cpow(matrix[i * size + k], power) * factor[ind * size + k]
             result[i] = out
 
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void kronii_dot_transpose(LTYPE_t start, LTYPE_t stop, LTYPE_t size,
+                                      LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
+                                      cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power) nogil:
+    cdef LTYPE_t i, j, k
+    cdef ITYPE_t ind
+    cdef DTYPE_t dd, f
+
+    for i in xrange(start, stop):
+        f = factor[i]
+        if f == 0:
+            continue
+        for j in xrange(indptr[i], indptr[i + 1]):
+            ind = indices[j]
+            dd = cpow(data[j], power)
+            for k in xrange(size):
+                result[ind * size + k] += dd * cpow(matrix[i * size + k], power) * f
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void kronii_sparse_dot_transpose(LTYPE_t start, LTYPE_t stop, ITYPE_t other_ncols,
+                                             LTYPE_t* self_indptr, ITYPE_t* self_indices, DTYPE_t* self_data,
+                                             LTYPE_t* other_indptr, ITYPE_t* other_indices, DTYPE_t* other_data,
+                                             DTYPE_t* factor, DTYPE_t* result, double power) nogil:
+
+    cdef LTYPE_t i, j, ind, begin, end, kk
+    cdef DTYPE_t alpha, f
+
+    for i in xrange(start, stop):
+        begin, end = other_indptr[i], other_indptr[i + 1]
+        f = factor[i]
+        if f == 0:
+            continue
+        for j in xrange(self_indptr[i], self_indptr[i + 1]):
+            alpha = cpow(self_data[j], power)
+            ind = self_indices[j] * other_ncols
+            for kk in xrange(begin, end):
+                result[ind + other_indices[kk]] += alpha * cpow(other_data[kk], power) * f
+
+
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
@@ -98,7 +141,7 @@ cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
                                    LTYPE_t* other_indptr, ITYPE_t* other_indices, DTYPE_t* other_data,
                                    DTYPE_t* factor, DTYPE_t* result, double power):
 
-    cdef LTYPE_t i, j, ind, start, stop, kk, size
+    cdef LTYPE_t i, j, ind, start, stop, kk
     cdef DTYPE_t alpha, out
 
     for i in prange(nrows, nogil=True):
