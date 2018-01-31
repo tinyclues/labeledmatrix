@@ -1491,3 +1491,49 @@ def diagonal_of_inverse_symposdef(mat, nb_threads=16):
                                       np.eye(mat.shape[0], dtype=np.float32),
                                       lower=True)
         return np.einsum('ji,ji->i', Ch_mat_inv, Ch_mat_inv)
+
+
+def coherence(matrix):
+    """
+    >>> from cyperf.matrix.karma_sparse import KarmaSparse
+    >>> coherence(np.eye(5))
+    0.0
+    >>> coherence(KarmaSparse(np.eye(5, 5)))
+    0.0
+    >>> np.allclose(coherence(np.ones((5, 3))), 1)
+    True
+    """
+    normalized_matrix = normalize(matrix, norm='l2', axis=0)
+    abs_normalized_gram = np.abs(normalized_matrix.transpose().dot(normalized_matrix))
+    np.fill_diagonal(abs_normalized_gram, 0)
+    return abs_normalized_gram.max()
+
+
+def gini_weights(N):
+    """
+    >>> gini_weights(2)
+    array([ 0.75,  0.25])
+    >>> gini_weights(5)
+    array([ 0.9,  0.7,  0.5,  0.3,  0.1])
+    """
+    res = np.arange(1, N + 1, dtype=float)
+    res *= -1
+    res += N + 0.5
+    res /= N
+    return res
+
+
+def row_mean_gini(matrix):
+    """
+    >>> np.isclose(row_mean_gini(np.eye(5, 5)), 0.8)
+    True
+    >>> row_mean_gini(np.zeros((5, 5)))
+    1.0
+    """
+    if is_karmasparse(matrix):
+        return 1.0
+    sorted_matrix = np.sort(np.abs(matrix), axis=1)
+    sorted_matrix = normalize(sorted_matrix, norm='l1', axis=1)
+    diag_gini_weights = np.diag(gini_weights(matrix.shape[1]))
+    sorted_matrix = sorted_matrix.dot(diag_gini_weights)
+    return np.mean(1 - 2 * np.sum(sorted_matrix, axis=1))
