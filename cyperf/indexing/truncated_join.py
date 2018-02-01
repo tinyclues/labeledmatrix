@@ -8,6 +8,51 @@ from pandas.core.algorithms import htable
 from pandas import to_datetime
 
 
+MaxSizeHtable = 10 ** 6
+MinCompression = 0.9
+
+
+def two_integer_array_deduplication(arr1, arr2, shift=1):
+    """
+    Factorize for zip(arr1, arr2) where arr1, arr2 are both integer arrays
+    (see also MultiIndex._build_index method)
+
+    # shift is need, since np.iinfo(np.int).min is ignore by pandas.htable
+
+    returns : reversed_indices, (unique_values1, unique_values2)
+    """
+    assert len(arr1) == len(arr2)
+    arr1 = np.asarray(arr1, dtype=np.int)
+    arr2 = np.asarray(arr2, dtype=np.int)
+
+    max_size = min(len(arr1), MaxSizeHtable)
+    fz = htable.Int64Factorizer(max_size)
+    ind1, u1 = fz.factorize(arr1 + shift), fz.uniques.to_array()
+    u1 -= shift
+
+    fz = htable.Int64Factorizer(max_size)
+    ind2, u2 = fz.factorize(arr2 + shift), fz.uniques.to_array()
+    u2 -= shift
+
+    coef = max(len(u1), len(u2))
+    val12 = ind1 * coef  # check overflow ?..
+    val12 += ind2
+
+    fz = htable.Int64Factorizer(len(u1) + len(u2))
+    val12, u12 = fz.factorize(val12), fz.uniques.to_array()
+    del fz
+
+    # doing maximum inplace
+    # first factor
+    au1 = u12 / coef
+    au1 = u1[au1]
+    # second factor
+    u12 %= coef  # inplace "au2"
+    u12 = u2[u12]
+
+    return val12, (au1, u12)
+
+
 def create_truncated_index(user_index, date_values):
     assert user_index.indices.shape[0] == len(date_values)
 
@@ -119,8 +164,7 @@ class SortedDateIndex(LookUpDateIndex):
             self.unique_date = full_unique_date
             self.interval_indices = full_interval_indices
 
-        self.interval_indices = np.hstack([self.interval_indices,
-                                           [len(self.date_values)]])
+        self.interval_indices = np.hstack([self.interval_indices, [len(self.date_values)]])
 
     def get_window_indices(self, d, lower=-1, upper=0):
         assert lower < upper
@@ -144,31 +188,37 @@ class BaseTruncatedIndex(object):
         self.user_index = user_index
         self.date_index = date_index
 
-    def ks_get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all', half_life=None):
-        indices, indptr = self.get_batch_window_indices(u, d, lower, upper, truncation)
+    def ks_get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all', half_life=None, nb=None):
+        indices, indptr, repeated_indices, d = self._get_batch_window_indices(u, d, lower, upper, truncation)
 
         data = np.ones(len(indices), dtype=np.float64)
         ks = KarmaSparse((data, indices, indptr), format="csr",
-                         shape=(len(u), self.user_index.indptr[-1]),
+                         shape=(len(d), self.user_index.indptr[-1]),
                          copy=False, has_sorted_indices=True, has_canonical_format=True)
+
         if half_life is not None:
             row_decay, column_decay = self.date_index.decay(d, half_life=half_life)
             ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
                    .scale_along_axis_inplace(column_decay, axis=0)
 
-        return compactify_on_right(ks)
+        if nb is not None:
+            # this can be done inside cython routine earlier to be more memory efficient ...
+            ks = ks.truncate_by_count(nb, axis=1)
+        target_indices, ks_compact = compactify_on_right(ks)
 
-    def get_batch_window_indices_with_intensity(self, u, d, lower=-1, upper=0, half_life=None):
-        return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='all', half_life=half_life)
+        return target_indices, ks_compact, repeated_indices
 
-    def get_first_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
+    def get_batch_window_indices_with_intensity(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
         return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='first', half_life=half_life)
+                                                truncation='all', half_life=half_life, nb=nb)
 
-    def get_last_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None):
+    def get_first_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
         return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='last', half_life=half_life)
+                                                truncation='first', half_life=half_life, nb=nb)
+
+    def get_last_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
+        return self.ks_get_batch_window_indices(u, d, lower, upper,
+                                                truncation='last', half_life=half_life, nb=nb)
 
 
 class LookUpTruncatedIndex(BaseTruncatedIndex):
@@ -177,7 +227,7 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
                               'last': last_indices_lookup,
                               'all': indices_truncation_lookup}
 
-    def get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
+    def _get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
         assert len(d) == len(u)
         assert lower < upper
         truncation_method = self._truncation_method_map[truncation]
@@ -186,10 +236,18 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
         local_dates = self.date_index.date_values.view(np.int)
 
         d = safe_datetime64_cast(d).view(np.int)
+        repeated_indices, (positions_, d_) = two_integer_array_deduplication(positions, d)
+        if len(positions_) < MinCompression * len(positions):
+            positions, d = positions_, d_
+        else:
+            del positions_, d_
+            repeated_indices = None
+
         indices, indptr = truncation_method(positions, self.user_index.indices,
                                             self.user_index.indptr, local_dates,
                                             d, lower, upper)
-        return indices, indptr
+        # we may want to make a switch based on the compression rate
+        return indices, indptr, repeated_indices, d.view('M8[D]')
 
 
 class SortedTruncatedIndex(BaseTruncatedIndex):
@@ -198,16 +256,27 @@ class SortedTruncatedIndex(BaseTruncatedIndex):
                               'last': last_indices_sorted,
                               'all': indices_truncation_sorted}
 
-    def get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
+    def _get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
         assert len(d) == len(u)
         assert lower < upper
         truncation_method = self._truncation_method_map[truncation]
 
         positions = self.user_index._get_positions(u)
-        lower_bound, upper_bound = self.date_index.get_window_indices(d, lower, upper)
+
+        d = safe_datetime64_cast(d).view(np.int)
+        repeated_indices, (positions_, d_) = two_integer_array_deduplication(positions, d)
+        if len(positions_) < MinCompression * len(positions):
+            positions, d = positions_, d_
+        else:
+            del positions_, d_
+            repeated_indices = None
+
+        lower_bound, upper_bound = self.date_index.get_window_indices(d.view('M8[D]'), lower, upper)
+
         indices, indptr = truncation_method(positions, self.user_index.indices,
                                             self.user_index.indptr, lower_bound, upper_bound)
-        return indices, indptr
+        # we may want to make a switch based on the compression rate
+        return indices, indptr, repeated_indices, d.view('M8[D]')
 
 
 def compactify_on_right(ks):

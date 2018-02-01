@@ -43,4 +43,8 @@ ctypedef fused INT2:
     ITYPE_t
     LTYPE_t
 
+ctypedef fused INT3:
+    ITYPE_t
+    LTYPE_t
+
 from openmp cimport omp_set_num_threads

@@ -6,8 +6,20 @@ import unittest
 import numpy as np
 
 from cyperf.indexing.truncated_join import (sorted_unique, SortedDateIndex, SortedTruncatedIndex,
-                                            LookUpDateIndex, LookUpTruncatedIndex, create_truncated_index)
+                                            LookUpDateIndex, LookUpTruncatedIndex, create_truncated_index,
+                                            two_integer_array_deduplication)
 from cyperf.indexing import ColumnIndex
+
+
+class TestDeduplication(unittest.TestCase):
+    def test_two_integer_array_deduplication(self):
+        for _ in xrange(100):
+            a1 = np.random.randint(-100, np.random.randint(100) + 1, size=10**4)
+            a2 = np.random.randint(-200, np.random.randint(100) + 1, size=10**4)
+            ind, (u1, u2) = two_integer_array_deduplication(a1, a2)
+            self.assertEqual(sorted(set(zip(a1, a2))), sorted(zip(u1, u2)))
+            np.testing.assert_equal(u1[ind], a1)
+            np.testing.assert_equal(u2[ind], a2)
 
 
 class TestTruncatedJoin(unittest.TestCase):
@@ -66,94 +78,145 @@ class TruncatedIndexSortedTestCase(unittest.TestCase):
         self.ii = SortedTruncatedIndex(self.uu, self.dd)
         self.ii_lookup = LookUpTruncatedIndex(self.uu, LookUpDateIndex(dd))
 
+    def test_get_batch_window_indices_with_nb(self):
+        u, d = ['u1', 'u2', 'u1', 'u2'], ['2017-03-23', '2017-04-02', '2017-03-23', '2017-04-02']
+        target_indices, ks, repeated_indices = self.ii\
+            .get_batch_window_indices_with_intensity(u, d, lower=-1000, upper=1000)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=-1000, upper=1000)
+
+        np.testing.assert_array_equal(target_indices, [0, 1, 2, 3, 4, 5])
+        np.testing.assert_array_equal(repeated_indices, [0, 1, 0, 1])
+        np.testing.assert_array_equal(ks.indices, [0, 2, 3, 1, 4, 5])
+        np.testing.assert_array_equal(ks.indptr, [0, 3, 6])
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
+
+        target_indices, ks, repeated_indices = self.ii\
+            .get_batch_window_indices_with_intensity(u, d, lower=-1000, upper=1000, nb=2)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=-1000, upper=1000, nb=2)
+
+        np.testing.assert_array_equal(target_indices, [2, 3, 4, 5])
+        np.testing.assert_array_equal(repeated_indices, [0, 1, 0, 1])
+        np.testing.assert_array_equal(ks.indices, [0, 1, 2, 3])
+        np.testing.assert_array_equal(ks.indptr, [0, 2, 4])
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
+
     def test_get_batch_window_indices0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, indptr = self.ii.get_batch_window_indices(u, d)
-        indices_lu, indptr_lu = self.ii_lookup.get_batch_window_indices(u, d)
-        np.testing.assert_array_equal(indices, [0, 2, 4, 5])
-        np.testing.assert_array_equal(indptr, [0, 1, 2, 4])
+        target_indices, ks, repeated_indices = self.ii.get_batch_window_indices_with_intensity(u, d)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup.get_batch_window_indices_with_intensity(u, d)
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(indptr_lu, indptr)
+        np.testing.assert_array_equal(target_indices, [0, 2, 4, 5])
+        self.assertIsNone(repeated_indices)
+        np.testing.assert_array_equal(ks.indices, [0, 1, 2, 3])
+        np.testing.assert_array_equal(ks.indptr, [0, 1, 2, 4])
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_batch_window_indices1(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, indptr = self.ii.get_batch_window_indices(u, d, lower=0, upper=9)
-        indices_lu, indptr_lu = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=9)
 
-        np.testing.assert_array_equal(indices, [3])
-        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+        target_indices, ks, repeated_indices = self.ii.get_batch_window_indices_with_intensity(u, d, lower=0, upper=9)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=0, upper=9)
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(indptr_lu, indptr)
+        np.testing.assert_array_equal(target_indices, [3])
+        self.assertIsNone(repeated_indices)
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1, 1])
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_batch_window_indices2(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, indptr = self.ii.get_batch_window_indices(u, d, lower=0, upper=8)
-        indices_lu, indptr_lu = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=8)
 
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 0])
+        target_indices, ks, repeated_indices = self.ii.get_batch_window_indices_with_intensity(u, d, lower=0, upper=8)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=0, upper=8)
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(indptr_lu, indptr)
+        np.testing.assert_array_equal(target_indices, [0])
+        self.assertIsNone(repeated_indices)
+
+        np.testing.assert_array_equal(ks.nnz, 0)
+        np.testing.assert_array_equal(ks.shape, (3, 1))
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_batch_window_indices_with_intensity0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii.get_batch_window_indices_with_intensity(u, d, half_life=1)
-        indices_lu, intensities_lu = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
+        target_indices, ks, repeated_indices = self.ii.get_batch_window_indices_with_intensity(u, d, half_life=1)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, half_life=1)
 
-        np.testing.assert_array_equal(indices, [0, 2, 4, 5])
-        np.testing.assert_array_equal(intensities[[0, 1, 2, 2], np.arange(4)], np.full(4, 0.5))
+        np.testing.assert_array_equal(target_indices, [0, 2, 4, 5])
+        np.testing.assert_array_equal(ks.indices, [0, 1, 2, 3])
+        np.testing.assert_array_equal(ks[[0, 1, 2, 2], np.arange(4)], np.full(4, 0.5))
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(intensities_lu, intensities)
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_batch_window_indices_with_intensity1(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii\
+        target_indices, ks, repeated_indices = self.ii\
             .get_batch_window_indices_with_intensity(u, d, half_life=10,
                                                      lower=-14, upper=14)
-        indices_lu, intensities_lu = self.ii_lookup\
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
             .get_batch_window_indices_with_intensity(u, d, half_life=10,
                                                      lower=-14, upper=14)
-        self.assertEqual(len(indices), 6)
-        self.assertEqual(intensities.nnz, 8)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2],
-                                             [0., 0.4665165, 0., 0., 0.93303299, 0.93303299])
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(intensities_lu, intensities)
+        self.assertEqual(len(target_indices_lu), 6)
+        self.assertIsNone(repeated_indices)
+        self.assertEqual(ks.nnz, 8)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0.4665165, 0., 0., 0.93303299, 0.93303299])
+
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_first_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii\
-            .get_first_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                             lower=-14, upper=14)
-        indices_lu, intensities_lu = self.ii_lookup\
-            .get_first_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                             lower=-14, upper=14)
+        target_indices, ks, repeated_indices = self.ii\
+            .get_first_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_first_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 2)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0.4665165])
+        self.assertEqual(len(target_indices), 2)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0.4665165])
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(intensities_lu, intensities)
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
     def test_get_last_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
 
-        indices, intensities = self.ii.get_last_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                                                      lower=-14, upper=14)
-        indices_lu, intensities_lu = self.ii_lookup.get_last_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                                                                   lower=-14, upper=14)
+        target_indices, ks, repeated_indices = self.ii\
+            .get_last_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
+        target_indices_lu, ks_lu, repeated_indices_lu = self.ii_lookup\
+            .get_last_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 3)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0., 0.93303299])
+        np.testing.assert_array_equal(target_indices, [2, 3, 5])
+        self.assertEqual(len(target_indices), 3)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0., 0.93303299])
 
-        np.testing.assert_array_equal(indices_lu, indices)
-        np.testing.assert_array_equal(intensities_lu, intensities)
+        np.testing.assert_array_equal(ks_lu, ks)
+        np.testing.assert_array_equal(target_indices, target_indices_lu)
+        np.testing.assert_array_equal(repeated_indices, repeated_indices_lu)
 
 
 class TruncatedIndexUnsortedTestCase(unittest.TestCase):
@@ -165,59 +228,61 @@ class TruncatedIndexUnsortedTestCase(unittest.TestCase):
     def test_get_batch_window_indices0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
 
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d)
-        np.testing.assert_array_equal(indices, [2, 4, 1, 5])
-        np.testing.assert_array_equal(indptr, [0, 1, 2, 4])
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d)
+        np.testing.assert_array_equal(target_indices, [1, 2, 4, 5])
+        np.testing.assert_array_equal(ks.indices, [1, 2, 0, 3])
+        np.testing.assert_array_equal(ks.indptr, [0, 1, 2, 4])
+        self.assertIsNone(repeated_indices)
 
     def test_get_batch_window_indices1(self):
         u, d = ['u1', 'u2', 'u1'], ['2017-03-13', '2017-04-02', '2017-03-23']
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=9)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=0, upper=9)
 
-        np.testing.assert_array_equal(indices, [0])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 1])
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 0, 1])
 
     def test_get_batch_window_indices2(self):
         u, d = ['u1', 'u2', 'u1'], ['2017-03-13', '2017-04-02', '2017-03-23']
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=8)
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, lower=0, upper=8)
 
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 0])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 0, 0])
 
     def test_get_batch_window_indices_with_intensity0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
 
-        np.testing.assert_array_equal(indices, [1, 2, 4, 5])
-        np.testing.assert_array_equal(intensities[[0, 1, 2, 2], [1, 2, 3, 3]], 0.5)
+        np.testing.assert_array_equal(target_indices, [1, 2, 4, 5])
+        np.testing.assert_array_equal(ks[[0, 1, 2, 2], [1, 2, 3, 3]], 0.5)
 
     def test_get_batch_window_indices_with_intensity1(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup\
+        target_indices, ks, repeated_indices = self.ii_lookup\
             .get_batch_window_indices_with_intensity(u, d, lower=-14, upper=14, half_life=10)
-        self.assertEqual(len(indices), 6)
-        self.assertEqual(intensities.nnz, 8)
-        print intensities.toarray()
-        np.testing.assert_array_almost_equal(intensities.toarray()[2],
+        self.assertEqual(len(target_indices), 6)
+        self.assertEqual(ks.nnz, 8)
+        np.testing.assert_array_almost_equal(ks.toarray()[2],
                                              [0.,  0.933033,  0.,  0.466516,  0.,  0.933033])
 
     def test_get_first_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup.get_first_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                                                              lower=-14, upper=14)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_first_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 2)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0.4665165])
+        self.assertEqual(len(target_indices), 2)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0.4665165])
 
     def test_get_last_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
 
-        indices, intensities = self.ii_lookup.get_last_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                                                             lower=-14, upper=14)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_last_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 3)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0., 0.93303299])
+        self.assertEqual(len(target_indices), 3)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0., 0.93303299])
 
 
 class TruncatedIndexUnsortedDirtyTestCase(unittest.TestCase):
@@ -229,76 +294,94 @@ class TruncatedIndexUnsortedDirtyTestCase(unittest.TestCase):
     def test_get_batch_window_indices0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
 
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d)
-        np.testing.assert_array_equal(indices, [3, 6, 1, 7])
-        np.testing.assert_array_equal(indptr, [0, 1, 2, 4])
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d)
+
+        np.testing.assert_array_equal(target_indices, [1, 3, 6, 7])
+        np.testing.assert_array_equal(ks.indptr, [0, 1, 2, 4])
+        np.testing.assert_array_equal(ks.data, 1)
+        np.testing.assert_array_equal(ks.toarray(), [[0., 1., 0., 0.], [0., 0., 1., 0.], [1., 0., 0., 1.]])
+        self.assertIsNone(repeated_indices)
 
     def test_get_batch_window_indices_dirty(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', None, '2017-04-02']
 
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d)
-        np.testing.assert_array_equal(indices, [3, 1, 7])
-        np.testing.assert_array_equal(indptr, [0, 1, 1, 3])
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d)
+
+        np.testing.assert_array_equal(target_indices, [1, 3, 7])
+        np.testing.assert_array_equal(ks.indices, [1, 0, 2])
+        np.testing.assert_array_equal(ks.indptr, [0, 1, 1, 3])
+        np.testing.assert_array_equal(ks.data, 1)
+        self.assertIsNone(repeated_indices)
 
     def test_get_batch_window_indices1(self):
         u, d = ['u1', 'u2', 'u1'], ['2017-03-13', '2017-04-02', '2017-03-23']
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=9)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=0, upper=9)
 
-        np.testing.assert_array_equal(indices, [0])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 1])
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 0, 1])
+        np.testing.assert_array_equal(ks.data, 1)
 
     def test_get_batch_window_indices2(self):
         u, d = ['u1', 'u2', 'u1'], ['2017-03-13', '2017-04-02', '2017-03-23']
-        indices, indptr = self.ii_lookup.get_batch_window_indices(u, d, lower=0, upper=8)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=0, upper=8)
 
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 0])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 0, 0])
+        np.testing.assert_array_equal(ks.data, 1)
 
     def test_get_batch_window_indices_with_intensity0(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
 
-        np.testing.assert_array_equal(indices, [1, 3, 6, 7])
-        np.testing.assert_array_equal(intensities[[0, 1, 2, 2], [1, 2, 3, 3]], 0.5)
+        np.testing.assert_array_equal(target_indices, [1, 3, 6, 7])
+        np.testing.assert_array_equal(ks[[0, 1, 2, 2], [1, 2, 3, 3]], 0.5)
+        np.testing.assert_array_equal(ks.shape, (3, 4))
+        self.assertIsNone(repeated_indices)
 
     def test_get_batch_window_indices_with_dirty_intensity0(self):
         u, d = ['u1', 'u1', 'u2', 'u2'], ['2017-03-13', '2017-03-23', 'Dirty', '2017-04-02']
-        indices, intensities = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
+        target_indices, ks, repeated_indices = self.ii_lookup.get_batch_window_indices_with_intensity(u, d, half_life=1)
 
-        np.testing.assert_array_equal(indices, [1, 3, 6, 7])
-        np.testing.assert_array_equal(intensities[[0, 1, 3, 3], [1, 2, 3, 3]], 0.5)
+        np.testing.assert_array_equal(target_indices, [1, 3, 6, 7])
+        np.testing.assert_array_equal(ks.indices, [1, 2, 0, 3])
+        np.testing.assert_array_equal(ks[[0, 1, 3, 3], [1, 2, 3, 3]], 0.5)
+        self.assertIsNone(repeated_indices)
 
     def test_get_batch_window_indices_with_intensity1(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup\
+        target_indices, ks, repeated_indices = self.ii_lookup\
             .get_batch_window_indices_with_intensity(u, d, half_life=10,
                                                      lower=-14, upper=14)
-        self.assertEqual(len(indices), 6)
-        self.assertEqual(intensities.nnz, 8)
-        print intensities.toarray()
-        np.testing.assert_array_almost_equal(intensities.toarray()[2],
+        self.assertEqual(len(target_indices), 6)
+        self.assertEqual(ks.nnz, 8)
+        np.testing.assert_array_almost_equal(ks.toarray()[2],
                                              [0.,  0.933033,  0.,  0.466516,  0.,  0.933033])
+        self.assertIsNone(repeated_indices)
 
     def test_get_first_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
-        indices, intensities = self.ii_lookup\
+        target_indices, ks, repeated_indices = self.ii_lookup\
             .get_first_batch_window_indices_with_intensities(u, d, half_life=10,
                                                              lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 2)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0.4665165])
+        self.assertEqual(len(target_indices), 2)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0.4665165])
+        self.assertIsNone(repeated_indices)
 
     def test_get_last_batch_window_indices_with_intensities(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
 
-        indices, intensities = self.ii_lookup\
-            .get_last_batch_window_indices_with_intensities(u, d, half_life=10,
-                                                            lower=-14, upper=14)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_last_batch_window_indices_with_intensities(u, d, half_life=10, lower=-14, upper=14)
 
-        self.assertEqual(len(indices), 3)
-        self.assertEqual(intensities.nnz, 3)
-        np.testing.assert_array_almost_equal(intensities.toarray()[2], [0., 0., 0.93303299])
+        self.assertEqual(len(target_indices), 3)
+        self.assertEqual(ks.nnz, 3)
+        np.testing.assert_array_almost_equal(ks.toarray()[2], [0., 0., 0.93303299])
+        self.assertIsNone(repeated_indices)
 
 
 class TruncatedIndexSortedDirtyTestCase2(unittest.TestCase):
@@ -309,30 +392,64 @@ class TruncatedIndexSortedDirtyTestCase2(unittest.TestCase):
         self.ii_sorted = create_truncated_index(uu, dd)
 
     def test_dirty_get_case1(self):
-        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
-                                                                  [None, '2017-04-22', None],
-                                                                  lower=0, upper=1)
-        np.testing.assert_array_equal(indices, [4])
-        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+        target_indices, ks, repeated_indices = self.ii_sorted\
+            .get_batch_window_indices_with_intensity(['u1', 'u2', 'u3'],
+                                                     [None, '2017-04-22', None], lower=0, upper=1)
 
-        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
-                                                                  [None, '2017-04-22', None],
-                                                                  lower=-100, upper=0)
-        np.testing.assert_array_equal(indices, [1])
-        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+        np.testing.assert_array_equal(target_indices, [4])
+        self.assertIsNone(repeated_indices)
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1, 1])
+        np.testing.assert_array_equal(ks.data, 1)
 
-        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
-                                                                  [None, '2017-04-22', None],
-                                                                  lower=-100, upper=0)
-        np.testing.assert_array_equal(indices, [1])
-        np.testing.assert_array_equal(indptr, [0, 0, 1, 1])
+        target_indices, ks, repeated_indices = self.ii_sorted\
+            .get_batch_window_indices_with_intensity(['u1', 'u2', 'u3'],
+                                                     [None, '2017-04-22', None],
+                                                     lower=-100, upper=0)
+        np.testing.assert_array_equal(target_indices, [1])
+        self.assertIsNone(repeated_indices)
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1, 1])
+        np.testing.assert_array_equal(ks.data, 1)
 
     def test_dirty_get_case_all_dirty(self):
-        indices, indptr = self.ii_sorted.get_batch_window_indices(['u1', 'u2', 'u3'],
-                                                              [None, '', None],
-                                                              lower=0, upper=1)
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0, 0, 0])
+        target_indices, ks, repeated_indices = self.ii_sorted\
+            .get_batch_window_indices_with_intensity(['u1', 'u2', 'u3'],
+                                                     [None, '', None],
+                                                     lower=0, upper=1)
+        np.testing.assert_array_equal(ks.data, [])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 0, 0])
+
+    def test_dirty_repeated_values1(self):
+        u, d = [''] * 4, [None] * 4
+        target_indices, ks, repeated_indices = self.ii_sorted\
+            .get_batch_window_indices_with_intensity(u, d, lower=-100, upper=1000)
+
+        np.testing.assert_array_equal(ks.nnz, 0)
+        np.testing.assert_array_equal(target_indices, [0])
+        np.testing.assert_array_equal(repeated_indices, [0] * 4)
+
+        # composition test
+        out = np.arange(10).reshape(5, 2)
+        np.testing.assert_array_equal(ks.dot(out[target_indices])[repeated_indices], 0)
+
+    def test_dirty_repeated_values2(self):
+        u, d = ['u1', 'u2', 'u1', 'u2'], ['2017-04-01', '', '2017-04-01', '']
+        target_indices, ks, repeated_indices = self.ii_sorted\
+            .get_batch_window_indices_with_intensity(u, d, lower=-100, upper=1000)
+
+        np.testing.assert_array_equal(target_indices, [0, 3])
+        np.testing.assert_array_equal(repeated_indices, [0, 1, 0, 1])
+        np.testing.assert_array_equal(ks.indices, [0, 1])
+        np.testing.assert_array_equal(ks.indptr, [0, 2, 2])
+        np.testing.assert_array_equal(ks.shape, (2, 2))
+        np.testing.assert_array_equal(ks.toarray(), [[1, 1], [0, 0]])
+
+        # composition test
+        out = np.arange(10).reshape(5, 2)
+        np.testing.assert_array_equal(ks.dot(out[target_indices])[repeated_indices],
+                                      [[6., 8.], [0., 0.], [6., 8.], [0., 0.]])
 
 
 class TruncatedIndexUnsortedDirtyTestCase2(unittest.TestCase):
@@ -343,21 +460,21 @@ class TruncatedIndexUnsortedDirtyTestCase2(unittest.TestCase):
         self.ii_lookup = create_truncated_index(uu, dd)
 
     def test_dirty_get_case1_all_decay(self):
-        ind, ks = self.ii_lookup.ks_get_batch_window_indices(['u1', 'u2'], ['', 'Nn'],
-                                                             lower=-1000, upper=1000,
-                                                             truncation='all', half_life=2)
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .ks_get_batch_window_indices(['u1', 'u2'], ['', 'Nn'], lower=-1000, upper=1000,
+                                         truncation='all', half_life=2)
 
-        np.testing.assert_array_equal(ind, [0])
+        np.testing.assert_array_equal(target_indices, [0])
         np.testing.assert_array_equal(ks.shape, (2, 1))
         np.testing.assert_array_equal(ks.nnz, 0)
+        self.assertIsNone(repeated_indices)
 
     def test_dirty_get_case1_all(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
-                                                                  lower=-1000, upper=1000,
-                                                                  truncation='all')
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(['u1'], [None], lower=-1000, upper=1000)
 
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0])
 
         # no modification on data
         np.testing.assert_array_equal(self.ii_lookup.date_index.date_values,
@@ -365,41 +482,63 @@ class TruncatedIndexUnsortedDirtyTestCase2(unittest.TestCase):
                                                 '2017-04-12', '2017-04-01', 'NaT'], dtype='M'))
 
     def test_dirty_get_case1_first(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
-                                                                  lower=-1000, upper=1000,
-                                                                  truncation='first')
-
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0])
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_first_batch_window_indices_with_intensities(['u1'], [None], lower=-1000, upper=1000)
+        np.testing.assert_array_equal(target_indices, [0])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0])
+        self.assertIsNone(repeated_indices)
 
     def test_dirty_get_case1_last(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u1'], [None],
-                                                                  lower=-1000, upper=1000,
-                                                                  truncation='last')
-
-        np.testing.assert_array_equal(indices, [])
-        np.testing.assert_array_equal(indptr, [0, 0])
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_last_batch_window_indices_with_intensities(['u1'], [None], lower=-1000, upper=1000)
+        np.testing.assert_array_equal(target_indices, [0])
+        np.testing.assert_array_equal(ks.indices, [])
+        np.testing.assert_array_equal(ks.indptr, [0, 0])
 
     def test_dirty_get_case2_all(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u3', 'u1'], ['2017-04-01', '2017-04-01'],
-                                                                  lower=10, upper=1000,
-                                                                  truncation='all')
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(['u3', 'u1'], ['2017-04-01', '2017-04-01'],
+                                                     lower=10, upper=1000,)
 
-        np.testing.assert_array_equal(indices, [3])
-        np.testing.assert_array_equal(indptr, [0, 0, 1])
+        np.testing.assert_array_equal(target_indices, [3])
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1])
+        self.assertIsNone(repeated_indices)
 
     def test_dirty_get_case2_first(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u2', 'u1'], [None, '2017-04-01'],
-                                                                  lower=-100, upper=1000,
-                                                                  truncation='first')
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_first_batch_window_indices_with_intensities(['u2', 'u1'], [None, '2017-04-01'],
+                                                             lower=-100, upper=1000)
 
-        np.testing.assert_array_equal(indices, [0])
-        np.testing.assert_array_equal(indptr, [0, 0, 1])
+        np.testing.assert_array_equal(target_indices, [0])
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1])
+        self.assertIsNone(repeated_indices)
 
     def test_dirty_get_case2_last(self):
-        indices, indptr = self.ii_lookup.get_batch_window_indices(['u2', 'u1'], [None, '2017-04-01'],
-                                                                  lower=-100, upper=1000,
-                                                                  truncation='last')
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_last_batch_window_indices_with_intensities(['u2', 'u1'], [None, '2017-04-01'],
+                                                            lower=-100, upper=1000)
 
-        np.testing.assert_array_equal(indices, [3])
-        np.testing.assert_array_equal(indptr, [0, 0, 1])
+        np.testing.assert_array_equal(target_indices, [3])
+        np.testing.assert_array_equal(ks.indices, [0])
+        np.testing.assert_array_equal(ks.indptr, [0, 0, 1])
+        self.assertIsNone(repeated_indices)
+
+    def test_dirty_repeated_values(self):
+        u, d = [''] * 4, [None] * 4
+        target_indices, ks, repeated_indices = self.ii_lookup\
+            .get_batch_window_indices_with_intensity(u, d, lower=-100, upper=1000)
+
+        np.testing.assert_array_equal(target_indices, [0])
+        np.testing.assert_array_equal(ks.nnz, 0)
+        np.testing.assert_array_equal(repeated_indices, [0, 0, 0, 0])
+
+        u, d = ['u1', 'u2', 'u1', 'u2'], ['2017-04-01', '', '2017-04-01', '']
+        target_indices, ks, repeated_indices = self\
+            .ii_lookup.get_batch_window_indices_with_intensity(u, d, lower=-100, upper=1000)
+        np.testing.assert_array_equal(target_indices, [0, 3])
+        np.testing.assert_array_equal(ks.indices, [0, 1])
+        np.testing.assert_array_equal(ks.indptr, [0, 2, 2])
+        np.testing.assert_array_equal(repeated_indices, [0, 1, 0, 1])

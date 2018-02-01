@@ -307,7 +307,7 @@ def kronii(A[:,:] a, B[:,:] b):
 # That can be viewed as new KarmaSparse operation
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def indices_truncation_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+def indices_truncation_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
                               LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
     >>> positions = np.array([0, 1], dtype=np.int32)
@@ -357,7 +357,7 @@ def indices_truncation_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def first_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+def first_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
                          LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
     >>> positions = np.array([0, 1], dtype=np.int32)
@@ -408,7 +408,7 @@ def first_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indpt
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def last_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+def last_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
                         LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
     """
     >>> positions = np.array([0, 1], dtype=np.int32)
@@ -459,7 +459,7 @@ def last_indices_sorted(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def indices_truncation_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr,
+def indices_truncation_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
                               LTYPE_t[::1] local_dates,
                               LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
     assert len(positions) == len(boundary_dates)
@@ -503,7 +503,7 @@ def indices_truncation_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def last_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
+def last_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                         LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
     assert len(positions) == len(boundary_dates)
     assert indptr[len(indptr) - 1] == len(indices)
@@ -548,7 +548,7 @@ def last_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def first_indices_lookup(INT1[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
+def first_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
                          LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
 
     assert len(positions) == len(boundary_dates)
