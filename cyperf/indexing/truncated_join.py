@@ -167,19 +167,32 @@ class SortedDateIndex(LookUpDateIndex):
         self.interval_indices = np.hstack([self.interval_indices, [len(self.date_values)]])
 
     def get_window_indices(self, d, lower=-1, upper=0):
+        """
+        Returns indices for day such that lower <= day - d  < upper
+        """
         assert lower < upper
-        # indices for day such that lower <= day - d  < upper
+        d = safe_datetime64_cast(d)
+
+        lower_bound = self.get_lower_window_indices(d, lower)
+        upper_bound = self.get_upper_window_indices(d, upper)
+
+        return lower_bound, upper_bound
+
+    def get_upper_window_indices(self, d, upper=0):
+        d = safe_datetime64_cast(d)
+
+        d_upper = (d + upper).clip(self.min_date, self.max_date + 1)
+        d_upper = (d_upper - self.min_date).view(np.int)
+
+        return self.interval_indices[d_upper]
+
+    def get_lower_window_indices(self, d, lower=0):
         d = safe_datetime64_cast(d)
 
         d_lower = (d + lower).clip(self.min_date, self.max_date + 1)
         d_lower = (d_lower - self.min_date).view(np.int)
 
-        d_upper = (d + upper).clip(self.min_date, self.max_date + 1)
-        d_upper = (d_upper - self.min_date).view(np.int)
-
-        lower_bound = self.interval_indices[d_lower]
-        upper_bound = self.interval_indices[d_upper]
-        return lower_bound, upper_bound
+        return self.interval_indices[d_lower]
 
 
 class BaseTruncatedIndex(object):
