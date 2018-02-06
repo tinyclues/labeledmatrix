@@ -156,6 +156,56 @@ def _prepare_and_check_classes(y, groups):
 
 
 class CrossValidationWrapper(object):
+    """Cross-validation.
+
+    General Karma wrapper for the creation of shuffled cross-validation (possibly stratified).
+
+    Parameters
+    ----------
+    cv : float
+    Between 0 and 1, proportion of the data to use in each test set.
+
+    y : array
+    Targets for the classification task.
+
+    groups : array, default None
+    Values of the stratification variable.
+
+    n_splits : int, default 1
+    Number of splits to create.
+
+    seed: int, default None
+    To use a specific seed.
+
+    Attributes
+    ----------
+    test_indices : int array
+    Rows indices used in test sets.
+
+    test_y_hat : float array
+    Predictions on the different test sets.
+
+    intercepts : list
+    Intercepts on each fold.
+
+    feat_coefs : list of arrays
+    List of the feature coefficients on each fold.
+
+    test_fraction : float
+    Proportion of data in each test set.
+
+    test_size : int
+    Number of observations in each test set.
+
+    classes : array
+    Stratified targets.
+
+    n_splits : int
+    Number of splits.
+
+    seed : int
+    Random seed used.
+    """
     method_output = None
     meta = None
 
@@ -172,17 +222,22 @@ class CrossValidationWrapper(object):
 
         self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
         self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
+        self.intercepts, self.feat_coefs = [], []
 
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
         cv = StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
 
         X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
         i = 0
+
         for (train_idx, test_idx) in cv.split(self.classes, self.classes):
             train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
                             for k, v in kwargs.items()}
             self.method_output = method(X_stacked[train_idx], y[train_idx], **train_kwargs)
             intercept, betas = self.method_output[1:3]
+            self.intercepts.append(intercept)
+            self.feat_coefs.append(betas)
+
             self.test_y_hat[i:i + self.test_size] = np.asarray(
                 X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
             self.test_indices[i:i + self.test_size] = test_idx

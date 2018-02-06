@@ -116,3 +116,10 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
                                        warmup_key='w_warm', **kwargs)
         self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
         self.assertEqual(cv.meta['curves'].auc, 0.0062)
+
+    def test_weights_storage(self):
+        df = self.df.copy()
+        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=6, seed=123)
+        _ = df.build_lib_column('logistic_regression', 'x', parameters={'axis': 'y', 'cv': cv}, output='pred_y')
+        self.assertEqual(len(cv.feat_coefs), cv.n_splits)
+        self.assertEqual(len(cv.intercepts), cv.n_splits)
