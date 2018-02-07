@@ -222,21 +222,23 @@ class CrossValidationWrapper(object):
 
         self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
         self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
-        self.intercepts, self.feat_coefs = [], []
+        self.intercepts, self.feat_coefs = [None]*self.n_splits, [None]*self.n_splits
 
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
         cv = StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
 
         X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
         i = 0
+        j = 0
 
         for (train_idx, test_idx) in cv.split(self.classes, self.classes):
             train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
                             for k, v in kwargs.items()}
             self.method_output = method(X_stacked[train_idx], y[train_idx], **train_kwargs)
             intercept, betas = self.method_output[1:3]
-            self.intercepts.append(intercept)
-            self.feat_coefs.append(betas)
+            self.intercepts[j] = intercept
+            self.feat_coefs[j] = betas
+            j += 1
 
             self.test_y_hat[i:i + self.test_size] = np.asarray(
                 X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
