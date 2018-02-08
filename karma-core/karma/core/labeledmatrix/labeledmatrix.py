@@ -1869,13 +1869,13 @@ class LabeledMatrix(object):
         return DataFrame([x for x in double if x[1]],
                          columns=[col, prefix + col]).sort_by(col)
 
-    def to_vectorial_dataframe(self, col="col0", vector="col1"):
+    def to_vectorial_dataframe(self, col="col0", vector="col1", deco=False):
         """
         >>> mat = np.array([[4, 5, 0],
         ...                 [0, 3, 0],
         ...                 [0, 0, 0],
         ...                 [1, 0, 0]])
-        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat)
+        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat, deco=({'a': 'AA'}, {'y': 'YY'}))
         >>> lm.to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
         -------------------------------
         col0 | col1:x | col1:y | col1:z
@@ -1884,7 +1884,14 @@ class LabeledMatrix(object):
         b      0        3        0
         c      0        0        0
         d      1        0        0
-
+        >>> lm.to_vectorial_dataframe(deco=True).preview() #doctest: +NORMALIZE_WHITESPACE
+        --------------------------------
+        col0 | col1:x | col1:YY | col1:z
+        --------------------------------
+        AA     4        5         0
+        b      0        3         0
+        c      0        0         0
+        d      1        0         0
         >>> lm.to_sparse().to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
         ---------------------
         col0 | col1
@@ -1894,10 +1901,14 @@ class LabeledMatrix(object):
         c
         d      x: 1.0
         """
-        df = DataFrame()
-        df[col] = Column(self.row.list)
-        df[vector] = Column(self.matrix)
-        df[vector].coordinates = self.column.list  # to copy ?
+        if deco:
+            columns = [self.column_deco.get(col_, col_) for col_ in self.column.list]
+            rows = [self.row_deco.get(row_, row_) for row_ in self.row.list]
+        else:
+            columns = self.column.list  # to copy ?
+            rows = self.row.list
+        df = DataFrame(OrderedDict([(col, rows), (vector, self.matrix)]))
+        df[vector].coordinates = columns
         return df
 
     def normalize(self, axis=1, norm="l1"):
