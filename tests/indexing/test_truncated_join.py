@@ -7,7 +7,7 @@ import numpy as np
 
 from cyperf.indexing.truncated_join import (sorted_unique, SortedDateIndex, SortedTruncatedIndex,
                                             LookUpDateIndex, LookUpTruncatedIndex, create_truncated_index,
-                                            two_integer_array_deduplication)
+                                            two_integer_array_deduplication, _merge_ks_struct)
 from cyperf.indexing import ColumnIndex
 
 
@@ -20,6 +20,17 @@ class TestDeduplication(unittest.TestCase):
             self.assertEqual(sorted(set(zip(a1, a2))), sorted(zip(u1, u2)))
             np.testing.assert_equal(u1[ind], a1)
             np.testing.assert_equal(u2[ind], a2)
+
+    def test_merge_ks_struct(self):
+        indices, indptr = _merge_ks_struct([([1, 2, 2, 3], [0, 2, 4]), ([1, 0, 0], [0, 1, 2, 3])])
+        self.assertEqual(indices.dtype.kind, 'i')
+        np.testing.assert_equal(indices, [1, 2, 2, 3, 1, 0, 0])
+        np.testing.assert_equal(indptr, [0, 2, 4, 5, 6, 7])
+
+        indices, indptr = _merge_ks_struct([([1, 2, 2, 3], [0, 2, 4]), ([], [0, 0, 0])])
+        np.testing.assert_equal(indices, [1, 2, 2, 3])
+        np.testing.assert_equal(indptr, [0, 2, 4, 4, 4])
+        self.assertEqual(indptr.dtype.kind, 'i')
 
 
 class TestTruncatedJoin(unittest.TestCase):

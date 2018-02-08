@@ -6,10 +6,28 @@ import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse
 from pandas.core.algorithms import htable
 from pandas import to_datetime
-
+from multiprocessing.pool import ThreadPool
 
 MaxSizeHtable = 10 ** 6
 MinCompression = 0.9
+NbThreads = 4
+
+
+def _merge_ks_struct(series):
+    if len(series) > 1:
+        indices = np.concatenate([x[0] for x in series])
+        indptr = np.cumsum(np.concatenate([[0]] + [np.diff(x[1]) for x in series]))
+    else:
+        indices, indptr = series[0]
+    return indices, indptr
+
+
+def _slice_batches(length, n):
+    size = length / n
+    if size == 0:
+        return [slice(0, length)]
+    else:
+        return [slice(i * size, length if i + 1 == n else (i + 1) * size) for i in xrange(n)]
 
 
 def two_integer_array_deduplication(arr1, arr2, shift=1):
@@ -208,7 +226,6 @@ class BaseTruncatedIndex(object):
         ks = KarmaSparse((data, indices, indptr), format="csr",
                          shape=(len(d), self.user_index.indptr[-1]),
                          copy=False, has_sorted_indices=True, has_canonical_format=True)
-
         if half_life is not None:
             row_decay, column_decay = self.date_index.decay(d, half_life=half_life)
             ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
@@ -256,9 +273,19 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
             del positions_, d_
             repeated_indices = None
 
-        indices, indptr = truncation_method(positions, self.user_index.indices,
-                                            self.user_index.indptr, local_dates,
-                                            d, lower, upper)
+        def partial_ks(slice_):
+            return truncation_method(positions[slice_], self.user_index.indices,
+                                     self.user_index.indptr, local_dates, d[slice_], lower, upper)
+
+        if len(positions) >= NbThreads:  # Parallel partition + merge
+            pp = ThreadPool(NbThreads)
+            indices, indptr = _merge_ks_struct(pp.map(partial_ks,
+                                                      _slice_batches(len(positions), NbThreads)))
+            pp.close()
+            pp.terminate()
+        else:
+            indices, indptr = partial_ks(slice(None))
+
         # we may want to make a switch based on the compression rate
         return indices, indptr, repeated_indices, d.view('M8[D]')
 
@@ -286,8 +313,19 @@ class SortedTruncatedIndex(BaseTruncatedIndex):
 
         lower_bound, upper_bound = self.date_index.get_window_indices(d.view('M8[D]'), lower, upper)
 
-        indices, indptr = truncation_method(positions, self.user_index.indices,
-                                            self.user_index.indptr, lower_bound, upper_bound)
+        def partial_ks(slice_):
+            return truncation_method(positions[slice_], self.user_index.indices,
+                                     self.user_index.indptr, lower_bound[slice_], upper_bound[slice_])
+
+        if len(positions) >= NbThreads:  # Parallel partition + merge
+            pp = ThreadPool(NbThreads)
+            indices, indptr = _merge_ks_struct(pp.map(partial_ks,
+                                                      _slice_batches(len(positions), NbThreads)))
+            pp.close()
+            pp.terminate()
+        else:
+            indices, indptr = partial_ks(slice(None))
+
         # we may want to make a switch based on the compression rate
         return indices, indptr, repeated_indices, d.view('M8[D]')
 
