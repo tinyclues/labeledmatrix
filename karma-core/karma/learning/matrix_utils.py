@@ -1537,3 +1537,24 @@ def row_mean_gini(matrix):
     diag_gini_weights = np.diag(gini_weights(matrix.shape[1]))
     sorted_matrix = sorted_matrix.dot(diag_gini_weights)
     return np.mean(1 - 2 * np.sum(sorted_matrix, axis=1))
+
+
+def gram_quantiles(matrix, q=0.1):
+    """
+    Computes quantiles of the distribution of scalar products of 
+    the columns of a given matrix.
+    Args:
+        matrix: rectangular matrix, sparse or not
+        q: float between 0 and 1, or list of floats, which quantile(s) to compute
+    >>> from karma.core.utils.utils import use_seed
+    >>> with use_seed(42):
+    ...    G = np.random.randn(100, 10)
+    >>> gram_quantiles(G, 0.1)
+    array([ 0.0163046])
+    >>> gram_quantiles(G, [0.1, 0.9])
+    array([ 0.0163046 ,  0.16680645])
+    """
+    normalized_matrix = normalize(matrix, norm='l2', axis=0)
+    abs_normalized_gram = np.abs(normalized_matrix.transpose().dot(normalized_matrix))
+    extra_diag_terms = abs_normalized_gram[np.triu_indices(abs_normalized_gram.shape[1], 1)]
+    return mquantiles(extra_diag_terms, q)
