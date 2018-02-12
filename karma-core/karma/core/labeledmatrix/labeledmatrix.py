@@ -513,6 +513,27 @@ class LabeledMatrix(object):
         else:
             return self
 
+    def sort_by_deco(self):
+        """
+        >>> lm = LabeledMatrix((['b', 'c'], ['y', 'x', 'z']), np.arange(6).reshape(2, 3),
+        ...                    deco=({'b': 'f', 'c': 'a'}, {'x': 'k', 'z': 'l'}))
+        >>> lm.sort().label
+        (['b', 'c'], ['x', 'y', 'z'])
+        >>> lm.sort_by_deco().label
+        (['c', 'b'], ['x', 'z', 'y'])
+        """
+        if len(self.row_deco) != 0:
+            _, row_indices = IndexedList([self.row_deco.get(row_, row_) for row_ in self.row.list]).sorted()
+        else:
+            row_indices = slice(None)
+
+        if len(self.column_deco) != 0:
+            _, column_indices = IndexedList([self.column_deco.get(col_, col_) for col_ in self.column.list]).sorted()
+        else:
+            column_indices = slice(None)
+
+        return self._take_on_row(row_indices)._take_on_column(column_indices)
+
     def sort(self):
         """
         >>> lm = LabeledMatrix((['b', 'c'], ['y', 'x', 'z']), np.arange(6).reshape(2, 3))
