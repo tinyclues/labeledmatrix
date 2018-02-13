@@ -77,8 +77,8 @@ Exemple :
         >>> np.sum(np.abs(models[2] - coef)) < 0.00001
         True
 """
-    Gram = XX.copy()
-    Cov = Xy.copy()
+    Gram = np.array(XX, dtype=np.float)
+    Cov = np.array(Xy, dtype=np.float)
     n_features = Gram.shape[0]
     if max_features is None:
         max_features = n_features
