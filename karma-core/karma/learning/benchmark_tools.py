@@ -1,6 +1,13 @@
 from collections import defaultdict
 from karma.core.dataframe import DataFrame
-from karma.learning.matrix_utils import coherence, row_mean_gini
+from karma.learning.matrix_utils import coherence, gram_quantiles, safe_max, safe_min
+
+
+def gram_first_quartile(mat):
+    return gram_quantiles(mat, q=0.25)
+
+def gram_third_quartile(mat):
+    return gram_quantiles(mat, q=0.75)
 
 
 def is_positive(matrix):
@@ -27,8 +34,9 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     features : list of strings, default to all vectorial and sparse columns
         List of features on which to restrict descriptive statistics computations.
     func_list : list of tuple of two strings or functions
-        If given a tuple ('f', 'g') then we wompute g row-by-row and use f as an agregator,
-        if pure function applied globally.
+        If given a tuple ('f', 'g', 'n') then we compute g row-wise, use f as an aggregator, and name the resulting
+        statistics n, if n is not specified we create the name f_g.
+        If given a function, it is supposed to apply on the whole matrix associated to the feature.
     column_order : list of strings, default None
         Allows to force column order of the output
     restrict_nonempty : bool, default False
@@ -38,13 +46,13 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     >>> from karma.core.utils import use_seed
     >>> with use_seed(12784):
     ...     df = DataFrame({"col_1": np.ones((5, 2)), "col_2": np.random.randn(5, 2)})
-    >>> f_list = [('mean', 'l2_norm'), is_positive, ('mean', 'l0_norm'), row_mean_gini, coherence]
+    >>> f_list = [('mean', 'l2_norm', 'm_l2'), is_positive, ('mean', 'l0_norm')]
     >>> descriptive_features_benchmark(df, func_list=f_list).preview() #doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-    --------------------------------------------------------------------------------------------------------
-    features | dimension | is_sparse | mean_l2_norm | is_positive | mean_l0_norm | row_mean_gini | coherence
-    --------------------------------------------------------------------------------------------------------
-    col_2      2           False       1.4748         False         2.0            0.1878          0.5242
-    col_1      2           False       1.4142         True          2.0            0.0             1.0
+    ----------------------------------------------------------------------------------------------------
+    features | is_sparse | dimension | proportion_of_nonempty_rows | m_l2   | is_positive | mean_l0_norm
+    ----------------------------------------------------------------------------------------------------
+    col_2      False       2           1                             1.4748   False         2.0
+    col_1      False       2           1                             1.4142   True          2.0
     """
     if features is None:
         features = df.vectorial_column_names + df.sparse_column_names
@@ -52,33 +60,42 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     result_lists = defaultdict(list)
 
     result_lists["features"] = features
-    result_lists["dimension"] = [df[feature].vectorial_shape()[0] for feature in features]
     result_lists["is_sparse"] = [df[feature].is_sparse() for feature in features]
+    result_lists["dimension"] = [df[feature].vectorial_shape()[0] for feature in features]
+    result_lists["proportion_of_nonempty_rows"] = [df.aggregate('sum(is_non_empty({}))'.format(feature)) / len(df)
+                                                for feature in features]
 
     if column_order is None:
-        default_column_order = ["features", "dimension", "is_sparse"]
+        default_column_order = ["features", "is_sparse", "dimension", "proportion_of_nonempty_rows"]
 
     if func_list is None:
-        func_list = [('mean', 'l2_norm'),
-                     ('standard_deviation', 'l2_norm'),
+        func_list = [('min', 'is_one_hot', 'is_one_hot'),
                      is_positive,
-                     ('sum', 'is_non_empty'),
-                     ('min', 'is_one_hot'),
+                     ('mean', 'l2_norm'),
+                     ('standard_deviation', 'l2_norm'),
                      ('mean', 'l0_norm'),
-                     row_mean_gini,
-                     coherence]
+                     gram_first_quartile,
+                     gram_third_quartile,
+                     coherence,
+                     safe_min,
+                     safe_max]
 
     for feature in features:
+
         if restrict_nonempty:
             df_copy = df.copy()
-            col_name = 'is_nonempty_' + feature
-            df_copy[col_name] = df_copy['is_non_empty({})'.format(feature)]
-            df_copy = df_copy.where(col_name)
+            nonempty_col_name = 'is_nonempty_' + feature
+            df_copy[nonempty_col_name] = df_copy['is_non_empty({})'.format(feature)]
+            df_copy = df_copy.where(nonempty_col_name)
         else:
             df_copy = df.copy()
+
         for func in func_list:
             if isinstance(func, tuple):
-                col_name = func[0] + '_' + func[1]
+                if len(func) == 3:
+                    col_name = func[2]
+                else:
+                    col_name = func[0] + '_' + func[1]
                 aggregate_func = func[0] + '(' + func[1] + '({}))'
                 result_lists[col_name].append(df_copy.aggregate(aggregate_func.format(feature)))
                 default_column_order.append(col_name)
