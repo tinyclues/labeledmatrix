@@ -1,10 +1,8 @@
 import numpy as np
+import numexpr as ne
 from cyperf.matrix.karma_sparse import is_karmasparse
-from cyperf.tools import logit
 from scipy.optimize import fmin_l_bfgs_b
-from scipy.special import expit
 from sklearn.linear_model.logistic import LogisticRegression
-from sklearn.utils.extmath import log_logistic
 
 from karma.core.utils import create_timer
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
@@ -12,11 +10,43 @@ from karma.learning.regression import regression_on_blocks
 from karma.learning.utils import VirtualHStack
 from karma.thread_setter import blas_threads, open_mp_threads
 
+
 __all__ = ['logistic_coefficients']
 
 
-def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None, w0=None,
-                           alpha_intercept=0., intercept0=0.):
+# TODO : I want to have a context for this
+ne.set_num_threads(4)
+
+
+def expit(x):
+    """
+    # It about x3 faster with numexpr
+    # It's equivalent to "1/(1 + exp(-x))", but more robust for larger values
+
+    >>> from scipy.special import expit as sy_expit
+    >>> x = np.random.randn(10**4) * 30
+    >>> np.allclose(sy_expit(x), expit(x))
+    True
+    """
+    return ne.evaluate('(tanh(x / 2) + 1) / 2', truediv=True)
+
+
+def _expit_m1_times_y(x, y):
+    return ne.evaluate('y * (tanh(x/2) - 1) / 2', truediv=True)
+
+
+def _log_logistic_inplace(x):
+    return ne.evaluate('where(x > 0, -log(1 + exp(-x)), x - log(1 + exp(x)))', out=x)
+
+
+def _log_logistic_inplace_sample_weight(x, sw):
+    return ne.evaluate('where(x > 0, - sw * log(1 + exp(-x)), sw * (x - log(1 + exp(x))))',
+                       out=x, casting='same_kind')
+
+
+def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
+                           w0=None, alpha_intercept=0., intercept0=0.):
+
     n_samples, n_features = X.shape
     grad = np.empty_like(w)
 
@@ -26,18 +56,19 @@ def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None, w0=None,
     if w0 is None:
         w0 = np.zeros_like(w)
 
-    yz = X.dot(w)
+    # Downcast to have faster expit and _log_logistic_inplace
+    yz = X.dot(w).astype(np.float32, copy=False)
     yz += c
     yz *= y
-    z0 = y * (expit(yz) - 1)
+    z0 = _expit_m1_times_y(yz, y)
 
     dw = alpha * (w - w0)
     out = .5 * dw.dot(w - w0)
 
     if sample_weight is None:
-        out -= log_logistic(yz).sum()
+        out -= _log_logistic_inplace(yz).sum()
     else:
-        out -= (sample_weight * log_logistic(yz)).sum()
+        out -= _log_logistic_inplace_sample_weight(yz, sample_weight).sum()
         z0 *= sample_weight
 
     grad[:n_features] = X.transpose_dot(z0)
@@ -72,6 +103,7 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     """
     if not isinstance(X, VirtualHStack):
         X = VirtualHStack(X, nb_threads=nb_threads)
+
     C = X.adjust_array_to_total_dimension(C, 'C')
 
     if w_warm is None:
@@ -82,7 +114,8 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
                                  args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
                                  iprint=0, pgtol=1e-7, maxiter=max_iter)
         intercept, beta = w0[-1], w0[:-1]
-        linear_pred = X.dot(beta) + intercept
+        linear_pred = X.dot(beta)
+        linear_pred += intercept
         betas = X.split_by_dims(beta)
     except Exception as ee:
         X._close_pool()  # avoid memory leak
@@ -104,7 +137,7 @@ def logistic_coefficients_fall_back(X, y, max_iter, solver='liblinear', C=1e10, 
     lr = LogisticRegression(C=C, tol=1e-5, solver=solver, fit_intercept=True, max_iter=max_iter,
                             random_state=X.shape[0])
     lr.fit(X, y, sample_weight=sample_weight)
-    return logit(lr.decision_function(X)), lr.intercept_[0], lr.coef_[0]
+    return expit(lr.decision_function(X)), lr.intercept_[0], lr.coef_[0]
 
 
 def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
@@ -117,7 +150,7 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
                                                                    w_warm=w_warm,
                                                                    sample_weight=sample_weight,
                                                                    nb_threads=nb_threads)
-        return logit(linear_pred), intercept, beta
+        return expit(linear_pred), intercept, beta
 
 
 def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercept_priori=0.,
@@ -154,7 +187,8 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
         with timer('BayLogReg_Reg_Variance'):
             if full_hessian:
                 # full_hessian = hessian(w0, X, y, alpha_priori, sample_weight, alpha_intercept)
-                C_post = diagonal_of_inverse_symposdef(hessian(w0, X, y, alpha_priori, sample_weight, alpha_intercept))
+                C_post = diagonal_of_inverse_symposdef(hessian(w0, X, y, alpha_priori,
+                                                               sample_weight, alpha_intercept))
             else:
                 C_post = 1. / diag_hessian(w0, X, y, alpha_priori, sample_weight, alpha_intercept)
 
@@ -168,7 +202,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
         raise ee
 
     X._close_pool()  # Warning should called manually at the exit from class
-    return (logit(linear_pred),
+    return (expit(linear_pred),
             intercept, betas,
             intercept_C_post, feature_C_posts)
 
