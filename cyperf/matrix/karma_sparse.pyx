@@ -104,12 +104,14 @@ cpdef bool is_int(n) except? 0:
     False
     >>> is_int(np.array([1], dtype=np.int32)[0])
     True
+    >>> is_int(np.array([np.nan]))
+    False
     """
     if isinstance(n, (int, long, np.int16, np.int32, np.int64)):
         return 1
     try:
         return (<int?>n == n) is 1
-    except TypeError:
+    except (TypeError, ValueError):
         return 0
 
 
