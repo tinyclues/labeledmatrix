@@ -1,10 +1,13 @@
+from collections import OrderedDict
+from copy import deepcopy
 import numpy as np
 import numexpr as ne
+from cyperf.tools.getter import build_safe_decorator
 from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.optimize import fmin_l_bfgs_b
 from sklearn.linear_model.logistic import LogisticRegression
 
-from karma.core.utils import create_timer
+from karma.core.utils import create_timer, LOGGER
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
 from karma.learning.regression import regression_on_blocks
 from karma.learning.utils import VirtualHStack
@@ -114,14 +117,13 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
         w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                  args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
                                                  iprint=0, pgtol=1e-7, maxiter=max_iter)
-        conv_dict['objective_value'] = obj_value
+
+        conv_dict = _conv_dict_format(conv_dict, obj_value)
+
         intercept, beta = w0[-1], w0[:-1]
         linear_pred = X.dot(beta)
         linear_pred += intercept
         betas = X.split_by_dims(beta)
-
-        if KarmaSetup.verbose:
-            print(conv_dict)
 
     except Exception as ee:
         X._close_pool()  # avoid memory leak
@@ -191,7 +193,8 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
                                                            alpha_intercept, intercept_priori),
                                                      iprint=0, pgtol=1e-7, maxiter=max_iter)
             intercept, beta = w0[-1], w0[:-1]
-            conv_dict['objective_value'] = obj_value
+
+            conv_dict = _conv_dict_format(conv_dict, obj_value)
 
         with timer('BayLogReg_Reg_Variance'):
             if full_hessian:
@@ -347,3 +350,46 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
     DHess[:n_features] += alpha
     return DHess
+
+
+@build_safe_decorator({})
+def _conv_dict_format(conv_dict, obj_value):
+    """Pretty printing of lbfgs convergence information.
+    """
+    conv_dict = deepcopy(conv_dict)
+    conv_dict['objective_value'] = obj_value
+
+    gradient = conv_dict.pop('grad', None)
+    if gradient is None:
+        norm_grad = None
+    else:
+        norm_grad = np.linalg.norm(gradient)
+    conv_dict['gradient_l2_norm_at_min'] = norm_grad
+    conv_dict['stopping_criterion'] = conv_dict.pop('task')
+
+    warn_flag_translation_dict = {0: 'converged',
+                                  1: 'too many function evaluations',
+                                  2: 'stopping criterion not reached'}
+
+    conv_dict['warnflag_hr'] = warn_flag_translation_dict[conv_dict['warnflag']] #hr -> human readable
+    conv_dict['design_width'] = len(gradient)
+
+    ordered_keys = ['nit', 'funcalls', 'warnflag_hr', 'stopping_criterion', 'gradient_l2_norm_at_min',
+                    'design_width']
+    conv_dict_ordered = OrderedDict([(key, conv_dict[key]) for key in ordered_keys])
+
+    if KarmaSetup.verbose:
+        from karma.core.dataframe import DataFrame
+        DataFrame(conv_dict_ordered, one_line=True).preview()
+
+    #if conv_dict['warnflag'] in [1, 2]:
+    #    error_string = 'Convergence of lbfgs failed since {}.\n'.format(conv_dict['warnflag_hr'])
+    #    if conv_dict['warnflag'] == 1:
+    #        error_string += 'Used {} as stopping criterion.\n'.format(conv_dict['stopping_criterion'])
+    #    if conv_dict['warnflag'] == 2:
+    #        error_string += 'Solver error: {}.\n'.format(conv_dict['stopping_criterion'])
+    #    error_string += 'Final gradient norm: {}.\n'.format(conv_dict['gradient_l2_norm_at_min'])
+    #    print(error_string)
+    #    LOGGER.warn(error_string)
+
+    return conv_dict_ordered
