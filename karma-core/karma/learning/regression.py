@@ -21,12 +21,12 @@ __all__ = ['regression_on_blocks', 'linear_regression_coefficients', 'sklearn_re
 def regression_on_blocks(regression_method):
     @wraps(regression_method)
     def decorated_function(X, y, *args, **kwargs):
-        from karma.learning.utils import VirtualHStack
-        if not isinstance(X, VirtualHStack):
-            X = VirtualHStack(X)
+        from karma.learning.utils import BasicVirtualHStack
+        if not isinstance(X, BasicVirtualHStack):
+            X = BasicVirtualHStack(X)
 
         result = regression_method(X.flatten_hstack(), y, *args, **kwargs)
-        X._close_pool()
+
         if isinstance(result, tuple) and len(result) == 3:
             y_hat, intercept, beta = result
             return y_hat, intercept, X.split_by_dims(beta)

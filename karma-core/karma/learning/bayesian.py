@@ -1,7 +1,7 @@
 import numpy as np
 
 from karma.core.utils import create_timer
-from karma.learning.utils import VirtualHStack
+from karma.learning.utils import BasicVirtualHStack
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
 from karma.learning.regression import linear_regression_coefficients
 
@@ -14,8 +14,8 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
         timer = create_timer(None)
 
     with timer('BayLinReg_Reg_Init'):
-        if not isinstance(X, VirtualHStack):
-            X = VirtualHStack(X)
+        if not isinstance(X, BasicVirtualHStack):
+            X = BasicVirtualHStack(X)
         XX = X.flatten_hstack()
         XX = np.hstack((XX, np.ones((XX.shape[0], 1), dtype=np.float32)))
 
@@ -54,7 +54,6 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
 
     y_hat_post = y_hat_post_prime + y_hat_prior
 
-    X._close_pool()
     return (y_hat_post,
             intercept_post, w_post,
             intercept_C_post, w_C_post)

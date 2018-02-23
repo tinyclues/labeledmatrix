@@ -2,13 +2,14 @@ import unittest
 
 import numpy as np
 from numpy.testing import assert_equal
+from sklearn.model_selection import StratifiedShuffleSplit
 
 from karma import create_column_from_data
 from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
 from karma.learning.logistic import logistic_coefficients
 from karma.learning.matrix_utils import as_vector_batch
-from karma.learning.utils import CrossValidationWrapper, validate_regression_model
+from karma.learning.utils import CrossValidationWrapper, validate_regression_model, BasicVirtualHStack
 from karma.lib.logistic_regression import logistic_regression
 
 
@@ -34,6 +35,9 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         self.assertIsNotNone(cv.method_output)
 
         self.assertAlmostEqual(cv.meta['train_MSE'], 0.25, places=2)
+
+        self.assertIsInstance(cv.cv, StratifiedShuffleSplit)
+        self.assertEqual(cv.cv.test_size, 0.2)
 
     def test_stratified_shuffle_split(self):
         df = self.df.copy()
@@ -123,3 +127,91 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         _ = df.build_lib_column('logistic_regression', 'x', parameters={'axis': 'y', 'cv': cv}, output='pred_y')
         self.assertEqual(len(cv.feat_coefs), cv.n_splits)
         self.assertEqual(len(cv.intercepts), cv.n_splits)
+
+
+class VirtualHStackTestCase(unittest.TestCase):
+    def test_init(self):
+        hstack = BasicVirtualHStack([np.ones((5, 2)), np.ones((5, 3)), 2, np.int32(3), np.asarray(2, dtype=np.int8)])
+        self.assertTrue(hstack.is_block)
+        np.testing.assert_array_equal(hstack.X[0], np.ones((5, 2)))
+        np.testing.assert_array_equal(hstack.X[1], np.ones((5, 3)))
+        np.testing.assert_array_equal(hstack.X[2], np.zeros((5, 2)))
+        np.testing.assert_array_equal(hstack.X[3], np.zeros((5, 3)))
+        np.testing.assert_array_equal(hstack.X[4], np.zeros((5, 2)))
+        np.testing.assert_array_equal(hstack.dims, [0, 2, 5, 7, 10, 12])
+        self.assertEqual(hstack.shape, (5, 12))
+
+        hstack_copy = BasicVirtualHStack(hstack)
+        self.assertEqual(id(hstack_copy.X), id(hstack.X))
+        self.assertEqual(hstack_copy.is_block, hstack.is_block)
+        self.assertEqual(hstack_copy.shape, hstack.shape)
+
+        hstack = BasicVirtualHStack(np.zeros((15, 8)))
+        self.assertEqual(hstack.shape, (15, 8))
+
+        hstack_copy = BasicVirtualHStack(hstack)
+        self.assertEqual(id(hstack_copy.X), id(hstack.X))
+        self.assertEqual(hstack_copy.is_block, hstack.is_block)
+        self.assertEqual(hstack_copy.shape, hstack.shape)
+
+        with self.assertRaises(ValueError) as e:
+            BasicVirtualHStack([])
+        self.assertEqual('Cannot create a VirtualHStack of an empty list',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            BasicVirtualHStack([np.ones((5, 2)), 'a'])
+        self.assertEqual('Cannot create a VirtualHStack with <type \'str\'>',
+                         str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            BasicVirtualHStack([np.ones((5, 2)), np.ones((6, 3))])
+        self.assertEqual('Cannot create a VirtualHStack for an array of length 6 while other array has length 5',
+                         str(e.exception))
+
+    def test_split_by_dims(self):
+        hstack = BasicVirtualHStack([np.ones((5, 2)), np.ones((5, 3)), 1])
+        self.assertEqual(map(len, hstack.split_by_dims(np.ones(6))), [2, 3, 1])
+        with self.assertRaises(AssertionError):
+            hstack.split_by_dims(np.ones(7))
+
+    def test_adjust_array_to_total_dimension(self):
+        hstack = BasicVirtualHStack([np.ones((5, 2)), np.ones((5, 3)), 1])
+        np.testing.assert_array_equal(hstack.adjust_array_to_total_dimension(5), [5] * 6)
+        np.testing.assert_array_equal(hstack.adjust_array_to_total_dimension([5] * 3 + [6] * 3), [5] * 3 + [6] * 3)
+        np.testing.assert_array_equal(hstack.adjust_array_to_total_dimension([[1, 2], 5, 6]), [1, 2, 5, 5, 5, 6])
+
+        with self.assertRaises(ValueError) as e:
+            hstack.adjust_array_to_total_dimension([5] * 5)
+        self.assertEqual('parameter is invalid: expected float or an array-like of length 6 or 3, '
+                         'got array-like of length 5',
+                         str(e.exception))
+
+        hstack = BasicVirtualHStack(np.zeros((15, 8)))
+        with self.assertRaises(ValueError) as e:
+            hstack.adjust_array_to_total_dimension([5] * 5, 'tt')
+        self.assertEqual('parameter \'tt\' is invalid: expected float or an array-like of length 8, '
+                         'got array-like of length 5',
+                         str(e.exception))
+
+    def test_adjust_to_block_dimensions(self):
+        hstack = BasicVirtualHStack([np.ones((5, 2)), np.ones((5, 3)), 1])
+        self.assertEqual(map(len, hstack.adjust_to_block_dimensions([[1, 2], 5, 6])), [2, 3, 1])
+        with self.assertRaises(ValueError):
+            hstack.adjust_to_block_dimensions(np.ones(7))
+
+    def test_promote_types(self):
+        hstack = BasicVirtualHStack([np.ones((5, 2), dtype=np.float16),
+                                     np.full((5, 1), 3, dtype=np.float32),
+                                     np.ones((5, 3), dtype=np.float64),
+                                     1])
+        self.assertEqual(hstack.X[0].dtype, np.float32)  # dtype is promoted
+        self.assertEqual(hstack.X[1].dtype, np.float32)
+        self.assertEqual(hstack.X[2].dtype, np.float64)
+        self.assertEqual(hstack.X[3].dtype, np.float64)
+        self.assertEqual(hstack.flatten_hstack().dtype, np.float64)
+        np.testing.assert_array_equal(hstack.flatten_hstack(), [[1, 1, 3, 1, 1, 1, 0]] * 5)
+
+        hstack = BasicVirtualHStack(np.ones((5, 2), dtype=np.float16))
+        self.assertEqual(hstack.X.dtype, np.float32)  # dtype is promoted
+        self.assertEqual(hstack.flatten_hstack().dtype, np.float32)

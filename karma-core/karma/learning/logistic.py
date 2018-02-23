@@ -15,7 +15,7 @@ from karma.thread_setter import blas_threads, open_mp_threads
 from karma.runtime import KarmaSetup
 
 
-__all__ = ['logistic_coefficients']
+__all__ = ['logistic_coefficients', 'logistic_coefficients_and_posteriori', 'expit']
 
 
 # TODO : I want to have a context for this
@@ -160,7 +160,6 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
                                                                               nb_threads=nb_threads)
 
         return expit(linear_pred), intercept, beta, conv_dict
-
 
 
 def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercept_priori=0.,
