@@ -13,7 +13,7 @@ from scipy.linalg.lapack import get_lapack_funcs
 from sklearn.utils import arrayfuncs
 
 
-def lasso_gram(Xy, XX, max_features=None, max_iter=500, alpha_min=0, method='lasso'):
+def lasso_gram(Xy, XX, max_features=None, max_iter=500, min_alpha=0, method='lasso'):
 
     """ Compute Least Angle Regression and LASSO path
 
@@ -112,20 +112,20 @@ Exemple :
         prev_alpha = alphas[n_iter - 1, np.newaxis]
         prev_coef = coefs[n_iter - 1]
         alpha[0] = C
-        if alpha[0] <= alpha_min:  # early stopping
-            if not alpha[0] == alpha_min:
+        if alpha[0] <= min_alpha:  # early stopping
+            if not alpha[0] == min_alpha:
                 # interpolation factor 0 <= ss < 1
                 if n_iter > 0:
                     # In the first iteration, all alphas are zero, the formula
                     # below would make ss a NaN
-                    ss = ((prev_alpha[0] - alpha_min) /
+                    ss = ((prev_alpha[0] - min_alpha) /
                           (prev_alpha[0] - alpha[0]))
                     coef[:] = prev_coef + ss * (coef - prev_coef)
-                alpha[0] = alpha_min
+                alpha[0] = min_alpha
             coefs[n_iter] = coef
             break
 
-        if n_iter >= max_iter or n_active >= n_features:
+        if n_iter >= max_iter or n_active >= max_features:
             break
 
         if not drop:

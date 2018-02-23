@@ -36,12 +36,12 @@ class LassoTestCase(unittest.TestCase):
             xx = np.random.rand(10 ** 4, 100)
             w = np.random.randint(0, 3, size=xx.shape[1])
             yy = xx.dot(w) + np.random.randn(xx.shape[0]) * 0.1 + 4.
-        beta, intercept = best_lasso_model_cv_from_moments(xx, yy)
+        predictions, intercept, betas = best_lasso_model_cv_from_moments(xx, yy)
 
-        self.assertLess(np.max(np.abs((w - beta))), 0.01)
+        self.assertLess(np.max(np.abs((w - betas))), 0.01)
         self.assertLess(np.max(np.abs(intercept - 4)), 0.1)
-        self.assertLess(np.std(yy - intercept - xx.dot(beta)), 0.5 * np.std(yy))
+        self.assertLess(np.std(yy - intercept - xx.dot(betas)), 0.5 * np.std(yy))
 
-        beta_sp, intercept_sp = best_lasso_model_cv_from_moments(KarmaSparse(xx), yy)
-        np.testing.assert_array_almost_equal(beta_sp, beta, decimal=6)
+        predictions_sp, intercept_sp, betas_sp = best_lasso_model_cv_from_moments(KarmaSparse(xx), yy)
+        np.testing.assert_array_almost_equal(betas_sp, betas, decimal=6)
         np.testing.assert_array_almost_equal(intercept_sp, intercept, decimal=6)

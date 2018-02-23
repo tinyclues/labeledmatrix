@@ -11,11 +11,10 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 
 from karma.core.curve import compute_mean_curve, gain_from_prediction, nonbinary_gain_from_prediction
 from karma.core.utils.array import is_binary
-from karma.learning.lasso import best_lasso_model_cv_from_moments
 from karma.learning.matrix_utils import to_scipy_sparse
 
 __all__ = ['regression_on_blocks', 'linear_regression_coefficients', 'sklearn_regression_model',
-           'lasso_cv_regression_coefficients', 'create_meta_of_regression']
+           'create_meta_of_regression']
 
 
 def regression_on_blocks(regression_method):
@@ -42,14 +41,6 @@ def linear_regression_coefficients(X, y, intercept=True, C=1e10, sample_weight=N
     lr.fit(X, y, sample_weight)
 
     return lr.predict(X), lr.intercept_, lr.coef_.T
-
-
-@regression_on_blocks
-def lasso_cv_regression_coefficients(X, y, max_features=None, cv=None,
-                                     n_jobs=None, granularity=None):
-    betas, intercept = best_lasso_model_cv_from_moments(X, y, max_features=max_features, cv=cv,
-                                                        n_jobs=n_jobs, granularity=granularity)
-    return X.dot(betas) + intercept, intercept, betas
 
 
 @regression_on_blocks

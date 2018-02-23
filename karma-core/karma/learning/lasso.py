@@ -6,15 +6,16 @@ import numpy as np
 # XXX we should have used LassoLarsCV here but its parallel version is currently broken
 from sklearn.linear_model import LassoCV
 from sklearn.model_selection import ShuffleSplit
-from multiprocessing.pool import ThreadPool
+from karma.core.utils.utils import Parallel
 
 from scipy.sparse import isspmatrix as is_scipysparse
 from cyperf.matrix.karma_sparse import is_karmasparse
 from cyperf.matrix import linear_error
 
 from karma.learning.lasso_gram import lasso_gram
+from karma.learning.regression import regression_on_blocks
 from karma import KarmaSetup
-from karma.thread_setter import blas_threads
+from karma.thread_setter import blas_threads, open_mp_threads
 
 
 __all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments']
@@ -177,7 +178,7 @@ def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
     return np.nonzero(np.abs(lasso_cv.coef_) > 1e-10)[0], lasso_cv.coef_, lasso_cv.intercept_
 
 
-def lassopath(dataframe, x, y, max_features=None):
+def lassopath(dataframe, x, y, max_features=None, min_alpha=0., max_iter=500):
     """
     >>> from karma.synthetic.regression import regression_dataframe
     >>> dd = regression_dataframe(200, dim=10, coeff_dist=np.random.uniform, law=None,
@@ -198,10 +199,10 @@ def lassopath(dataframe, x, y, max_features=None):
     xx = xx if is_karmasparse(xx) else np.asarray(xx, dtype=np.float)
     yy = np.asarray(dataframe[y][:], dtype=np.float)
 
-    return _lassopath(xx, yy, max_features)
+    return _lassopath(xx, yy, max_features, min_alpha, max_iter)
 
 
-def _lassopath(xx, yy, max_features=None):
+def _lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
 
     if max_features is None:
         max_features = xx.shape[1]
@@ -220,50 +221,53 @@ def _lassopath(xx, yy, max_features=None):
 
         csum_xx, csum_xy, c_xx, norm_xy, diag = center_and_normalize(nblines, sum_x, sum_y,
                                                                      sum_xx, sum_xy, sum_yy)
-        cbetas = lasso_gram(csum_xy, csum_xx, max_iter=max_features, alpha_min=KarmaSetup.lasso_min_alpha)[2]
+        cbetas = lasso_gram(csum_xy, csum_xx, max_features=max_features,
+                            min_alpha=min_alpha, max_iter=max_iter)[2]
 
         betas = cbetas * norm_xy / diag.T
         intercepts = (sum_y - sum_x.dot(betas)) / nblines
         return betas.T, intercepts
 
+    # TODO : moments can be computed via VirtualHstack
     return lassopath_from_moments(yy.shape[0], xx.sum(axis=0), yy.sum(axis=0),
                                   np.asarray(xx.T.dot(xx)),
                                   xx.T.dot(yy.astype(xx.dtype, copy=False)),
                                   yy.dot(yy))
 
 
-def best_lasso_model_cv_from_moments(xx, yy, max_features=None, cv=None, n_jobs=None, granularity=None):
+@regression_on_blocks
+def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., max_iter=1000,
+                                     cv=None, granularity=None, nb_cv_jobs=None, nb_blas_threads=4):
     """
     Usage example ::
         >>> xx = np.random.rand(10**3, 100)
         >>> w = np.random.randint(0, 3, size=xx.shape[1])
         >>> yy = xx.dot(w) + np.random.randn(xx.shape[0]) * 0.1
-        >>> beta, intercept = best_lasso_model_cv_from_moments(xx, yy)
-        >>> np.std(yy - intercept - xx.dot(beta)) < 0.5 * np.std(yy)
+        >>> predictions, intercept, betas = best_lasso_model_cv_from_moments(xx, yy)
+        >>> np.std(yy - intercept - xx.dot(betas)) < 0.5 * np.std(yy)
         True
     """
-    def erreur_by_rank(args):
+    def error_by_rank(args):
         x_train, y_train, x_test, y_test = args
-        betas, intercepts = _lassopath(x_train, y_train, max_features)
+        betas, intercepts = _lassopath(x_train, y_train, max_features, min_alpha, max_iter)
         return linear_error(x_test, betas.T, intercepts, - y_test)
 
     if cv is None:
         cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=yy.shape[0])
 
-    if n_jobs is None:
-        n_jobs = min(cv.get_n_splits(), 8)
+    if nb_cv_jobs is None:
+        nb_cv_jobs = min(cv.get_n_splits(), 8)
 
-    pp = ThreadPool(n_jobs)
-    with blas_threads(4):
-        erreurs = list(pp.imap_unordered(erreur_by_rank,
-                                         ((xx[train], yy[train], xx[test], yy[test])
-                                          for train, test in cv.split(xx,
-                                                                      granularity if granularity is not None else yy))))
-    pp.terminate()
+    with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
+        errors = Parallel(nb_cv_jobs, backend="threading")\
+            .map(error_by_rank, ((xx[train], yy[train], xx[test], yy[test]) for train, test in
+                                  cv.split(xx, granularity if granularity is not None else yy)))
 
-    min_dim = min(e.shape[0] for e in erreurs)
-    erreur_series = np.vstack([e[:min_dim] for e in erreurs]).sum(axis=0)
+    min_dim = min(e.shape[0] for e in errors)
+    erreur_series = np.vstack([e[:min_dim] for e in errors]).sum(axis=0)
     optimal_rank = erreur_series.argmin()
 
-    whole_betas, whole_intercepts = _lassopath(xx, yy, optimal_rank)
-    return whole_betas[-1], whole_intercepts[-1]
+    with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
+        whole_betas, whole_intercepts = _lassopath(xx, yy, optimal_rank, min_alpha, max_iter)
+    betas, intercept = whole_betas[-1], whole_intercepts[-1]
+    return xx.dot(betas) + intercept, intercept, betas
