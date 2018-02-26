@@ -382,10 +382,6 @@ cdef class KarmaSparse:
             else:
                 return 0.
 
-    def ndim(self):
-        def __get__(self):
-            return 2
-
     def __cinit__(self, arg, shape=None, format=None, bool copy=True,
                   bool has_sorted_indices=False,
                   bool has_canonical_format=False,
