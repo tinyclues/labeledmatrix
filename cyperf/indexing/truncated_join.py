@@ -93,11 +93,13 @@ def safe_datetime64_cast(date_values):
     """
     >>> d = safe_datetime64_cast(['2014-01-14', np.nan, 'DD', None, '2014-01-14'])
     >>> d
-    array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
+    array(['2014-01-14',        'NaT',        'NaT',        'NaT',
+           '2014-01-14'], dtype='datetime64[D]')
     >>> np.isnat(d)
-    array([False,  True,  True,  True, False], dtype=bool)
+    array([False,  True,  True,  True, False])
     >>> safe_datetime64_cast(['2014/01/14', np.nan, 'DD', None, '2014/01/14'])
-    array(['2014-01-14', 'NaT', 'NaT', 'NaT', '2014-01-14'], dtype='datetime64[D]')
+    array(['2014-01-14',        'NaT',        'NaT',        'NaT',
+           '2014-01-14'], dtype='datetime64[D]')
     """
     try:
         return np.asarray(date_values, dtype="datetime64[D]")

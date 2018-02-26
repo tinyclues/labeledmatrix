@@ -24,9 +24,9 @@ def sparse_argmax_dispatch(KarmaSparse matrix, int maximum_pressure, INT1[:] max
     >>> volumes = np.array([1, 1])
     >>> ranks = np.array([2, 2])
     >>> sparse_argmax_dispatch(KarmaSparse(matrix), maximum_pressure=1, max_rank=ranks, max_volume=volumes).toarray()
-    array([[ 0.8,  0. ],
-           [ 0. ,  0.5],
-           [ 0. ,  0. ]])
+    array([[0.8, 0. ],
+           [0. , 0.5],
+           [0. , 0. ]])
     """
 
     cdef ITYPE_t nb_user, nb_topic, nnz = matrix.nnz

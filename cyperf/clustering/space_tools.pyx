@@ -31,7 +31,7 @@ cdef metric_func_type get_distance(string metric) except *:
 cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclidean'):
     """
     >>> pairwise_flat([[1, 2], [1, 2], [1, 3]])
-    array([ 0.,  1.,  1.], dtype=float32)
+    array([0., 1., 1.], dtype=float32)
     """
     cdef DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
     cdef ITYPE_t n_dim = X.shape[1]
@@ -54,9 +54,9 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclid
 cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_square(mat, string metric='euclidean'):
     """
     >>> pairwise_square([[1, 2], [1, 2], [1, 3]])
-    array([[ 0.,  0.,  1.],
-           [ 0.,  0.,  1.],
-           [ 1.,  1.,  0.]], dtype=float32)
+    array([[0., 0., 1.],
+           [0., 0., 1.],
+           [1., 1., 0.]], dtype=float32)
     """
     cdef DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
     cdef ITYPE_t n_dim = X.shape[1], n_samples = X.shape[0], i, j
@@ -135,7 +135,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] vector_distance(np.ndarray vector,
                                                         string metric="sqeuclidean"):
     """
     >>> vector_distance(np.array([1, 2]), np.array([[1, 2], [1, 2], [1, 3], [2, 2]]))
-    array([ 0.,  0.,  1.,  1.], dtype=float32)
+    array([0., 0., 1., 1.], dtype=float32)
     """
 
     cdef:

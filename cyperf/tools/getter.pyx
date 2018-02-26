@@ -135,10 +135,10 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
     TypeError: a float is required
 
     >>> cast_to_float_array(x, 'same_kind')
-    array([  4.,   3.,  nan])
+    array([ 4.,  3., nan])
 
     >>> cast_to_float_array(x, 'unsafe')
-    array([ 4.,  3.,  3.])
+    array([4., 3., 3.])
 
     """
     check_values(values)

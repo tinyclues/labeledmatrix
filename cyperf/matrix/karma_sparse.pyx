@@ -382,6 +382,10 @@ cdef class KarmaSparse:
             else:
                 return 0.
 
+    def ndim(self):
+        def __get__(self):
+            return 2
+
     def __cinit__(self, arg, shape=None, format=None, bool copy=True,
                   bool has_sorted_indices=False,
                   bool has_canonical_format=False,
@@ -459,6 +463,9 @@ cdef class KarmaSparse:
     def __reduce__(self):
         return new_karmasparse, ((np.asarray(self.data), np.asarray(self.indices),
                                  np.asarray(self.indptr)), self.shape, self.format)
+
+    def __len__(self):
+        return self.shape[0]
 
     cdef bool aligned_axis(self, axis) except? 0:
         if not is_int(axis):
@@ -1377,8 +1384,8 @@ cdef class KarmaSparse:
         Example::
             >>> ks = KarmaSparse(np.array([[-1, 2, 0, -1.1], [3, 4, -3, -1]]))
             >>> ks.truncate_by_count(nb=1, axis=1).toarray()
-            array([[ 0.,  2.,  0.,  0.],
-                   [ 0.,  4.,  0.,  0.]])
+            array([[0., 2., 0., 0.],
+                   [0., 4., 0., 0.]])
             >>> ks.truncate_by_count(nb=1, axis=0).toarray()
             array([[ 0.,  0.,  0.,  0.],
                    [ 3.,  4., -3., -1.]])

@@ -511,8 +511,7 @@ class SelectIndex(ColumnIndex):
         >>> index_select = index.select(selection, select_col)
         >>> u, ind = index_select.reversed_index()
         >>> u
-        array(['b', 'a'],
-              dtype='|S1')
+        array(['b', 'a'], dtype='|S1')
         >>> ind
         array([1, 0, 0], dtype=int32)
         >>> [u[x] for x in ind]
