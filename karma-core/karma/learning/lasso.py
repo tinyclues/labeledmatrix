@@ -264,8 +264,8 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
                                   cv.split(xx, granularity if granularity is not None else yy)))
 
     min_dim = min(e.shape[0] for e in errors)
-    erreur_series = np.vstack([e[:min_dim] for e in errors]).sum(axis=0)
-    optimal_rank = erreur_series.argmin()
+    error_series = np.vstack([e[:min_dim] for e in errors]).sum(axis=0)
+    optimal_rank = error_series.argmin()
 
     with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
         whole_betas, whole_intercepts = _lassopath(xx, yy, optimal_rank, min_alpha, max_iter)
