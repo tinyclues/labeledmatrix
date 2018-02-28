@@ -865,8 +865,8 @@ class LabeledMatrix(object):
         """
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c']), np.array([[4, 6], [7, 9]]))
         >>> lm.to_sparse().without_diagonal().matrix.toarray()
-        array([[ 0.,  6.],
-               [ 7.,  0.]])
+        array([[0., 6.],
+               [7., 0.]])
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c', 'd']), np.array([[4, 6, 8], [7, 9, 3]]))
         >>> lm.without_diagonal().matrix
         array([[0, 6, 8],
@@ -1005,17 +1005,17 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,0], [3,4]]))
         >>> d = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[0.5,2], [3,4]]))
         >>> d._divide(lm).matrix
-        array([[ 0.5,  0. ],
-               [ 1. ,  1. ]])
+        array([[0.5, 0. ],
+               [1. , 1. ]])
         >>> d.to_sparse()._divide(lm.to_sparse()).matrix.toarray()
-        array([[ 0.5,  0. ],
-               [ 1. ,  1. ]])
+        array([[0.5, 0. ],
+               [1. , 1. ]])
         >>> d._divide(lm.to_sparse()).matrix.toarray()
-        array([[ 0.5,  0. ],
-               [ 1. ,  1. ]])
+        array([[0.5, 0. ],
+               [1. , 1. ]])
         >>> d.to_sparse()._divide(lm).matrix.toarray()
-        array([[ 0.5,  0. ],
-               [ 1. ,  1. ]])
+        array([[0.5, 0. ],
+               [1. , 1. ]])
         """
         matrix = safe_multiply(self.matrix, pseudo_element_inverse(lm.matrix))
         return LabeledMatrix(self.label, matrix,
@@ -1025,8 +1025,8 @@ class LabeledMatrix(object):
         """
         >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
         >>> lm1._scalar_divide(2.0).matrix
-        array([[ 0.5,  1. ],
-               [ 1.5,  2. ]])
+        array([[0.5, 1. ],
+               [1.5, 2. ]])
         >>> aeq(lm1._scalar_divide(2).matrix, np.array([[ 0.5,  1. ],[ 1.5,  2.]]))
         True
         >>> aeq(lm1.to_sparse()._scalar_divide(2).matrix, np.array([[ 0.5,  1. ], [ 1.5, 2.]]))
@@ -1038,18 +1038,18 @@ class LabeledMatrix(object):
         """
         >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1.,2.], [5., 0.]]))
         >>> lm1.inverse(2.0).matrix
-        array([[ 2. ,  1. ],
-               [ 0.4,  0. ]])
+        array([[2. , 1. ],
+               [0.4, 0. ]])
         >>> lm1.to_sparse().inverse(2.0).matrix.toarray()
-        array([[ 2. ,  1. ],
-               [ 0.4,  0. ]])
+        array([[2. , 1. ],
+               [0.4, 0. ]])
         >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1,2], [5,4]]))
         >>> lm.to_sparse().inverse(2.0).matrix.toarray()
-        array([[ 2. ,  1. ],
-               [ 0.4,  0.5]])
+        array([[2. , 1. ],
+               [0.4, 0.5]])
         >>> lm.inverse(2.).matrix
-        array([[ 2. ,  1. ],
-               [ 0.4,  0.5]])
+        array([[2. , 1. ],
+               [0.4, 0.5]])
         """
         return LabeledMatrix(self.label,
                              pseudo_element_inverse(self.matrix, scalar),
@@ -1061,7 +1061,7 @@ class LabeledMatrix(object):
         >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
         >>> mlm = lm1.divide(lm2)
         >>> mlm.matrix
-        array([[ 0.5]])
+        array([[0.5]])
         >>> mlm.label
         (['c'], ['c'])
         >>> np.all(mlm.matrix == lm1.to_sparse().divide(lm2.to_sparse()).matrix.toarray())
@@ -1245,13 +1245,13 @@ class LabeledMatrix(object):
         >>> cat2 = {'e': 'x', 'f': 'x', 'r': 'y'}
         >>> lmcat2 = lm_from_dict(cat2)
         >>> lm.compatibility_renormalization(lmcat1, lmcat2, 1, 0).matrix.toarray()
-        array([[ 0.,  1.,  0.],
-               [ 0.,  0.,  5.],
-               [ 0.,  0.,  8.]])
+        array([[0., 1., 0.],
+               [0., 0., 5.],
+               [0., 0., 8.]])
         >>> lm.compatibility_renormalization(lmcat1, lmcat2, 0, 1).matrix.toarray()
-        array([[ 0.,  0.,  2.],
-               [ 3.,  4.,  0.],
-               [ 6.,  7.,  0.]])
+        array([[0., 0., 2.],
+               [3., 4., 0.],
+               [6., 7., 0.]])
         """
         lmcat1 = lmcat1.align(self, axes=[(1, 1, None)])[0]
         lmcat2 = lmcat2.align(self, axes=[(1, 0, None)])[0]
@@ -1345,16 +1345,16 @@ class LabeledMatrix(object):
         >>> aeq((lm.to_sparse() / lm).matrix, np.ones((2,2)))
         True
         >>> (lm.to_sparse() / 2.0).matrix.toarray()
-        array([[ 0.5,  1. ],
-               [ 1.5,  2. ]])
+        array([[0.5, 1. ],
+               [1.5, 2. ]])
         >>> aeq((lm.to_sparse() / lm.to_sparse()).matrix, np.ones((2,2)))
         True
         >>> (lm / lm).matrix
-        array([[ 1.,  1.],
-               [ 1.,  1.]])
+        array([[1., 1.],
+               [1., 1.]])
         >>> (lm / 2.0).matrix
-        array([[ 0.5,  1. ],
-               [ 1.5,  2. ]])
+        array([[0.5, 1. ],
+               [1.5, 2. ]])
         """
         if np.isscalar(other):
             return self._scalar_divide(other)
@@ -1415,14 +1415,14 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['c', 'b'], ['x', 'y', 'z']) ,
         ...                    np.array([[0.3, 0.6, 0], [0.75, 0.5, 0]]))
         >>> lm.max().sort().matrix.toarray()
-        array([[ 0.75,  0.  ],
-               [ 0.  ,  0.6 ]])
+        array([[0.75, 0.  ],
+               [0.  , 0.6 ]])
         >>> lm.max().sort().label
         (['b', 'c'], ['b', 'c'])
         >>> lm.max(axis=0).sort().matrix.toarray()
-        array([[ 0.75,  0.  ,  0.  ],
-               [ 0.  ,  0.6 ,  0.  ],
-               [ 0.  ,  0.  ,  0.  ]])
+        array([[0.75, 0.  , 0.  ],
+               [0.  , 0.6 , 0.  ],
+               [0.  , 0.  , 0.  ]])
         >>> lm.max(axis=0).sort().label
         (['x', 'y', 'z'], ['x', 'y', 'z'])
         >>> aeq(lm.max(axis=0).matrix, lm.to_sparse().max(axis=0).matrix.toarray())
@@ -1494,13 +1494,13 @@ class LabeledMatrix(object):
         """
         >>> lm = LabeledMatrix((['a', 'b'], ['x', 'y']), np.array([[5, 5], [25, 75]])).sort()
         >>> lm.mean().matrix.toarray()
-        array([[  5.,   0.],
-               [  0.,  50.]])
+        array([[ 5.,  0.],
+               [ 0., 50.]])
         >>> lm.mean().label
         (['a', 'b'], ['a', 'b'])
         >>> lm.mean(axis=0).sort().matrix.toarray()
-        array([[ 15.,   0.],
-               [  0.,  40.]])
+        array([[15.,  0.],
+               [ 0., 40.]])
         >>> lm.mean(axis=0).sort().label
         (['x', 'y'], ['x', 'y'])
         >>> aeq(lm.mean(axis=0).matrix, lm.to_sparse().mean(axis=0).matrix.toarray())
@@ -1518,11 +1518,11 @@ class LabeledMatrix(object):
         """
         >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
         >>> lm.abs().matrix
-        array([[ 0.5 ,  0.5 ],
-               [ 0.25,  0.  ]])
+        array([[0.5 , 0.5 ],
+               [0.25, 0.  ]])
         >>> lm.to_sparse().abs().matrix.toarray()
-        array([[ 0.5 ,  0.5 ],
-               [ 0.25,  0.  ]])
+        array([[0.5 , 0.5 ],
+               [0.25, 0.  ]])
         """
         return LabeledMatrix(self.label, self.matrix.__abs__(), deco=self.deco)
 
@@ -1549,15 +1549,15 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix(2*[['a', 'b', 'c', 'd']], mat)
         >>> bilambda = lambda x: int(x[1] > x[0])
         >>> lm.to_sparse().apply_lambda(bilambda).matrix.toarray()
-        array([[ 0. ,  0.5,  0. ,  0. ],
-               [ 0. ,  0. ,  0. ,  0. ],
-               [ 0. ,  0. ,  0. ,  0.5],
-               [ 0. ,  0. ,  0. ,  0. ]])
+        array([[0. , 0.5, 0. , 0. ],
+               [0. , 0. , 0. , 0. ],
+               [0. , 0. , 0. , 0.5],
+               [0. , 0. , 0. , 0. ]])
         >>> lm.apply_lambda(bilambda).matrix
-        array([[ 0. ,  0.5,  0. ,  0. ],
-               [ 0. ,  0. ,  0. ,  0. ],
-               [ 0. ,  0. ,  0. ,  0.5],
-               [ 0. ,  0. ,  0. ,  0. ]])
+        array([[0. , 0.5, 0. , 0. ],
+               [0. , 0. , 0. , 0. ],
+               [0. , 0. , 0. , 0.5],
+               [0. , 0. , 0. , 0. ]])
         """
         x, y = self.matrix.nonzero()
         factor = np.array([lambda_((self.row[i], self.column[j])) for i, j in zip(x, y)])
@@ -1573,14 +1573,14 @@ class LabeledMatrix(object):
         """
         >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1.345,2.234], [3.890,4.678]]))
         >>> lm.apply_numpy_function(np.round, [1]).matrix
-        array([[ 1.3,  2.2],
-               [ 3.9,  4.7]])
+        array([[1.3, 2.2],
+               [3.9, 4.7]])
         >>> lm.apply_numpy_function(np.log).matrix
-        array([[ 0.29639401,  0.8037937 ],
-               [ 1.35840916,  1.54287067]])
+        array([[0.29639401, 0.8037937 ],
+               [1.35840916, 1.54287067]])
         >>> lm.to_sparse().apply_numpy_function(np.log).matrix.toarray()
-        array([[ 0.29639401,  0.8037937 ],
-               [ 1.35840916,  1.54287067]])
+        array([[0.29639401, 0.8037937 ],
+               [1.35840916, 1.54287067]])
         >>> np.all(lm.apply_numpy_function(np.log).apply_numpy_function(np.exp).matrix == lm.matrix)
         True
         """
@@ -1616,8 +1616,8 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']),
         ...                    np.array([[3, -6, 9], [7, 5, 10]]))
         >>> lm.soft_cutoff(100).matrix
-        array([[ 0.02955447,  0.        ,  0.08606881],
-               [ 0.06760618,  0.04877058,  0.09516258]])
+        array([[0.02955447, 0.        , 0.08606881],
+               [0.06760618, 0.04877058, 0.09516258]])
         """
         def np_soft_cutoff(x, threshold):
             return np.maximum(1. - np.exp(-x / threshold), 0)
@@ -1628,11 +1628,11 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']),
         ...                    np.array([[3, 6, 9], [7, 5, 10]]))
         >>> lm.logistic(6).matrix
-        array([[ 0.04742587,  0.5       ,  0.95257413],
-               [ 0.73105858,  0.26894142,  0.98201379]])
+        array([[0.04742587, 0.5       , 0.95257413],
+               [0.73105858, 0.26894142, 0.98201379]])
         >>> lm.to_sparse().logistic(6).matrix.toarray()
-        array([[ 0.04742587,  0.5       ,  0.95257413],
-               [ 0.73105858,  0.26894142,  0.98201379]])
+        array([[0.04742587, 0.5       , 0.95257413],
+               [0.73105858, 0.26894142, 0.98201379]])
         """
         return self.apply_numpy_function(logit, [shift, coef])
 
@@ -1766,10 +1766,10 @@ class LabeledMatrix(object):
         >>> df['dense_vector'].coordinates
         ['x', 'y', 'z']
         >>> df['dense_vector'][:]
-        array([[ 0.,  0.,  0.],
-               [ 3.,  4.,  5.],
-               [ 3.,  4.,  5.],
-               [ 0.,  1.,  2.]])
+        array([[0., 0., 0.],
+               [3., 4., 5.],
+               [3., 4., 5.],
+               [0., 1., 2.]])
         """
         kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
         if not self.is_sparse:
@@ -1945,9 +1945,9 @@ class LabeledMatrix(object):
         Warning: self - self.diagonal() should be made before.
         >>> lm = LabeledMatrix(2*[['b', 'c', 'd']], np.array([[4, 4, 1], [2, 5, 2], [2, 1., 3]]))
         >>> np.round((lm - lm.diagonal()).transition(threshold=1., width=0.2).matrix, 3)
-        array([[ 0.   ,  0.706,  0.294],
-               [ 0.429,  0.   ,  0.571],
-               [ 0.714,  0.286,  0.   ]])
+        array([[0.   , 0.706, 0.294],
+               [0.429, 0.   , 0.571],
+               [0.714, 0.286, 0.   ]])
         """
         matrix = normalize(self.matrix, axis=0, norm=norm, invpow=invpow, invlog=invlog,
                            threshold=threshold, width=width)
@@ -2031,17 +2031,17 @@ class LabeledMatrix(object):
         ...                 [0.1, 0, 0.5, 0.4, 0]])
         >>> lm = LabeledMatrix((range(4), range(5)),  mat).to_sparse()
         >>> lm.similarity(nb_keep=2).matrix.toarray()
-        array([[ 1. ,  0.2,  0. ,  0. ],
-               [ 0. ,  1. ,  0. ,  0.8],
-               [ 0. ,  0. ,  0. ,  0. ],
-               [ 0. ,  0.8,  0. ,  1. ]])
+        array([[1. , 0.2, 0. , 0. ],
+               [0. , 1. , 0. , 0.8],
+               [0. , 0. , 0. , 0. ],
+               [0. , 0.8, 0. , 1. ]])
         >>> lm.similarity().label
         ([0, 1, 2, 3], [0, 1, 2, 3])
         >>> res = lm.similarity(other=lm.restrict_row([1, 2]), nb_keep=2)
         >>> res.matrix.toarray()
-        array([[ 0.2],
-               [ 1. ],
-               [ 0.8]])
+        array([[0.2],
+               [1. ],
+               [0.8]])
         >>> res.label
         ([0, 1, 3], [1])
         """
@@ -2501,8 +2501,8 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((range(2), range(5)),  mat)
         >>> groups = LabeledMatrix((range(5), range(5)),  np.arange(25).reshape(5, 5) % 2).to_sparse()
         >>> np.array(lm.deduplicate_by(groups, nb=1).matrix)
-        array([[ 0. ,  0.5,  0. ,  0.1,  0. ],
-               [ 0.1,  0. ,  0.5,  0. ,  0. ]])
+        array([[0. , 0.5, 0. , 0.1, 0. ],
+               [0.1, 0. , 0.5, 0. , 0. ]])
         """
         exclude = exclude.align(self, axes=[(1, 0, None)])[0].nonzero_mask()
         rest, result = self.copy(), self.zeros()
@@ -2680,16 +2680,16 @@ class LabeledMatrix(object):
         >>> lm_beta, lm_intercept = lm.to_sparse().logistic_regression(response)
         >>> lm_pred = lm.apply_logistic_model(lm_beta, lm_intercept)
         >>> lm_pred.matrix
-        array([[ 0.23668904,  0.76331096],
-               [ 0.40982753,  0.59017247],
-               [ 0.42858583,  0.57141417],
-               [ 0.69164498,  0.30835502],
-               [ 0.2974724 ,  0.7025276 ],
-               [ 0.60249609,  0.39750391],
-               [ 0.51964895,  0.48035105],
-               [ 0.39132797,  0.60867203],
-               [ 0.42230742,  0.57769258],
-               [ 0.2974724 ,  0.7025276 ]])
+        array([[0.23668904, 0.76331096],
+               [0.40982753, 0.59017247],
+               [0.42858583, 0.57141417],
+               [0.69164498, 0.30835502],
+               [0.2974724 , 0.7025276 ],
+               [0.60249609, 0.39750391],
+               [0.51964895, 0.48035105],
+               [0.39132797, 0.60867203],
+               [0.42230742, 0.57769258],
+               [0.2974724 , 0.7025276 ]])
         >>> lm_beta.matrix
         array([[ 0.02568505,  0.23449988],
                [-0.02568505, -0.23449988]])
@@ -2794,13 +2794,13 @@ class LabeledMatrix(object):
             >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
             >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
             >>> np.array(lm.pairwise_overlap(2).matrix)
-            array([[ 1. ,  0.5,  0.5],
-                   [ 0.5,  1. ,  0.5],
-                   [ 0.5,  0.5,  1. ]])
+            array([[1. , 0.5, 0.5],
+                   [0.5, 1. , 0.5],
+                   [0.5, 0.5, 1. ]])
             >>> np.array(lm.pairwise_overlap(3).matrix)
-            array([[ 1.        ,  0.66666667,  0.66666667],
-                   [ 0.66666667,  1.        ,  1.        ],
-                   [ 0.66666667,  1.        ,  1.        ]])
+            array([[1.        , 0.66666667, 0.66666667],
+                   [0.66666667, 1.        , 1.        ],
+                   [0.66666667, 1.        , 1.        ]])
             >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int)
             array([[3, 2, 2],
                    [2, 3, 3],
@@ -2971,11 +2971,11 @@ class LabeledMatrix(object):
         >>> score = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0.2], [0.5, 0.5], [0.2, 1]]))
         >>> dispatch_mask = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0], [0.5, 0], [0., 1]]))
         >>> score.population_allocation(dispatch_mask, norm=None).matrix
-        array([[ 2.,  1.],
-               [ 2.,  1.]])
+        array([[2., 1.],
+               [2., 1.]])
         >>> score.population_allocation(dispatch_mask, norm='l1').matrix
-        array([[ 0.66666667,  0.33333333],
-               [ 0.66666667,  0.33333333]])
+        array([[0.66666667, 0.33333333],
+               [0.66666667, 0.33333333]])
         """
         pop_allocation = self.nonzero_mask().transpose().dot(dispatch_mask.nonzero_mask())
         if norm is not None:
@@ -2994,11 +2994,11 @@ class LabeledMatrix(object):
         >>> score = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0.2], [0.5, 0.5], [0.2, 1]]))
         >>> dispatch_mask = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0], [0.5, 0], [0., 1]]))
         >>> score.potential_allocation(dispatch_mask, norm=None).matrix
-        array([[ 1.5,  0.2],
-               [ 0.7,  1. ]])
+        array([[1.5, 0.2],
+               [0.7, 1. ]])
         >>> score.potential_allocation(dispatch_mask, norm='l1').matrix
-        array([[ 0.88235294,  0.11764706],
-               [ 0.41176471,  0.58823529]])
+        array([[0.88235294, 0.11764706],
+               [0.41176471, 0.58823529]])
         """
         pot_allocation = self.transpose().dot(dispatch_mask.nonzero_mask())
         if norm is not None:
@@ -3021,11 +3021,11 @@ class LabeledMatrix(object):
         >>> isinstance(kplot, KarmaPlot)
         True
         >>> kplot.data['matrix']
-        array([[  0.],
-               [ 10.],
-               [ 20.],
-               [ 30.],
-               [ 40.]])
+        array([[ 0.],
+               [10.],
+               [20.],
+               [30.],
+               [40.]])
         >>> kplot.data['vmax']
         100.0
         """

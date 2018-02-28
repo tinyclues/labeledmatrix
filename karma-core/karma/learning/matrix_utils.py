@@ -44,31 +44,31 @@ def truncate_by_budget(matrix, density, volume, axis=1):
         ...                        [0.3, 0.8, 0.6, 1.]])
         >>> density = np.array([1.03, 1.02, 1.01, 1.])
         >>> truncate_by_budget(similarity, density, 2).toarray()  # top(nb_h = 2)
-        array([[ 1. ,  0.4,  0. ,  0. ],
-               [ 0. ,  1. ,  0.5,  0. ],
-               [ 0. ,  0. ,  1. ,  0.6],
-               [ 0. ,  0.8,  0. ,  1. ]])
+        array([[1. , 0.4, 0. , 0. ],
+               [0. , 1. , 0.5, 0. ],
+               [0. , 0. , 1. , 0.6],
+               [0. , 0.8, 0. , 1. ]])
         >>> truncate_by_budget(similarity, density, 3).toarray()  # top(nb_h = 3)
-        array([[ 1. ,  0.4,  0.2,  0. ],
-               [ 0.3,  1. ,  0.5,  0. ],
-               [ 0. ,  0.5,  1. ,  0.6],
-               [ 0. ,  0.8,  0.6,  1. ]])
+        array([[1. , 0.4, 0.2, 0. ],
+               [0.3, 1. , 0.5, 0. ],
+               [0. , 0.5, 1. , 0.6],
+               [0. , 0.8, 0.6, 1. ]])
         >>> density = np.array([2., 1.01, 0.2, 1.0])
-            >>> truncate_by_budget(similarity, density, 2.).toarray()
-            array([[ 1. ,  0. ,  0. ,  0. ],
-                   [ 0.3,  1. ,  0.5,  0. ],
-                   [ 0. ,  0.5,  1. ,  0.6],
-                   [ 0. ,  0.8,  0. ,  1. ]])
+        >>> truncate_by_budget(similarity, density, 2.).toarray()
+        array([[1. , 0. , 0. , 0. ],
+               [0.3, 1. , 0.5, 0. ],
+               [0. , 0.5, 1. , 0.6],
+               [0. , 0.8, 0. , 1. ]])
         >>> similarity = np.array([[0., 0., 0., 0.],
         ...                        [0., 1., 0., 0],
         ...                        [0., 2., 0., 0.],
         ...                        [0., 3., 0., 1.]])
         >>> density = np.array([1.03, 1.02, 1.01, 1.])
         >>> truncate_by_budget(similarity, density, 2).toarray()  # top(nb_h = 2)
-        array([[ 0.,  0.,  0.,  0.],
-               [ 0.,  1.,  0.,  0.],
-               [ 0.,  2.,  0.,  0.],
-               [ 0.,  3.,  0.,  1.]])
+        array([[0., 0., 0., 0.],
+               [0., 1., 0., 0.],
+               [0., 2., 0., 0.],
+               [0., 3., 0., 1.]])
     """
     density = density if len(density.shape) == 1 else density.diagonal()
     if not is_karmasparse(matrix):
@@ -91,20 +91,20 @@ def truncate_by_count(matrix, max_rank, axis):
         ...                 [0.1, 0, 0.5, 0.4, 0]])
         >>> res = truncate_by_count(KarmaSparse(mat), max_rank=1, axis=1).toarray()
         >>> res
-        array([[ 0.  ,  0.51,  0.  ,  0.  ,  0.  ],
-               [ 0.  ,  0.  ,  0.  ,  0.  ,  0.  ],
-               [ 0.  ,  0.  ,  0.  ,  0.52,  0.  ],
-               [ 0.  ,  0.  ,  0.5 ,  0.  ,  0.  ]])
+        array([[0.  , 0.51, 0.  , 0.  , 0.  ],
+               [0.  , 0.  , 0.  , 0.  , 0.  ],
+               [0.  , 0.  , 0.  , 0.52, 0.  ],
+               [0.  , 0.  , 0.5 , 0.  , 0.  ]])
         >>> np.allclose(res, truncate_by_count(mat, max_rank=1, axis=1))
         True
         >>> np.allclose(truncate_by_count(KarmaSparse(mat), max_rank=2, axis=None).toarray(),
         ...             truncate_by_count(mat, max_rank=2, axis=None))
         True
         >>> truncate_by_count(mat, max_rank=2, axis=None)
-        array([[ 0.  ,  0.51,  0.  ,  0.  ,  0.  ],
-               [ 0.  ,  0.  ,  0.  ,  0.  ,  0.  ],
-               [ 0.  ,  0.  ,  0.  ,  0.52,  0.  ],
-               [ 0.  ,  0.  ,  0.  ,  0.  ,  0.  ]])
+        array([[0.  , 0.51, 0.  , 0.  , 0.  ],
+               [0.  , 0.  , 0.  , 0.  , 0.  ],
+               [0.  , 0.  , 0.  , 0.52, 0.  ],
+               [0.  , 0.  , 0.  , 0.  , 0.  ]])
     """
     if axis not in [0, 1, None]:
         raise ValueError('axis must be 0, 1 or None')
@@ -182,10 +182,10 @@ def complement(matrix, other):
     >>> mask = np.zeros(mat.shape)
     >>> mask[diag_idx, diag_idx] = 1
     >>> complement(mat, (diag_idx, diag_idx))
-    array([[ 0. ,  0.5,  0. ],
-           [ 0. ,  0. ,  0. ],
-           [ 0. ,  1. ,  0. ],
-           [ 1. ,  0. ,  5. ]])
+    array([[0. , 0.5, 0. ],
+           [0. , 0. , 0. ],
+           [0. , 1. , 0. ],
+           [1. , 0. , 5. ]])
     >>> np.all(complement(mat, (diag_idx, diag_idx))
     ...    == complement(ks, (diag_idx, diag_idx)).toarray())
     ...    == complement(spmat, (diag_idx, diag_idx)).toarray()
@@ -215,15 +215,15 @@ def truncate_by_cumulative(matrix, per, axis):
     ...                 [0, 0.1, 0.4, 0.5, 0],
     ...                 [0.1, 0, 0.5, 0.4, 0]])
     >>> truncate_by_cumulative(KarmaSparse(mat), per=0.1, axis=1).toarray()
-    array([[ 0.4,  0.5,  0. ,  0. ,  0. ],
-           [ 0. ,  0. ,  0. ,  0. ,  0. ],
-           [ 0. ,  0. ,  0.4,  0.5,  0. ],
-           [ 0. ,  0. ,  0.5,  0.4,  0. ]])
+    array([[0.4, 0.5, 0. , 0. , 0. ],
+           [0. , 0. , 0. , 0. , 0. ],
+           [0. , 0. , 0.4, 0.5, 0. ],
+           [0. , 0. , 0.5, 0.4, 0. ]])
     >>> truncate_by_cumulative(KarmaSparse(mat), per=0.5, axis=1).toarray()
-    array([[ 0. ,  0.5,  0. ,  0. ,  0. ],
-           [ 0. ,  0. ,  0. ,  0. ,  0. ],
-           [ 0. ,  0. ,  0. ,  0.5,  0. ],
-           [ 0. ,  0. ,  0.5,  0. ,  0. ]])
+    array([[0. , 0.5, 0. , 0. , 0. ],
+           [0. , 0. , 0. , 0. , 0. ],
+           [0. , 0. , 0. , 0.5, 0. ],
+           [0. , 0. , 0.5, 0. , 0. ]])
     """
     per = max(min(1, per), 0)
     if is_scipysparse(matrix):
@@ -245,15 +245,15 @@ def buddies_matrix(matrix, cutoff=0.001, nb_keep=200, top=None, cumtop=None):
     ...                 [0, 0, 0, 0, 0],
     ...                 [0.1, 0, 0.5, 0.4, 0]])
     >>> buddies_matrix(KarmaSparse(mat)).toarray()
-    array([[ 1. ,  0.2,  0. ,  0.2],
-           [ 0.2,  1. ,  0. ,  0.8],
-           [ 0. ,  0. ,  0. ,  0. ],
-           [ 0.2,  0.8,  0. ,  1. ]])
+    array([[1. , 0.2, 0. , 0.2],
+           [0.2, 1. , 0. , 0.8],
+           [0. , 0. , 0. , 0. ],
+           [0.2, 0.8, 0. , 1. ]])
     >>> buddies_matrix(KarmaSparse(mat, format="csc"), nb_keep=2).toarray()
-    array([[ 1. ,  0.2,  0. ,  0. ],
-           [ 0. ,  1. ,  0. ,  0.8],
-           [ 0. ,  0. ,  0. ,  0. ],
-           [ 0. ,  0.8,  0. ,  1. ]])
+    array([[1. , 0.2, 0. , 0. ],
+           [0. , 1. , 0. , 0.8],
+           [0. , 0. , 0. , 0. ],
+           [0. , 0.8, 0. , 1. ]])
     """
     # truncate for RAM security reasons
     if top is not None and cumtop is not None:
@@ -277,20 +277,20 @@ def pairwise_buddy(matrix, other, cutoff=0.001, nb_keep=200):
     ...                 [0, 0, 0, 0, 0],
     ...                 [0.1, 0, 0.5, 0.4, 0]])
     >>> pairwise_buddy(mat, mat[:2]).toarray()
-    array([[ 1. ,  0.2],
-           [ 0.2,  1. ],
-           [ 0. ,  0. ],
-           [ 0.2,  0.8]])
+    array([[1. , 0.2],
+           [0.2, 1. ],
+           [0. , 0. ],
+           [0.2, 0.8]])
     >>> pairwise_buddy(KarmaSparse(mat), mat[:2]).toarray()
-    array([[ 1. ,  0.2],
-           [ 0.2,  1. ],
-           [ 0. ,  0. ],
-           [ 0.2,  0.8]])
+    array([[1. , 0.2],
+           [0.2, 1. ],
+           [0. , 0. ],
+           [0.2, 0.8]])
     >>> pairwise_buddy(KarmaSparse(mat, format="csc"), KarmaSparse(mat[1:]), nb_keep=2).toarray()
-    array([[ 0.2,  0. ,  0.2],
-           [ 1. ,  0. ,  0.8],
-           [ 0. ,  0. ,  0. ],
-           [ 0.8,  0. ,  1. ]])
+    array([[0.2, 0. , 0.2],
+           [1. , 0. , 0.8],
+           [0. , 0. , 0. ],
+           [0.8, 0. , 1. ]])
     """
     if not is_karmasparse(matrix):
         matrix = KarmaSparse(matrix, format="csr")
@@ -304,8 +304,8 @@ def pseudo_element_inverse(matrix, scalar=1.):
     >>> import scipy.sparse as sp
     >>> a = np.array([[1.,2.], [5., 0.]])
     >>> pseudo_element_inverse(a)
-    array([[ 1. ,  0.5],
-           [ 0.2,  0. ]])
+    array([[1. , 0.5],
+           [0.2, 0. ]])
     >>> a = np.random.binomial(3, 0.4, (13, 10))
     >>> np.all(pseudo_element_inverse(sp.csr_matrix(a)).toarray() ==
     ...        pseudo_element_inverse(a))
@@ -1147,8 +1147,8 @@ def sparse_quantiles(matrix, nb, axis):
     >>> import scipy.sparse as sp
     >>> mat =  KarmaSparse(sp.csr_matrix(np.arange(20).reshape(2,10)))
     >>> sparse_quantiles(mat, 2, 1).toarray()
-    array([[ 0.,  1.,  1.,  1.,  1.,  2.,  2.,  2.,  2.,  2.],
-           [ 1.,  1.,  1.,  1.,  1.,  2.,  2.,  2.,  2.,  2.]])
+    array([[0., 1., 1., 1., 1., 2., 2., 2., 2., 2.],
+           [1., 1., 1., 1., 1., 2., 2., 2., 2., 2.]])
     """
     bins = np.arange(nb, dtype=np.float) / nb
 
@@ -1298,9 +1298,9 @@ def anomaly(matrix, skepticism):
            [ 0.391,  0.681, -4.502, -4.502, -0.   ],
            [ 0.391, -5.002,  0.547,  0.547, -0.   ]])
     >>> anomaly(np.random.rand(3, 1), skepticism=0.01)
-    array([[ 0.],
-           [ 0.],
-           [ 0.]])
+    array([[0.],
+           [0.],
+           [0.]])
     """
     if is_karmasparse(matrix) or is_scipysparse(matrix):
         # TODO
@@ -1327,10 +1327,9 @@ def rank_dispatch(matrix, maximum_pressure, max_rank, max_volume):
     Warning : works as expected only on nonzeros scores
     >>> matrix = np.array([[2, 2], [1, 1.2], [0, 0]])
     >>> rank_dispatch(matrix, 1, max_rank=np.array([3,3]), max_volume=np.array([3,3])).toarray()
-    array([[ 2.,  0.],
-           [ 1.,  0.],
-           [ 0.,  0.]])
-
+    array([[2., 0.],
+           [1., 0.],
+           [0., 0.]])
     """
     if is_karmasparse(matrix) or is_scipysparse(matrix):  # TODO
         raise NotImplementedError()
@@ -1346,9 +1345,9 @@ def argmax_dispatch(matrix, maximum_pressure, max_rank, max_volume):
     >>> volumes = np.array([1, 1])
     >>> ranks = np.array([2, 2])
     >>> sparse_argmax_dispatch(KarmaSparse(matrix), maximum_pressure=1, max_rank=ranks, max_volume=volumes).toarray()
-    array([[ 0.8,  0. ],
-           [ 0. ,  0.5],
-           [ 0. ,  0. ]])
+    array([[0.8, 0. ],
+           [0. , 0.5],
+           [0. , 0. ]])
     """
     nb_user, nb_topic = matrix.shape
     assert nb_topic == max_volume.shape[0]
@@ -1446,8 +1445,8 @@ def matrix_group_by(matrix, group_by_key_column, aggregator='mean'):
            [ 6,  7,  8]])
     >>> reversed_indices = [0, 0, 1]
     >>> matrix_group_by(matrix, reversed_indices, aggregator='sum')
-    array([[  3.,  14.,   7.],
-           [  6.,   7.,   8.]])
+    array([[ 3., 14.,  7.],
+           [ 6.,  7.,  8.]])
     >>> mat = np.array([-6.9, 5.4, -9.4, 0.4, -4.6, 6.2, -2.0, 5.6, 0.1]).reshape(3,3)
     >>> matrix_group_by(mat, reversed_indices, aggregator='sum')
     array([[-6.5,  0.8, -3.2],
@@ -1512,9 +1511,9 @@ def coherence(matrix):
 def gini_weights(N):
     """
     >>> gini_weights(2)
-    array([ 0.75,  0.25])
+    array([0.75, 0.25])
     >>> gini_weights(5)
-    array([ 0.9,  0.7,  0.5,  0.3,  0.1])
+    array([0.9, 0.7, 0.5, 0.3, 0.1])
     """
     res = np.arange(1, N + 1, dtype=float)
     res *= -1
@@ -1541,7 +1540,7 @@ def row_mean_gini(matrix):
 
 def gram_quantiles(matrix, q=0.1):
     """
-    Computes quantiles of the distribution of scalar products of 
+    Computes quantiles of the distribution of scalar products of
     the columns of a given matrix.
     Args:
         matrix: rectangular matrix, sparse or not
@@ -1550,9 +1549,9 @@ def gram_quantiles(matrix, q=0.1):
     >>> with use_seed(42):
     ...    G = np.random.randn(100, 10)
     >>> gram_quantiles(G, 0.1)
-    array([ 0.0163046])
+    array([0.0163046])
     >>> gram_quantiles(G, [0.1, 0.9])
-    array([ 0.0163046 ,  0.16680645])
+    array([0.0163046 , 0.16680645])
     """
     normalized_matrix = normalize(matrix, norm='l2', axis=0)
     abs_normalized_gram = np.abs(normalized_matrix.transpose().dot(normalized_matrix))

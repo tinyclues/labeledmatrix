@@ -136,9 +136,9 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     >>> isinstance(res1, LabeledMatrix)
     True
     >>> res1.matrix.toarray()
-    array([[ 1.        ,  0.80850765,  0.        ],
-           [ 0.86854149,  0.        ,  1.        ],
-           [ 0.        ,  0.        ,  0.77021511]])
+    array([[1.        , 0.80850765, 0.        ],
+           [0.86854149, 0.        , 1.        ],
+           [0.        , 0.        , 0.77021511]])
     >>> res1.label
     ([1, 4, 3], ['abc@fr', 'jkl@uk', 'bcd@de'])
     >>> res2 = lm_decayed_pivot_from_dataframe(data, key='name', axis='cat',
