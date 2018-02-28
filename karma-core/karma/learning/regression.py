@@ -9,7 +9,7 @@ from sklearn.linear_model import Ridge
 
 from cyperf.matrix.karma_sparse import is_karmasparse
 
-from karma.core.curve import compute_mean_curve, gain_from_prediction, nonbinary_gain_from_prediction
+from karma.core.curve import compute_mean_curve, gain_from_prediction, gain_curve_from_prediction
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import to_scipy_sparse
 
@@ -101,24 +101,16 @@ def lightfm_regression_model(user_features, item_features, interactions, sample_
 
 
 def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, test_mses=None):
-    binary_prediction = is_binary(y) and np.max(prediction) <= 1. and np.min(prediction) >= 0.
-    if binary_prediction:
-        curve_method = gain_from_prediction
-    elif np.min(y) >= 0:
-        curve_method = nonbinary_gain_from_prediction
-    else:
-        curve_method = None
-
     meta = {'train_MSE': np.mean((y - prediction) ** 2)}
-    if curve_method is not None:
-        curves = curve_method(prediction, y)
-        if with_guess and binary_prediction:
-            curves.guess = gain_from_prediction(prediction)
+    if np.min(y) >= 0:
+        curves = gain_curve_from_prediction(prediction, y, 'Train')
+        if with_guess and is_binary(y) and np.max(prediction) <= 1 and np.min(prediction) >= 0:
+            curves.guess = gain_curve_from_prediction(prediction, name='Guess')
 
         if test_curves is not None:
             if len(test_curves) > 1:
                 curves.tests = test_curves
-            curves.test = compute_mean_curve(test_curves)
+            curves.test = compute_mean_curve(test_curves, 'Test')
 
         meta['curves'] = curves
 
