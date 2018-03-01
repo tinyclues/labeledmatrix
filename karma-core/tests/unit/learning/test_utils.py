@@ -9,7 +9,8 @@ from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
 from karma.learning.logistic import logistic_coefficients
 from karma.learning.matrix_utils import as_vector_batch
-from karma.learning.utils import CrossValidationWrapper, validate_regression_model, BasicVirtualHStack
+from karma.learning.utils import (CrossValidationWrapper, validate_regression_model,
+                                  BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX)
 from karma.lib.logistic_regression import logistic_regression
 
 
@@ -215,3 +216,31 @@ class VirtualHStackTestCase(unittest.TestCase):
         hstack = BasicVirtualHStack(np.ones((5, 2), dtype=np.float16))
         self.assertEqual(hstack.X.dtype, np.float32)  # dtype is promoted
         self.assertEqual(hstack.flatten_hstack().dtype, np.float32)
+
+    def test_set_parallelism(self):
+        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
+                                np.full((5, 1), 3, dtype=np.float32),
+                                np.ones((5, 3), dtype=np.float64),
+                                1], nb_threads=0, nb_inner_threads=4)
+
+        self.assertEqual(hstack.nb_threads, 0)
+        self.assertEqual(hstack.nb_inner_threads, 4)
+        self.assertTrue(hstack.is_block)
+        self.assertTrue(hstack.pool is None)
+
+        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16)],
+                               nb_threads=4, nb_inner_threads=4)
+
+        self.assertEqual(hstack.nb_threads, 1)
+        self.assertEqual(hstack.nb_inner_threads, 4)
+        self.assertTrue(hstack.is_block)
+        self.assertTrue(hstack.pool is None)
+
+        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
+                                np.full((5, 1), 3, dtype=np.float32)],
+                                nb_threads=4)
+        self.assertTrue(hstack.is_block)
+        self.assertTrue(hstack.pool is not None)
+        self.assertEqual(hstack.nb_threads, 2)
+        self.assertEqual(hstack.nb_inner_threads, NB_THREADS_MAX)
+

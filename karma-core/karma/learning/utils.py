@@ -1,4 +1,4 @@
-from itertools import izip
+from itertools import izip, imap
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
@@ -13,6 +13,8 @@ from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import safe_hstack, types_promotion
 from karma.learning.regression import create_meta_of_regression
 from karma.thread_setter import blas_threads, open_mp_threads
+
+NB_THREADS_MAX = 16
 
 
 class BasicVirtualHStack(object):
@@ -109,26 +111,41 @@ class BasicVirtualHStack(object):
 
 
 class VirtualHStack(BasicVirtualHStack):
-    def __init__(self, X, nb_threads=1):
+    def __init__(self, X, nb_threads=1, nb_inner_threads=None):
         super(VirtualHStack, self).__init__(X)
-        if self.is_block:
-            self.nb_threads = min(nb_threads, len(self.X), 16)
-            self.pool = ThreadPool(self.nb_threads)
-            self.nb_inner_threads = min(16, max(1, int(2 * 32. / self.nb_threads)))
-            self.order = np.argsort(map(self._block_priority, self.X))[::-1]
-            self.reverse_order = np.argsort(self.order)
-        else:
-            self.pool = None
-            self.nb_threads = 1
+        self.pool = None
+        self.nb_threads = nb_threads
+        self.nb_inner_threads = nb_inner_threads
+        self._set_parallelism()
 
     # def __del__(self):  # It does not work as I expect
     #     self._close_pool()
     #     self.X = None
 
+    def _set_parallelism(self):
+        if self.is_block:
+            self.nb_threads = min(self.nb_threads, len(self.X), NB_THREADS_MAX)
+            if self.nb_threads > 1:
+                self.pool = ThreadPool(self.nb_threads)
+
+            self.order = np.argsort(map(self._block_priority, self.X))[::-1]
+            self.reverse_order = np.argsort(self.order)
+        else:
+            self.nb_threads = 1
+
+        if self.nb_inner_threads is None:
+            if self.nb_threads > 0:
+                self.nb_inner_threads = min(NB_THREADS_MAX, max(1, int(2 * 32. / self.nb_threads)))
+            else:
+                self.nb_inner_threads = NB_THREADS_MAX
+
+
     def __getitem__(self, indices):
         if indices is None:
             return self
-        return VirtualHStack(super(VirtualHStack, self).__getitem__(indices), self.nb_threads)
+        return VirtualHStack(super(VirtualHStack, self).__getitem__(indices),
+                             self.nb_threads,
+                             self.nb_inner_threads)
 
     def _close_pool(self):
         if self.pool is not None:
@@ -143,28 +160,34 @@ class VirtualHStack(BasicVirtualHStack):
             return int(2. * x.nnz / max(x.shape[0], 1))
 
     def dot(self, w, row_indices=None):
-        if self.is_block:
-            def _dot(i):
-                x = self.X[i]
-                if row_indices is not None:
-                    x = x[row_indices]
-                return x.dot(w[self.dims[i]:self.dims[i + 1]].astype(x.dtype, copy=False))
+        with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
+            if self.is_block:
+                def _dot(i):
+                    x = self.X[i]
+                    if row_indices is not None:
+                        x = x[row_indices]
+                    return x.dot(w[self.dims[i]:self.dims[i + 1]].astype(x.dtype, copy=False))
 
-            with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
-                return reduce(np.add, self.pool.imap_unordered(_dot, self.order))
-        else:
-            return self[row_indices].X.dot(w.astype(self.X.dtype, copy=False))
+                if self.pool is not None:
+                    return reduce(np.add, self.pool.imap_unordered(_dot, self.order))
+                else:
+                    return reduce(np.add, imap(_dot, self.order))
+            else:
+                return self.X.dot(w.astype(self.X.dtype, copy=False))
 
     def transpose_dot(self, w):
-        if self.is_block:
-            def _dot(i):
-                x = self.X[i]
-                return x.T.dot(w.astype(x.dtype, copy=False))
+        with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
+            if self.is_block:
+                def _dot(i):
+                    x = self.X[i]
+                    return x.T.dot(w.astype(x.dtype, copy=False))
 
-            with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
-                return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
-        else:
-            return self.X.T.dot(w.astype(self.X.dtype, copy=False))
+                if self.pool is not None:
+                    return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
+                else:
+                    return np.hstack(map(_dot, range(len(self.X))))
+            else:
+                return self.X.T.dot(w.astype(self.X.dtype, copy=False))
 
 
 def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
@@ -245,7 +268,9 @@ class CrossValidationWrapper(object):
         return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
 
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
-        X_stacked = VirtualHStack(blocks_x, nb_threads=kwargs.get('nb_threads', 1))
+        X_stacked = VirtualHStack(blocks_x,
+                                  nb_threads=kwargs.get('nb_threads', 1),
+                                  nb_inner_threads=kwargs.get('nb_inner_threads'))
         i, j = 0, 0
 
         for (train_idx, test_idx) in self.cv.split(self.classes, self.classes):

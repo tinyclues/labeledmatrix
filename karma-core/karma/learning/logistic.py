@@ -83,7 +83,8 @@ def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
     return out, grad
 
 
-def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weight=None, nb_threads=1):
+def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weight=None,
+                                nb_threads=1, nb_inner_threads=None):
     """
     >>> from karma.core.dataframe import DataFrame
     >>> from karma.core.utils.utils import use_seed
@@ -106,7 +107,8 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     True
     """
     if not isinstance(X, VirtualHStack):
-        X = VirtualHStack(X, nb_threads=nb_threads)
+        X = VirtualHStack(X, nb_threads=nb_threads,
+                          nb_inner_threads=nb_inner_threads)
 
     C = X.adjust_array_to_total_dimension(C, 'C')
 
@@ -149,7 +151,8 @@ def logistic_coefficients_fall_back(X, y, max_iter, solver='liblinear', C=1e10, 
 
 
 def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
-                          w_warm=None, sample_weight=None, nb_threads=1):
+                          w_warm=None, sample_weight=None, nb_threads=1,
+                          nb_inner_threads=None):
     if solver != 'lbfgs':
         return logistic_coefficients_fall_back(X, y, max_iter, solver,
                                                C=C, sample_weight=sample_weight)
@@ -157,7 +160,8 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
         linear_pred, intercept, beta, conv_dict = logistic_coefficients_lbfgs(X, y, max_iter=max_iter, C=C,
                                                                               w_warm=w_warm,
                                                                               sample_weight=sample_weight,
-                                                                              nb_threads=nb_threads)
+                                                                              nb_threads=nb_threads,
+                                                                              nb_inner_threads=nb_inner_threads)
 
         return expit(linear_pred), intercept, beta, conv_dict
 
@@ -165,13 +169,14 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
 def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercept_priori=0.,
                                          C_priori=1e10, intercept_C_priori=1e10,
                                          sample_weight=None, w_warm=None, nb_threads=1,
-                                         full_hessian=True, timer=None):
+                                         nb_inner_threads=None, full_hessian=True, timer=None):
     if timer is None:
         timer = create_timer(None)
 
     with timer('BayLogReg_Reg_Init'):
         if not isinstance(X, VirtualHStack):
-            X = VirtualHStack(X, nb_threads=nb_threads)
+            X = VirtualHStack(X, nb_threads=nb_threads,
+                              nb_inner_threads=nb_inner_threads)
 
         if w_priori is None:
             w_priori = np.zeros(X.shape[1], dtype=np.float)
@@ -266,28 +271,31 @@ def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
         Hess[-1, -1] = weight.sum() + alpha_intercept
     SubHess = Hess[:n_features, :n_features]
 
-    if X.is_block:
-        def _hess_fill(i):
-            dx = sc(X.X[i])
-            if fit_intercept:
-                Hess[X.dims[i]:X.dims[i + 1], -1] = dx.sum(axis=0)
-            for j, xj in enumerate(X.X):
-                if j >= i:
-                    # TODO : downcast dtype for dense * dense dtype
-                    Hess[X.dims[i]:X.dims[i + 1],
-                         X.dims[j]:X.dims[j + 1]] = np.asarray(dx.transpose().dot(xj))
+    with blas_threads(X.nb_inner_threads), open_mp_threads(X.nb_inner_threads):
+        if X.is_block:
+            def _hess_fill(i):
+                dx = sc(X.X[i])
+                if fit_intercept:
+                    Hess[X.dims[i]:X.dims[i + 1], -1] = dx.sum(axis=0)
+                for j, xj in enumerate(X.X):
+                    if j >= i:
+                        # TODO : downcast dtype for dense * dense dtype
+                        Hess[X.dims[i]:X.dims[i + 1],
+                        X.dims[j]:X.dims[j + 1]] = np.asarray(dx.transpose().dot(xj))
 
-        with blas_threads(X.nb_inner_threads), open_mp_threads(X.nb_inner_threads):
-            X.pool.map(_hess_fill, X.order)
-        # symmetrize
-        ind = np.triu_indices_from(Hess, 1)
-        Hess[ind[::-1]] = Hess[ind]
-    else:
-        dx = sc(X.X)
-        SubHess[:] = X.X.transpose().dot(dx)
-        if fit_intercept:
-            Hess[:-1, -1] = dx.sum(axis=0)
-            Hess[-1, :-1] = Hess[:-1, -1]
+            if X.pool is not None:
+                X.pool.map(_hess_fill, X.order)
+            else:
+                map(_hess_fill, X.order)
+
+            ind = np.triu_indices_from(Hess, 1)
+            Hess[ind[::-1]] = Hess[ind]
+        else:
+            dx = sc(X.X)
+            SubHess[:] = X.X.transpose().dot(dx)
+            if fit_intercept:
+                Hess[:-1, -1] = dx.sum(axis=0)
+                Hess[-1, :-1] = Hess[:-1, -1]
 
     # set a priori
     np.fill_diagonal(SubHess, np.diag(SubHess) + alpha)
@@ -338,14 +346,17 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
     if fit_intercept:
         DHess[-1] = weight.sum() + alpha_intercept
 
-    if X.is_block:
-        def _dhess_fill(i):
-            DHess[X.dims[i]:X.dims[i + 1]] = ssc(X.X[i])
+    with blas_threads(X.nb_inner_threads), open_mp_threads(X.nb_inner_threads):
+        if X.is_block:
+            def _dhess_fill(i):
+                DHess[X.dims[i]:X.dims[i + 1]] = ssc(X.X[i])
 
-        with blas_threads(X.nb_inner_threads), open_mp_threads(X.nb_inner_threads):
-            X.pool.map(_dhess_fill, X.order)
-    else:
-        DHess[:n_features] = ssc(X.X)
+            if X.pool is not None:
+                X.pool.map(_dhess_fill, X.order)
+            else:
+                map(_dhess_fill, X.order)
+        else:
+            DHess[:n_features] = ssc(X.X)
 
     DHess[:n_features] += alpha
     return DHess
