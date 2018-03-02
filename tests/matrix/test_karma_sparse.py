@@ -228,6 +228,12 @@ class TestKarmaSparse(unittest.TestCase):
             self.assertTrue(eq(KarmaSparse(a.shape, format="csr").toarray(), np.zeros(a.shape)))
             self.assertTrue(eq(KarmaSparse(a.shape, format="csc").toarray(), np.zeros(a.shape)))
 
+    def test_init_scalar(self):
+        for x in [1, 2.]:
+            ks = KarmaSparse(x)
+            self.assertEqual(ks.shape, (1, 1))
+            self.assertTrue(eq(ks, KarmaSparse(np.array([[x]]))))
+
     def test_format_respect(self):
         a = sp.rand(4, 2, 0.3, format='coo', random_state=1208)
         # sparse

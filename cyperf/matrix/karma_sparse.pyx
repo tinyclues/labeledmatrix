@@ -426,7 +426,10 @@ cdef class KarmaSparse:
             else:
                 raise ValueError('Cannot cast to KarmaSparse')
         else:
-            raise TypeError('Cannot cast to KarmaSparse')
+            try:
+                self.from_dense(np.asarray(arg))
+            except:
+                raise TypeError('Cannot cast to KarmaSparse')
 
     def __repr__(self):
         repr_ = "<KarmaSparse matrix with properties :"
@@ -530,7 +533,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef bool from_dense(self, np.ndarray a, format=None) except 0:
-        if a.ndim == 1:
+        if a.ndim <= 1:
             a = np.atleast_2d(a)  # embedding of 1-dim vector
         shape = tuple([a.shape[l] for l in xrange(a.ndim)])  # convert *int to tuple
         check_nonzero_shape(shape)
@@ -3526,7 +3529,7 @@ cdef class KarmaSparse:
         if is_karmasparse(matrix):
             return self.kronii_sparse_dot(matrix, factor, power)
         else:
-            return self.kronii_dense_dot(matrix, factor, power)
+            return self.kronii_dense_dot(np.ascontiguousarray(matrix), factor, power)
 
     def kronii_dense_dot(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
         check_shape_comptibility(self.shape[0], matrix.shape[0])
@@ -3644,4 +3647,4 @@ cdef class KarmaSparse:
         if is_karmasparse(matrix):
             return self.kronii_sparse_dot_transpose(matrix, factor, power)
         else:
-            return self.kronii_dense_dot_transpose(matrix, factor, power)
+            return self.kronii_dense_dot_transpose(np.ascontiguousarray(matrix), factor, power)
