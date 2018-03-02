@@ -1377,6 +1377,19 @@ def as_vector_batch(array):
         return array
 
 
+def as_sparse(array):
+    if is_karmasparse(array):
+        return array
+    elif isinstance(array, np.ndarray):
+        if array.ndim == 1:
+            array = to_array_if_needed(array, force_dim2=True).T
+        return KarmaSparse(array)
+    elif is_karmasparse(array[0]):
+        return ks_vstack(array)
+    else:
+        return as_sparse(np.asarray(array))
+
+
 def flatten_along_first_axis(data):
     """
     >>> x = np.random.rand(3, 4, 5, 2)
