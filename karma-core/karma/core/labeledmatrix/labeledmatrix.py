@@ -2,6 +2,7 @@
 # Copyright tinyclues, All rights reserved
 #
 
+from cytoolz.dicttoolz import keymap
 from collections import OrderedDict
 import random
 
@@ -17,10 +18,11 @@ from karma.core.karmacode import KarmaCode
 from karma.core.utils import is_integer, use_seed
 from karma.core.method import enforce_lib_closure
 
-from cyperf.tools import logit, logit_inplace, take_indices
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
+from cyperf.tools import logit, logit_inplace, take_indices
+from cyperf.tools.getter import apply_python_dict
 
 from karma.learning.affinity_propagation import affinity_propagation
 from karma.learning.co_clustering import co_clustering
@@ -2171,7 +2173,7 @@ class LabeledMatrix(object):
                 yield col, vector[0, current_indices[i]]
 
     @use_seed()
-    def nmf(self, rank, max_iter=120, svd_init=False):
+    def nmf(self, rank, max_model_rank=None, max_iter=None, svd_init=False):
         """
         >>> from karma.synthetic.labeledmatrix import rand
         >>> m = rand(seed=12, density=0.5).to_dense()
@@ -2185,7 +2187,7 @@ class LabeledMatrix(object):
             ranks = rank
         ww, hh = [], []
         for rank in ranks:
-            w, h = nmf(self.matrix, rank, svd_init=svd_init)
+            w, h = nmf(self.matrix, rank=rank, max_model_rank=max_model_rank, max_iter=max_iter, svd_init=svd_init)
             ww.append(w)
             hh.append(h)
         www, hhh = np.hstack(ww), np.hstack(hh)
@@ -3037,3 +3039,85 @@ class LabeledMatrix(object):
             lm = self
         kwargs.pop('column', None)
         return lm.to_dense().to_vectorial_dataframe(row_name, col_name).heatmap(**kwargs)
+
+    def scalar_multiply_rows(self, rows, scalar):
+        """
+        Multiplies given rows by a scalar
+        Args:
+            rows: rows to multiply; takes intersection of self.row and given list
+            scalar: scalar to multiply on
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]))
+        >>> lm.scalar_multiply_rows(['c', 'f'], 2).matrix
+        array([[1, 0],
+               [6, 8]])
+        >>> lm.scalar_multiply_rows(['b', 'c'], 0.5).matrix
+        array([[0.5, 0. ],
+               [1.5, 2. ]])
+        >>> lm.scalar_multiply_rows(['a', 'd'], 5).matrix
+        array([[1, 0],
+               [3, 4]])
+        """
+        try:
+            diff_lm = self.restrict_row(rows)
+        except LabeledMatrixException:
+            return self
+
+        diff_lm = (1 - scalar) * diff_lm
+        diff_lm = diff_lm.align(self, [(0, 0, None), (1, 1, None)], self_only=True)
+
+        return self - diff_lm
+
+    def scalar_multiply_columns(self, columns, scalar):
+        """
+        Multiplies given columns by a scalar
+        Args:
+            columns: columns to multiply; takes intersection of self.column and given list
+            scalar: scalar to multiply on
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]))
+        >>> lm.scalar_multiply_columns(['y', 'z'], 2).matrix
+        array([[1, 0],
+               [3, 8]])
+        >>> lm.scalar_multiply_columns(['x', 'y'], 0.5).matrix
+        array([[0.5, 0. ],
+               [1.5, 2. ]])
+        >>> lm.scalar_multiply_columns(['u', 'z'], 5).matrix
+        array([[1, 0],
+               [3, 4]])
+        """
+        return self.transpose().scalar_multiply_rows(columns, scalar).transpose()
+
+    def rename_row(self, prefix='', suffix='', mapping=None):
+        """
+        Returns LabeledMatrix with changed row names
+        Args:
+            prefix: prefix to add to row names
+            suffix: suffix to add to row names
+            mapping: translate names with respect to a dict
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]), deco=({'b': 'b_deco'}, {}))
+        >>> renamed_lm = lm.rename_row(prefix='a_', suffix='_z', mapping={'b': 'h'})
+        >>> list(renamed_lm.row)
+        ['a_h_z', 'a_c_z']
+        >>> renamed_lm.row_deco
+        {'a_h_z': 'b_deco'}
+        """
+        if mapping is None:
+            mapping = {}
+        rows = ['{}{}{}'.format(prefix, r, suffix) for r in apply_python_dict(mapping, self.row, None, keep_same=True)]
+        row_deco = keymap(dict(zip(self.row, rows)).get, self.row_deco)
+        return LabeledMatrix((rows, self.column), self.matrix, (row_deco, self.column_deco))
+
+    def rename_column(self, prefix='', suffix='', mapping=None):
+        """
+        Returns LabeledMatrix with changed column names
+        Args:
+            prefix: prefix to add to column names
+            suffix: suffix to add to column names
+            mapping: translate names with respect to a dict
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]), deco=({}, {'x': 'x_deco'}))
+        >>> renamed_lm = lm.rename_column(prefix='a_', suffix='_z', mapping={'x': 'h'})
+        >>> list(renamed_lm.column)
+        ['a_h_z', 'a_y_z']
+        >>> renamed_lm.column_deco
+        {'a_h_z': 'x_deco'}
+        """
+        return self.transpose().rename_row(prefix, suffix, mapping).transpose()
