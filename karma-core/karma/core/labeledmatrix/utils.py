@@ -230,11 +230,11 @@ def lm_block(my_dict, dense_output=False):
     return lm_flat._dot(lm_flat.transpose())
 
 
-def _zipmerge(d1, d2):
+def zipmerge(d1, d2):
     """
     >>> aa = {'a': 3, 'c': 4}
     >>> bb = {'a': 5, 'b': 4}
-    >>> _zipmerge((aa, bb), (bb, aa))
+    >>> zipmerge((aa, bb), (bb, aa))
     ({'a': 5, 'c': 4, 'b': 4}, {'a': 3, 'c': 4, 'b': 4})
     """
     return tuple([dict_merge(x, y) for x, y in zip(d1, d2)])

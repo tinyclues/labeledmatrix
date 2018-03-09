@@ -9,7 +9,7 @@ from sklearn.linear_model import Ridge
 
 from cyperf.matrix.karma_sparse import is_karmasparse
 
-from karma.core.curve import compute_mean_curve, gain_from_prediction, gain_curve_from_prediction
+from karma.core.curve import compute_mean_curve, gain_curve_from_prediction
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import to_scipy_sparse
 

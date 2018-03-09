@@ -19,7 +19,7 @@ ADD_TIME = 20
 EPSILON = 10 ** (-10)
 
 
-__all__ = ['nmf']
+__all__ = ['nmf', 'nmf_fold']
 
 
 @use_seed()

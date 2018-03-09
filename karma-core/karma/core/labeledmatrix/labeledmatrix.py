@@ -38,7 +38,7 @@ from karma.runtime import KarmaSetup
 from karma.core.labeledmatrix.utils import (lm_occurence,
                                             co,
                                             lmdiag,
-                                            _zipmerge,
+                                            zipmerge,
                                             dict_merge,
                                             aeq)
 
@@ -1021,7 +1021,7 @@ class LabeledMatrix(object):
         """
         matrix = safe_multiply(self.matrix, pseudo_element_inverse(lm.matrix))
         return LabeledMatrix(self.label, matrix,
-                             deco=_zipmerge(self.deco, lm.deco))
+                             deco=zipmerge(self.deco, lm.deco))
 
     def _scalar_divide(self, scalar):
         """
@@ -1150,7 +1150,7 @@ class LabeledMatrix(object):
         True
         """
         return LabeledMatrix(self.label, safe_add(self.matrix, other.matrix),
-                             deco=_zipmerge(self.deco, other.deco))
+                             deco=zipmerge(self.deco, other.deco))
 
     def add(self, other):
         """
