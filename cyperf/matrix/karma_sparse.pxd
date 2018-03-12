@@ -1,11 +1,11 @@
 cimport cython
 cimport numpy as np
 from cython.parallel cimport parallel, prange
+from cython cimport floating
 from libc.math cimport pow as _cpow
 from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, string, A, B
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
 from routine cimport (logistic, get_reducer, binary_func, mult, axpy, scalar_product, computed_quantile, mmax)
-
 
 # ctypedef (ITYPE_t, ITYPE_t) Shape_t  # BUG in cython : this type not cimportable
 ctypedef tuple Shape_t
@@ -18,6 +18,24 @@ cdef bool check_nonzero_shape(shape) except 0
 cdef bool check_bounds(ITYPE_t row, ITYPE_t upper_bound) except 0
 cdef bool check_ordered(ITYPE_t row0, ITYPE_t row1, bool strict) except 0
 cdef bool check_shape_comptibility(x1, x2) except 0
+
+
+# cy_syr fused type
+from scipy.linalg.cython_blas cimport dsyr, ssyr
+# dsyr(char *uplo, int *n, d *alpha, d *x, int *incx, d *a, int *lda)
+ctypedef void (*cy_syr_type)(int size, floating alpha, floating * x, floating * target, int dim) nogil
+
+
+cdef inline void cy_ssyr(int size, float alpha, float * x, float * target, int dim) nogil:
+    cdef int one = 1
+    cdef char * uplo = 'l'
+    ssyr(uplo, &size, &alpha, x, &one, target, &dim)
+
+
+cdef inline void cy_dsyr(int size, double alpha, double * x, double * target, int dim) nogil:
+    cdef int one = 1
+    cdef char * uplo = 'l'
+    dsyr(uplo, &size, &alpha, x, &one, target, &dim)
 
 
 cdef inline double cpow(double x, double y) nogil:
@@ -33,7 +51,7 @@ cdef inline double cpow(double x, double y) nogil:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cdef inline void _linear_error_dense(cython.floating[:,::1] inp, DTYPE_t[:,::1] matrix,
+cdef inline void _linear_error_dense(floating[:,::1] inp, DTYPE_t[:,::1] matrix,
                                      DTYPE_t * tmp, DTYPE_t * out,
                                      DTYPE_t* column, DTYPE_t* row) nogil:
         cdef:
@@ -76,7 +94,7 @@ cdef inline void _linear_error(LTYPE_t nrows, LTYPE_t n_cols,
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
-                            cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power):
+                            floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power):
     cdef LTYPE_t i, j, k
     cdef ITYPE_t ind
     cdef DTYPE_t out, dd
@@ -96,7 +114,7 @@ cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_
 @cython.boundscheck(False)
 cdef inline void kronii_dot_transpose(LTYPE_t start, LTYPE_t stop, LTYPE_t size,
                                       LTYPE_t* indptr, ITYPE_t* indices, DTYPE_t* data,
-                                      cython.floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power) nogil:
+                                      floating* matrix, DTYPE_t* factor, DTYPE_t* result, double power) nogil:
     cdef LTYPE_t i, j, k
     cdef ITYPE_t ind
     cdef DTYPE_t dd, f
@@ -191,8 +209,8 @@ cdef inline void inplace_arange(ITYPE_t * x, int size) nogil:
     for j in xrange(size): x[j] = j
 
 
-cpdef np.ndarray[dtype=cython.floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
-                                                            cython.floating[::1] values, shape=*,
+cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
+                                                            floating[::1] values, shape=*,
                                                             string aggregator=*, DTYPE_t default=*)
 
 
@@ -429,7 +447,7 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse divide(self, other)
 
-    cdef KarmaSparse kronii_align_dense(self, cython.floating[:,:] other)
+    cdef KarmaSparse kronii_align_dense(self, floating[:,:] other)
 
     cdef KarmaSparse kronii_align_sparse(self, KarmaSparse other)
 
@@ -467,6 +485,6 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, A[::1] vector)
 
-    cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other, binary_func fn)
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, binary_func fn)
 
     cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn)

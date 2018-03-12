@@ -24,7 +24,7 @@ cdef string DEFAULT_AGG = 'add'
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def linear_error_dense(cython.floating[:,::1] inp, DTYPE_t[:,::1] matrix,
+def linear_error_dense(floating[:,::1] inp, DTYPE_t[:,::1] matrix,
                        DTYPE_t[::1] column, DTYPE_t[::1] row):
     check_shape_comptibility(inp.shape[1], matrix.shape[0])
     check_shape_comptibility(matrix.shape[1], column.shape[0])
@@ -170,9 +170,9 @@ cdef bool check_shape_comptibility(x1, x2) except 0:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=cython.floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
+cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
                                                             ITYPE_t[::1] cols,
-                                                            cython.floating[::1] values,
+                                                            floating[::1] values,
                                                             shape=None,
                                                             string aggregator=DEFAULT_AGG,
                                                             DTYPE_t default=0):
@@ -201,7 +201,7 @@ cpdef np.ndarray[dtype=cython.floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
         shape = (maxx + 1, maxy + 1)
 
     cdef binary_func reducer = get_reducer(aggregator)
-    cdef cython.floating[:,::1] result = np.full(shape, default, dtype=np.array(values).dtype)
+    cdef floating[:,::1] result = np.full(shape, default, dtype=np.array(values).dtype)
     cdef np.uint8_t[:,::1] mask = np.zeros(shape, dtype=np.uint8)
     cdef DTYPE_t val
 
@@ -1689,7 +1689,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse kronii_align_dense(self, cython.floating[:,:] other):
+    cdef KarmaSparse kronii_align_dense(self, floating[:,:] other):
         cdef LTYPE_t ncols = other.shape[1]
         cdef LTYPE_t nnz = self.nnz * ncols
         cdef LTYPE_t[::1] indptr = np.asarray(self.indptr) * ncols
@@ -2669,6 +2669,7 @@ cdef class KarmaSparse:
             np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=DTYPE, order='C')
             ITYPE_t i
             LTYPE_t j
+
         with nogil:
             for i in xrange(self.nrows):
                 for j in xrange(self.indptr[i], self.indptr[i + 1]):
@@ -2758,6 +2759,7 @@ cdef class KarmaSparse:
         check_shape_comptibility(a.shape[1], b.shape[0])
         check_shape_comptibility(a.shape[0], self.nrows)
         check_shape_comptibility(b.shape[1], self.ncols)
+
         cdef:
             ITYPE_t inner_dim = a.shape[1]
             ITYPE_t i, ii
@@ -2772,6 +2774,7 @@ cdef class KarmaSparse:
                 ii = self.indices[j]
                 mx = scalar_product(inner_dim, &aa[i, 0], &bb[ii, 0])
                 data[j] = op(self.data[j], mx)
+
         res = KarmaSparse((data,
                            np.array(self.indices, copy=True),
                            np.array(self.indptr, copy=True)),
@@ -2786,6 +2789,7 @@ cdef class KarmaSparse:
         check_shape_comptibility(self.nrows, other_a.shape[0])
         check_shape_comptibility(self.ncols, other_b.shape[1])
         check_shape_comptibility(other_a.shape[1], other_b.shape[0])
+
         if other_a.format != CSR:
             other_a = other_a.swap_slicing()
         if other_b.format != CSC:
@@ -2895,7 +2899,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse generic_dense_restricted_binary_operation(self, cython.floating[:,:] other,
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other,
                                                                binary_func fn):
         check_shape_comptibility(self.shape, np.asarray(other).shape)
 
@@ -3531,7 +3535,7 @@ cdef class KarmaSparse:
         else:
             return self.kronii_dense_dot(np.ascontiguousarray(matrix), factor, power)
 
-    def kronii_dense_dot(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
+    def kronii_dense_dot(self, floating[:,::1] matrix, np.ndarray factor, double power=1.):
         check_shape_comptibility(self.shape[0], matrix.shape[0])
         check_shape_comptibility(factor.shape[0], self.shape[1] * matrix.shape[1])
 
@@ -3572,7 +3576,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    def kronii_dense_dot_transpose(self, cython.floating[:,::1] matrix, np.ndarray factor, double power=1.):
+    def kronii_dense_dot_transpose(self, floating[:,::1] matrix, np.ndarray factor, double power=1.):
         check_shape_comptibility(self.shape[0], matrix.shape[0])
         check_shape_comptibility(factor.shape[0], self.shape[0])
 
@@ -3648,3 +3652,92 @@ cdef class KarmaSparse:
             return self.kronii_sparse_dot_transpose(matrix, factor, power)
         else:
             return self.kronii_dense_dot_transpose(np.ascontiguousarray(matrix), factor, power)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def kronii_second_moment_sparse(self, KarmaSparse matrix):
+        # temporal fallback
+        check_shape_comptibility(self.shape[0], matrix.shape[0])
+        c = self.kronii(matrix)
+        return c.T.dot(c)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def kronii_second_moment_dense(self, floating[:,::1] matrix):
+        check_shape_comptibility(self.shape[0], matrix.shape[0])
+
+        cdef int size1 = self.shape[1], size2 = matrix.shape[1], dd = size1 * size2
+        cdef floating[:,::1] res = np.zeros((dd, dd), dtype=np.asarray(matrix).dtype)
+        cdef floating * tmp
+        cdef floating val
+        cdef KarmaSparse other
+        cdef int i, x1, x2, xx1, yy1, y1, y2, ind1_x, ind1_y, ind2_x, ind2_y, ind3_x, ind3_y, ind4_x, ind4_y
+        cdef LTYPE_t pos_a, stop_a, pos_b, stop_b, ind_a, ind_b
+        cdef long[::1] x, y, order
+        cdef cy_syr_type cy_syr
+
+        if floating is float:
+            cy_syr = cy_ssyr
+        else:
+            cy_syr = cy_dsyr
+
+        if self.aligned_axis(0):
+            other = self
+        else:
+            other = self.swap_slicing()
+
+        order = np.argsort(other.count_nonzero(axis=0))
+        x, y = map(np.ascontiguousarray, np.triu_indices(size1, 0))
+
+        # parallel over whole upper triangle
+        # order is important to better allocate threads
+        for i in prange(x.shape[0], nogil=True, schedule='dynamic'):
+            x1, y1 = order[x[i]], order[y[i]]
+            xx1, yy1 = x1 * size2, y1 * size2
+            tmp = &res[xx1, yy1]
+
+            pos_a, stop_a = other.indptr[x1], other.indptr[x1 + 1]
+            pos_b, stop_b = other.indptr[y1], other.indptr[y1 + 1]
+
+            while pos_a < stop_a and pos_b < stop_b:
+                ind_a, ind_b = other.indices[pos_a], other.indices[pos_b]
+                if ind_a == ind_b:
+                    cy_syr(size2, other.data[pos_a] * other.data[pos_b], &matrix[ind_b, 0], tmp, dd)
+                    pos_a = pos_a + 1
+                    pos_b = pos_b + 1
+                elif ind_a < ind_b:
+                    pos_a = pos_a + 1
+                else: # ind_b < ind_a:
+                    pos_b = pos_b + 1
+
+            # symmetrising inplace
+            for x2 in range(size2):
+                for y2 in range(size2):
+                    ind1_x, ind1_y = xx1 + x2, yy1 + y2
+                    ind2_x, ind2_y = yy1 + x2, xx1 + y2
+                    ind3_x, ind3_y = ind2_y, ind2_x
+                    ind4_x, ind4_y = ind1_y, ind1_x
+
+                    if res[ind1_x, ind1_y] != 0:
+                        val = res[ind1_x, ind1_y]
+                    elif res[ind2_x, ind2_y] != 0:
+                        val = res[ind2_x, ind2_y]
+                    elif res[ind3_x, ind3_y] != 0:
+                        val = res[ind2_x, ind2_y]
+                    else:
+                        val = res[ind4_x, ind4_y]
+
+                    if val != 0:
+                        res[ind1_x, ind1_y] = res[ind2_x, ind2_y] = res[ind2_x, ind2_y] = res[ind4_x, ind4_y] = val
+
+        return np.asarray(res)
+
+    def kronii_second_moment(self, matrix):
+        """
+        returns symmetric matrix x.T.dot(x), where x = kronii(self, matrix)
+        """
+        if is_karmasparse(matrix):
+            return self.kronii_second_moment_sparse(matrix)
+        else:
+            # we need to prevent blas from internal multi-threading use `with blas_threads(1):`
+            return self.kronii_second_moment_dense(np.ascontiguousarray(matrix))
