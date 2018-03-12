@@ -6,6 +6,7 @@ from karma.learning.matrix_utils import coherence, gram_quantiles, safe_max, saf
 def gram_first_quartile(mat):
     return gram_quantiles(mat, q=0.25)[0]
 
+
 def gram_third_quartile(mat):
     return gram_quantiles(mat, q=0.75)[0]
 
@@ -48,21 +49,21 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     ...     df = DataFrame({"col_1": np.ones((5, 2)), "col_2": np.random.randn(5, 2)})
     >>> f_list = [('mean', 'l2_norm', 'm_l2'), is_positive, ('mean', 'l0_norm')]
     >>> descriptive_features_benchmark(df, func_list=f_list).preview() #doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-    ---------------------------------------------------------------------------------------------------
-    feature | is_sparse | dimension | proportion_of_nonempty_rows | m_l2   | is_positive | mean_l0_norm
-    ---------------------------------------------------------------------------------------------------
-    col_2     False       2           1.0                           1.4748   False         2.0
-    col_1     False       2           1.0                           1.4142   True          2.0
+    ------------------------------------------------------------------------------------------
+    feature | is_sparse | dimension | nonempty_rows_rate | m_l2   | is_positive | mean_l0_norm
+    ------------------------------------------------------------------------------------------
+    col_2     False       2           1.0                  1.4748   False         2.0
+    col_1     False       2           1.0                  1.4142   True          2.0
     >>> with use_seed(42):
     ...    df = DataFrame({"col_1": np.ones((5, 2)), "col_2": np.random.randn(5, 2), "col_3": np.random.randn(5)})
     >>> f_list = [('mean', 'l2_norm', 'm_l2'), coherence, safe_min]
     >>> descriptive_features_benchmark(df, features=df.column_names, func_list=f_list).preview() #doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-    ---------------------------------------------------------------------------------------------
-    feature | is_sparse | dimension | proportion_of_nonempty_rows | m_l2   | coherence | safe_min
-    ---------------------------------------------------------------------------------------------
-    col_2     False       2           1.0                           0.995    0.5752      -0.4695
-    col_3     False       1           1.0                           0.9619   None        -1.9133
-    col_1     False       2           1.0                           1.4142   1.0         1.0
+    ------------------------------------------------------------------------------------
+    feature | is_sparse | dimension | nonempty_rows_rate | m_l2   | coherence | safe_min
+    ------------------------------------------------------------------------------------
+    col_2     False       2           1.0                  0.995    0.5752      -0.4695
+    col_3     False       1           1.0                  0.9619   None        -1.9133
+    col_1     False       2           1.0                  1.4142   1.0         1.0
     """
     if features is None:
         features = df.vectorial_column_names + df.sparse_column_names
@@ -72,11 +73,11 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     result_lists["feature"] = features
     result_lists["is_sparse"] = [df[feature].is_sparse() for feature in features]
     result_lists["dimension"] = [df[feat].safe_dim() for feat in features]
-    result_lists["proportion_of_nonempty_rows"] = [df.aggregate('mean(is_non_empty({}))'.format(feature))
-                                                   for feature in features]
+    result_lists["nonempty_rows_rate"] = [df.aggregate('mean(is_non_empty({}))'.format(feature))
+                                          for feature in features]
 
     if column_order is None:
-        default_column_order = ["feature", "is_sparse", "dimension", "proportion_of_nonempty_rows"]
+        default_column_order = ["feature", "is_sparse", "dimension", "nonempty_rows_rate"]
 
     if func_list is None:
         func_list = [('min', 'is_one_hot', 'is_one_hot'),
