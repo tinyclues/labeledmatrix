@@ -118,7 +118,11 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     try:
         w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                  args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
-                                                 iprint=0, pgtol=1e-7, maxiter=max_iter)
+                                                 iprint=0, pgtol=KarmaSetup.lbfgs_params.get('pgtol', 1e-7),
+                                                 maxiter=max_iter, m=KarmaSetup.lbfgs_params.get('m', 10),
+                                                 factr=KarmaSetup.lbfgs_params.get('factr', 1e7),
+                                                 maxfun=KarmaSetup.lbfgs_params.get('maxfun', 15000),
+                                                 maxls=KarmaSetup.lbfgs_params.get('maxls', 20))
 
         conv_dict = _conv_dict_format(conv_dict, obj_value)
 
@@ -195,7 +199,11 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
             w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                      args=(X, y, alpha_priori, sample_weight, w_priori,
                                                            alpha_intercept, intercept_priori),
-                                                     iprint=0, pgtol=1e-7, maxiter=max_iter)
+                                                     iprint=0, pgtol=KarmaSetup.lbfgs_params.get('pgtol', 1e-7),
+                                                     maxiter=max_iter, m=KarmaSetup.lbfgs_params.get('m', 10),
+                                                     factr=KarmaSetup.lbfgs_params.get('factr', 1e7),
+                                                     maxfun=KarmaSetup.lbfgs_params.get('maxfun', 15000),
+                                                     maxls=KarmaSetup.lbfgs_params.get('maxls', 20))
             intercept, beta = w0[-1], w0[:-1]
 
             conv_dict = _conv_dict_format(conv_dict, obj_value)
