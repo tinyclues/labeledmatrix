@@ -1772,6 +1772,8 @@ class LabeledMatrix(object):
                [3., 4., 5.],
                [3., 4., 5.],
                [0., 1., 2.]])
+        >>> type(kc_dense[0].mapping[0])
+        <type 'list'>
         """
         kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
         if not self.is_sparse:
@@ -1784,7 +1786,7 @@ class LabeledMatrix(object):
             else:
                 raise LabeledMatrixException("Unknown default {}".format(default))
 
-            kc += Map(inputs, output, (self.row, self.matrix),
+            kc += Map(inputs, output, (self.row.list, self.matrix),
                       v_default, coordinates=coordinates)
         else:
             if default != 'zero':
