@@ -8,9 +8,8 @@ rebuilt from  scikit-learn/sklearn/linear_model/least_angle.py
 """
 
 import numpy as np
-from scipy import linalg
-from scipy.linalg.lapack import get_lapack_funcs
-from sklearn.utils import arrayfuncs
+from scipy.linalg import get_lapack_funcs, get_blas_funcs, solve_triangular
+from sklearn.utils.arrayfuncs import cholesky_delete, min_pos
 
 
 def lasso_gram(Xy, XX, max_features=None, max_iter=500, min_alpha=0, method='lasso'):
@@ -76,9 +75,9 @@ Exemple :
         True
         >>> np.sum(np.abs(models[2] - coef)) < 0.00001
         True
-"""
-    Gram = np.array(XX, dtype=np.float)
-    Cov = np.array(Xy, dtype=np.float)
+    """
+    Gram, Cov = XX.copy(), np.array(Xy, dtype=np.float)
+
     n_features = Gram.shape[0]
     if max_features is None:
         max_features = n_features
@@ -86,18 +85,20 @@ Exemple :
     coefs = np.zeros((max_features + 1, n_features))
     alphas = np.zeros(max_features + 1)
     n_iter, n_active = 0, 0
-    active, indices = list(), np.arange(n_features)
+    active, indices = [], np.arange(n_features)
     # holds the sign of covariance
     sign_active = np.empty(max_features, dtype=np.int8)
     drop = False
-    eps = np.finfo(Gram.dtype).eps
+    eps = np.finfo(np.float).eps
+    tiny32 = np.finfo(np.float32).tiny  # to avoid division by 0 warning
 
     # will hold the cholesky factorization. Only lower part is referenced.
-    L = np.empty((max_features, max_features), dtype=Gram.dtype)
-    swap, nrm2 = linalg.get_blas_funcs(('swap', 'nrm2'), (Gram,))
-    solve_cholesky, = get_lapack_funcs(('potrs',), (Gram,))
+    L = np.empty((max_features, max_features), dtype=np.float)
+    solve_cholesky, = get_lapack_funcs(('potrs',), (L,))
 
-    tiny32 = np.finfo(np.float32).tiny  # to avoid division by 0 warning
+    # they can be of different dtype
+    swap_gram, = get_blas_funcs(('swap',), (Gram,))
+    swap_cov, = get_blas_funcs(('swap',), (Cov,))
 
     while True:
         if Cov.size:
@@ -132,32 +133,32 @@ Exemple :
             sign_active[n_active] = np.sign(C_)
             m, n = n_active, C_idx + n_active
 
-            Cov[C_idx], Cov[0] = swap(Cov[C_idx], Cov[0])
+            Cov[C_idx], Cov[0] = swap_cov(Cov[C_idx], Cov[0])
             indices[n], indices[m] = indices[m], indices[n]
             Cov_not_shortened = Cov
             Cov = Cov[1:]  # remove Cov[0]
 
             # swap does only work inplace if matrix is fortran
             # contiguous ...
-            Gram[m], Gram[n] = swap(Gram[m], Gram[n])
-            Gram[:, m], Gram[:, n] = swap(Gram[:, m], Gram[:, n])
+            Gram[m], Gram[n] = swap_gram(Gram[m], Gram[n])
+            Gram[:, m], Gram[:, n] = swap_gram(Gram[:, m], Gram[:, n])
             c = Gram[n_active, n_active]
             L[n_active, :n_active] = Gram[n_active, :n_active]
 
             # Update the cholesky decomposition for the Gram matrix
             if n_active:
-                linalg.solve_triangular(L[:n_active, :n_active],
-                                        L[n_active, :n_active],
-                                        trans=0, lower=True,
-                                        overwrite_b=True, check_finite=False)
-            v = np.dot(L[n_active, :n_active], L[n_active, :n_active])
+                solve_triangular(L[:n_active, :n_active],
+                                 L[n_active, :n_active],
+                                 trans=0, lower=True,
+                                 overwrite_b=True, check_finite=False)
+            v = L[n_active, :n_active].dot(L[n_active, :n_active])
             diag = max(np.sqrt(np.abs(c - v)), eps)
             L[n_active, n_active] = diag
 
             if diag < 1e-7:
                 Cov = Cov_not_shortened
                 Cov[0] = 0
-                Cov[C_idx], Cov[0] = swap(Cov[C_idx], Cov[0])
+                Cov[C_idx], Cov[0] = swap_gram(Cov[C_idx], Cov[0])
                 continue
 
             active.append(indices[n_active])
@@ -195,17 +196,16 @@ Exemple :
         # if huge number of features, this takes 50% of time, I
         # think could be avoided if we just update it using an
         # orthogonal (QR) decomposition of X
-        corr_eq_dir = np.dot(Gram[:n_active, n_active:].T,
-                             least_squares)
+        corr_eq_dir = Gram[:n_active, n_active:].T.dot(least_squares)
 
-        g1 = arrayfuncs.min_pos((C - Cov) / (AA - corr_eq_dir + tiny32))
-        g2 = arrayfuncs.min_pos((C + Cov) / (AA + corr_eq_dir + tiny32))
+        g1 = min_pos((C - Cov) / (AA - corr_eq_dir + tiny32))
+        g2 = min_pos((C + Cov) / (AA + corr_eq_dir + tiny32))
         gamma_ = min(g1, g2, C / AA)
 
         # TODO: better names for these variables: z
         drop = False
-        z = -coef[active] / (least_squares + tiny32)
-        z_pos = arrayfuncs.min_pos(z)
+        z = - coef[active] / (least_squares + tiny32)
+        z_pos = min_pos(z)
         if z_pos < gamma_:
             idx = np.where(z == z_pos)[0][::-1]
             sign_active[idx] = - sign_active[idx]
@@ -232,17 +232,17 @@ Exemple :
 
         # See if any coefficient has changed sign
         if drop and method == 'lasso':
-            [arrayfuncs.cholesky_delete(L[:n_active, :n_active], ii) for ii in idx]
+            [cholesky_delete(L[:n_active, :n_active], ii) for ii in idx]
             n_active -= 1
             m, n = idx, n_active
             drop_idx = [active.pop(ii) for ii in idx]
             for ii in idx:
                 for i in range(ii, n_active):
                     indices[i], indices[i + 1] = indices[i + 1], indices[i]
-                    Gram[i], Gram[i + 1] = swap(Gram[i], Gram[i+1])
-                    Gram[:, i], Gram[:, i + 1] = swap(Gram[:, i], Gram[:, i + 1])
+                    Gram[i], Gram[i + 1] = swap_gram(Gram[i], Gram[i + 1])
+                    Gram[:, i], Gram[:, i + 1] = swap_gram(Gram[:, i], Gram[:, i + 1])
 
-            temp = Xy[drop_idx] - np.dot(XX[drop_idx], coefs[n_iter])
+            temp = Xy[drop_idx] - XX[drop_idx].dot(coefs[n_iter])
             Cov = np.r_[temp, Cov]
 
             sign_active = np.delete(sign_active, idx)

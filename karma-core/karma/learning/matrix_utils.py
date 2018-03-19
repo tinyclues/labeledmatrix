@@ -3,10 +3,10 @@
 #
 
 import numpy as np
+from cytoolz import curry
 
 from scipy.stats.mstats import mquantiles
-from scipy.stats import threshold
-from scipy.linalg import block_diag, solve_triangular
+from scipy.linalg import block_diag, solve_triangular, get_blas_funcs
 from scipy.sparse import isspmatrix as is_scipysparse, csr_matrix as scipy_csr_matrix
 from cyperf.tools import logit
 from cyperf.matrix.rank_dispatch import matrix_rank_dispatch
@@ -924,10 +924,13 @@ def truncate_with_cutoff(matrix, cutoff):
     """
     if is_scipysparse(matrix):
         matrix = KarmaSparse(matrix)
+
     if is_karmasparse(matrix):
         return matrix.truncate_with_cutoff(cutoff)
     else:
-        return threshold(matrix, threshmin=cutoff, threshmax=None, newval=0)
+        matrix = matrix.copy()
+        matrix[matrix < cutoff] = 0
+        return matrix
 
 
 def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
@@ -1371,8 +1374,8 @@ def as_vector_batch(array):
         return array
 
     array = np.asarray(array)
-    if len(array.shape) == 1:
-        return array.reshape(array.shape[0], 1)
+    if array.ndim == 1:
+        return array.reshape(-1, 1)
     else:
         return array
 
@@ -1406,14 +1409,25 @@ def flatten_along_first_axis(data):
         return data.reshape(data.shape[0], -1)
 
 
-def to_array_if_needed(data, force_dim2=False, min_dtype=None):
+def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=False):
     if is_karmasparse(data):
         return data
+    elif is_scipysparse(data):
+        return KarmaSparse(data, copy=False)
     else:
-        res = np.atleast_2d(data) if force_dim2 else np.asarray(data)
+        res = np.asarray(data)
+        if force_dim2 and res.ndim <= 1:
+            res = np.atleast_2d(data)
+            if scalar_transpose:
+                res = res.T
         if min_dtype is not None:
             res = res.astype(np.promote_types(res.dtype, min_dtype), copy=False)
         return res
+
+
+cast_2dim_float32_transpose = curry(to_array_if_needed)(force_dim2=True, min_dtype=np.float32, scalar_transpose=True)
+cast_float32 = curry(to_array_if_needed)(force_dim2=False, min_dtype=np.float32)
+to_array_if_needed_dim2 = curry(to_array_if_needed)(force_dim2=True)
 
 
 def safe_hstack(args):
@@ -1428,12 +1442,6 @@ def safe_vstack(args):
         return ks_vstack(args)
     else:
         return np.vstack(args)
-
-
-def types_promotion(args):
-    return [np.asarray(X, dtype=np.promote_types(X.dtype, np.float32)) if isinstance(X, np.ndarray)
-            else (np.asarray(X) if not is_karmasparse(X) and not is_scipysparse(X) else X)
-            for X in args]
 
 
 def to_scipy_sparse(matrix):
@@ -1521,11 +1529,11 @@ def coherence(matrix):
     return abs_normalized_gram.max()
 
 
-def gini_weights(N):
+def _gini_weights(N):
     """
-    >>> gini_weights(2)
+    >>> _gini_weights(2)
     array([0.75, 0.25])
-    >>> gini_weights(5)
+    >>> _gini_weights(5)
     array([0.9, 0.7, 0.5, 0.3, 0.1])
     """
     res = np.arange(1, N + 1, dtype=float)
@@ -1546,7 +1554,7 @@ def row_mean_gini(matrix):
         return 1.0
     sorted_matrix = np.sort(np.abs(matrix), axis=1)
     sorted_matrix = normalize(sorted_matrix, norm='l1', axis=1)
-    diag_gini_weights = np.diag(gini_weights(matrix.shape[1]))
+    diag_gini_weights = np.diag(_gini_weights(matrix.shape[1]))
     sorted_matrix = sorted_matrix.dot(diag_gini_weights)
     return np.mean(1 - 2 * np.sum(sorted_matrix, axis=1))
 
@@ -1566,7 +1574,79 @@ def gram_quantiles(matrix, q=0.1):
     >>> gram_quantiles(G, [0.1, 0.9])
     array([0.0163046 , 0.16680645])
     """
-    normalized_matrix = normalize(matrix, norm='l2', axis=0)
-    abs_normalized_gram = np.abs(normalized_matrix.transpose().dot(normalized_matrix))
+    second_m = np.asarray(second_moment(matrix))
+    norm = 1. / np.sqrt(np.diagonal(second_m)).clip(1e-8)
+    abs_normalized_gram = np.abs(norm * (norm * second_m).T)
     extra_diag_terms = abs_normalized_gram[np.triu_indices(abs_normalized_gram.shape[1], 1)]
     return mquantiles(extra_diag_terms, q)
+
+
+def _dp_cast(left, right):
+    left, right = map(cast_2dim_float32_transpose, [left, right])
+    if not is_karmasparse(left) and is_karmasparse(right):
+        # exclude impossible special case dp(dense, sparse)
+        raise NotImplementedError('direct_product method does NOT support (dense, sparse) case')
+    return left, right
+
+
+def direct_product(left, right):
+    left, right = _dp_cast(left, right)
+    if is_karmasparse(left):
+        return left.kronii(right)
+    else:
+        left, right = np.asarray(left, dtype=np.float32), np.asarray(right, dtype=np.float32)
+        return np.einsum('ij, ik -> ijk', left, right).reshape(left.shape[0], -1)
+
+
+def direct_product_dot(left, right, rightfactor, power=1):
+    left, right = _dp_cast(left, right)
+    if is_karmasparse(left):
+        return left.kronii_dot(right, rightfactor, power)
+    else:  # dense x dense
+        if power not in [1, 2]:
+            raise NotImplementedError('direct_product_dot only support power of 1 or 2, but not {}'
+                                      .format(power))
+        rightmatrix = rightfactor.reshape((left.shape[1], right.shape[1]))
+        if power == 2:
+            return np.einsum('ij, ij, ik, ik, jk -> i', left, left, right, right, rightmatrix)
+        else:
+            return np.einsum('ij, ik, jk -> i', left, right, rightmatrix)
+
+
+def direct_product_dot_transpose(left, right, leftfactor, power=1):
+    left, right = _dp_cast(left, right)
+    if is_karmasparse(left):
+        return left.kronii_dot_transpose(right, leftfactor, power)
+    else:
+        if power not in [1, 2]:
+            raise NotImplementedError('direct_product_dot only support power of 1 or 2, but not {}'.format(power))
+        if power == 2:
+            res = np.einsum('ij, ij, ik, ik, i -> jk', left, left, right, right, leftfactor, optimize='optimal')
+        else:
+            res = np.einsum('ij, ik, i -> jk', left, right, leftfactor, optimize='optimal')
+        return res.reshape(-1)
+
+
+def second_moment(mat):
+    if is_karmasparse(mat):
+        # TODO : we can compute only upper triangle part and next symmetrize
+        # or to have dedicated KarmaSparse routine
+        return mat.T.dot(mat)
+    else:
+        # using special blas routine x2 time gain
+        syrk, = get_blas_funcs(('syrk',), (mat,))
+        res = syrk(1., mat.T)
+        res += res.T
+        np.fill_diagonal(res, np.diagonal(res) / 2.)
+        return res
+
+
+def direct_product_second_moment(left, right):
+    left, right = _dp_cast(left, right)
+    if is_karmasparse(left):
+        with blas_threads(1):   # turn off internal blas multithreading
+            return left.kronii_second_moment(right)
+    else:
+        # less memory consuming version :
+        # res = np.einsum('ij, ik, il, im -> jklm', left, right, right, left, optimize='optimal')
+        return second_moment(direct_product(left, right))

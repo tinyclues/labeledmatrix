@@ -10,11 +10,104 @@ from cyperf.tools import take_indices, logit_inplace
 
 from karma.core.utils import is_iterable
 from karma.core.utils.array import is_binary
-from karma.learning.matrix_utils import safe_hstack, types_promotion
+from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
+                                         direct_product, direct_product_dot,
+                                         direct_product_dot_transpose,
+                                         direct_product_second_moment)
 from karma.learning.regression import create_meta_of_regression
 from karma.thread_setter import blas_threads, open_mp_threads
 
 NB_THREADS_MAX = 16
+
+
+class VirtualDirectProduct(object):
+    """
+    We may also want to support scalar case of x or y ?
+
+
+        X should accept list like this [x, y, z, (x,y), (z, x)]
+        tuples stay for direct_product
+
+    """
+    def __init__(self, left, right, is_transposed=False):
+        assert left.shape[0] == right.shape[0]
+        assert left.ndim == 2
+        assert right.ndim == 2
+        self.is_transposed = is_transposed
+        self.left, self.right = cast_float32(left), cast_float32(right)
+
+    @property
+    def T(self):
+        return VirtualDirectProduct(self.left, self.right, is_transposed=not self.is_transposed)
+
+    @property
+    def shape(self):
+        shape = (self.left.shape[0], self.left.shape[1] * self.right.shape[1])
+        return shape[::-1] if self.is_transposed else shape
+
+    @property
+    def dtype(self):
+        return np.promote_types(self.left.dtype, self.right.dtype)
+
+    @property
+    def nnz(self):
+        # it does not work at all case (by sparse x dense should be Ok)
+        return number_nonzero(self.left) * number_nonzero(self.right) / max(self.right.shape[0], 1)
+
+    @property
+    def ndim(self):
+        return 2
+
+    def __getitem__(self, indices):
+        if self.is_transposed:
+            raise NotImplementedError('VirtualDirectProduct.__getitem__ when is_transposed')
+        else:
+            return VirtualDirectProduct(self.left[indices], self.right[indices], False)
+
+    def sum(self, axis=None):
+        if axis is None:
+            return self.sum(axis=1).sum()
+
+        if axis == 1:
+            return self.dot(np.ones(self.shape[1], dtype=self.dtype))
+        elif axis == 0:
+            return self.transpose_dot(np.ones(self.shape[0], dtype=self.dtype))
+        else:
+            raise NotImplementedError(axis)
+
+    def dot(self, w, power=1):
+        if self.is_transposed:
+            return direct_product_dot_transpose(self.left, self.right, w, power)
+        else:
+            return direct_product_dot(self.left, self.right, w, power)
+
+    def transpose_dot(self, w, power=1):
+        if self.is_transposed:
+            return direct_product_dot(self.left, self.right, w, power)
+        else:
+            return direct_product_dot_transpose(self.left, self.right, w, power)
+
+    def second_moment(self):
+        if self.is_transposed:
+            raise NotImplementedError()
+        else:
+            return direct_product_second_moment(self.left, self.right)
+
+    def materialize(self):
+        res = direct_product(self.left, self.right)
+        return res.T if self.is_transposed else res
+
+    def __array__(self):
+        # to simplify equality tests with numpy
+        return np.asarray(self.materialize())
+
+
+def safe_vdp_cast(x):
+    return VirtualDirectProduct(*x) if isinstance(x, tuple) else x
+
+
+def vdp_materilaze(x):
+    return x.materialize() if isinstance(x, VirtualDirectProduct) else x
 
 
 class BasicVirtualHStack(object):
@@ -25,10 +118,14 @@ class BasicVirtualHStack(object):
             if self.is_block:
                 self.dims = X.dims
             return
+
         self.is_block = isinstance(X, (list, tuple))
         if self.is_block:
             if len(X) == 0:
                 raise ValueError('Cannot create a VirtualHStack of an empty list')
+
+            X = map(safe_vdp_cast, X)
+
             integer_entries = []
             common_shape0 = None
             for i in xrange(len(X)):
@@ -48,10 +145,10 @@ class BasicVirtualHStack(object):
             for i in integer_entries:
                 X[i] = np.zeros((common_shape0 or 1, X[i]))
 
+            X = [xx if isinstance(xx, VirtualDirectProduct) else cast_float32(xx) for xx in X]
             self.dims = np.cumsum([0] + [x.shape[1] for x in X])
-            X = types_promotion(X)
         else:
-            X = types_promotion([X])[0]
+            X = X if isinstance(X, VirtualDirectProduct) else cast_float32(X)
 
         self.X = X
 
@@ -100,14 +197,14 @@ class BasicVirtualHStack(object):
     def adjust_to_block_dimensions(self, arr, param_name=''):
         return self.split_by_dims(self.adjust_array_to_total_dimension(arr, param_name))
 
-    def flatten_hstack(self):
+    def materialize(self):
         if self.is_block:
             if len(self.X) == 1:
-                return self.X[0]
+                return vdp_materilaze(self.X[0])
             else:
-                return safe_hstack(self.X)
+                return safe_hstack(map(vdp_materilaze, self.X))
         else:
-            return self.X
+            return vdp_materilaze(self.X)
 
 
 class VirtualHStack(BasicVirtualHStack):
@@ -118,9 +215,20 @@ class VirtualHStack(BasicVirtualHStack):
         self.nb_inner_threads = nb_inner_threads
         self._set_parallelism()
 
-    # def __del__(self):  # It does not work as I expect
-    #     self._close_pool()
-    #     self.X = None
+    def __repr__(self):
+        repr_ = "<VirtualHStack :"
+        repr_ += '\n * shape {}'.format(self.shape)
+        if self.is_block:
+            repr_ += "\n * containing {} blocks".format(len(self.X))
+            repr_ += "\n * with dimensions {}".format(np.diff(self.dims))
+        else:
+            repr_ += "\n * containing single matrix"
+        repr_ += "\n *  nb_threads={}, nb_inner_threads={}".format(self.nb_threads, self.nb_inner_threads)
+        return unicode(repr_ + ">", encoding="utf-8", errors='replace').encode("utf-8")
+
+    def __del__(self):
+        self._close_pool()  # I hope that it works as I expect
+        self.X = None
 
     def _set_parallelism(self):
         if self.is_block:
@@ -139,7 +247,6 @@ class VirtualHStack(BasicVirtualHStack):
             else:
                 self.nb_inner_threads = NB_THREADS_MAX
 
-
     def __getitem__(self, indices):
         if indices is None:
             return self
@@ -151,6 +258,7 @@ class VirtualHStack(BasicVirtualHStack):
         if self.pool is not None:
             self.pool.close()
             self.pool.terminate()
+            self.pool = None
 
     @staticmethod
     def _block_priority(x):
@@ -261,7 +369,7 @@ class CrossValidationWrapper(object):
 
         self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
         self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
-        self.intercepts, self.feat_coefs = [None]*self.n_splits, [None]*self.n_splits
+        self.intercepts, self.feat_coefs = [None] * self.n_splits, [None] * self.n_splits
 
     @property
     def cv(self):
@@ -380,8 +488,7 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
                 df[_name] = df['alias({})'.format(col)]
                 res_df.add_relation('rel', df, group_by_col, group_by_col)
                 res_df['{} {}'.format(col, label)] = \
-                    res_df['round(translate(translate(!rel.{}, mapping={{RelationalMissing: -1}}), ' \
-                           'mapping={{np.inf: -1}}), precision=4)'.format(_name)]
+                    res_df['round(replace_exceptional(!rel.{}, constant=-1), precision=4)'.format(_name)]
     else:
         res_df = metrics
     return res_df

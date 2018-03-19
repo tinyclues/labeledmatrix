@@ -16,7 +16,7 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
     with timer('BayLinReg_Reg_Init'):
         if not isinstance(X, BasicVirtualHStack):
             X = BasicVirtualHStack(X)
-        XX = X.flatten_hstack()
+        XX = X.materialize()
         XX = np.hstack((XX, np.ones((XX.shape[0], 1), dtype=np.float32)))
 
         w_priori = np.hstack((X.adjust_array_to_total_dimension(w_priori, 'w_priori'), intercept_priori))

@@ -7,10 +7,10 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.optimize import fmin_l_bfgs_b
 from sklearn.linear_model.logistic import LogisticRegression
 
-from karma.core.utils import create_timer, LOGGER
+from karma.core.utils import create_timer
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
 from karma.learning.regression import regression_on_blocks
-from karma.learning.utils import VirtualHStack
+from karma.learning.utils import VirtualHStack, VirtualDirectProduct, vdp_materilaze
 from karma.thread_setter import blas_threads, open_mp_threads
 from karma.runtime import KarmaSetup
 
@@ -264,6 +264,7 @@ def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
     weight = sample_weight * z * (1 - z)
 
     def sc(x):
+        x = vdp_materilaze(x)
         if is_karmasparse(x):
             x = x.tocsc()  # that does make copy
             x.scale_along_axis_inplace(weight, axis=1)
@@ -289,7 +290,7 @@ def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
                     if j >= i:
                         # TODO : downcast dtype for dense * dense dtype
                         Hess[X.dims[i]:X.dims[i + 1],
-                        X.dims[j]:X.dims[j + 1]] = np.asarray(dx.transpose().dot(xj))
+                             X.dims[j]:X.dims[j + 1]] = np.asarray(dx.T.dot(vdp_materilaze(xj)))
 
             if X.pool is not None:
                 X.pool.map(_hess_fill, X.order)
@@ -299,8 +300,9 @@ def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
             ind = np.triu_indices_from(Hess, 1)
             Hess[ind[::-1]] = Hess[ind]
         else:
-            dx = sc(X.X)
-            SubHess[:] = X.X.transpose().dot(dx)
+            mat_xx = vdp_materilaze(X.X)
+            dx = sc(mat_xx)
+            SubHess[:] = dx.T.dot(mat_xx)
             if fit_intercept:
                 Hess[:-1, -1] = dx.sum(axis=0)
                 Hess[-1, :-1] = Hess[:-1, -1]
@@ -345,6 +347,8 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
     def ssc(x):
         if is_karmasparse(x):
             return x.scale_along_axis(np.sqrt(weight), axis=1).sum_power(2, axis=0)
+        elif isinstance(x, VirtualDirectProduct):
+            return x.transpose_dot(weight, power=2)
         else:
             return np.einsum('ji, ji, j->i', x, x, weight)
 
@@ -389,7 +393,7 @@ def _conv_dict_format(conv_dict, obj_value):
                                   1: 'too many function evaluations',
                                   2: 'stopping criterion not reached'}
 
-    conv_dict['warnflag_hr'] = warn_flag_translation_dict[conv_dict['warnflag']] #hr -> human readable
+    conv_dict['warnflag_hr'] = warn_flag_translation_dict[conv_dict['warnflag']]  # hr -> human readable
     conv_dict['design_width'] = len(gradient)
 
     ordered_keys = ['nit', 'funcalls', 'warnflag_hr', 'stopping_criterion', 'gradient_l2_norm_at_min',

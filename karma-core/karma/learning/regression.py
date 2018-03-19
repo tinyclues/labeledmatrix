@@ -24,7 +24,7 @@ def regression_on_blocks(regression_method):
         if not isinstance(X, BasicVirtualHStack):
             X = BasicVirtualHStack(X)
 
-        result = regression_method(X.flatten_hstack(), y, *args, **kwargs)
+        result = regression_method(X.materialize(), y, *args, **kwargs)
 
         if isinstance(result, tuple) and len(result) == 3:
             y_hat, intercept, beta = result

@@ -13,9 +13,10 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 from cyperf.matrix import linear_error
 
 from karma.learning.lasso_gram import lasso_gram
-from karma.learning.regression import regression_on_blocks
 from karma import KarmaSetup
 from karma.thread_setter import blas_threads, open_mp_threads
+from karma.learning.utils import VirtualDirectProduct
+from karma.learning.matrix_utils import second_moment
 
 
 __all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments']
@@ -211,6 +212,7 @@ def _lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
 
         def center_and_normalize(nblines, sum_x, sum_y, sum_xx, sum_xy, sum_yy):
             sum_x, sum_y = np.atleast_2d(sum_x), np.atleast_2d(sum_y)
+            # IDEA : in principle it's possible to use only sparse representation of sum_xx=gram in `lasso_gram`
             c_xx = sum_xx - sum_x.T.dot(sum_x) / nblines
             c_xy = (sum_xy - sum_y.T.dot(sum_x) / nblines)[0]
             norm_xy = np.sqrt(sum_yy - sum_y ** 2 / nblines)[0, 0]
@@ -228,14 +230,11 @@ def _lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
         intercepts = (sum_y - sum_x.dot(betas)) / nblines
         return betas.T, intercepts
 
-    # TODO : moments can be computed via VirtualHstack
-    return lassopath_from_moments(yy.shape[0], xx.sum(axis=0), yy.sum(axis=0),
-                                  np.asarray(xx.T.dot(xx)),
-                                  xx.T.dot(yy.astype(xx.dtype, copy=False)),
-                                  yy.dot(yy))
+    gram = xx.second_moment() if isinstance(xx, VirtualDirectProduct) else second_moment(xx)
+    return lassopath_from_moments(yy.shape[0], xx.sum(axis=0), yy.sum(axis=0), np.asarray(gram),
+                                  xx.T.dot(yy.astype(xx.dtype, copy=False)), yy.dot(yy))
 
 
-@regression_on_blocks
 def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., max_iter=1000,
                                      cv=None, granularity=None, nb_cv_jobs=None, nb_blas_threads=4):
     """
@@ -250,6 +249,11 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
     def error_by_rank(args):
         x_train, y_train, x_test, y_test = args
         betas, intercepts = _lassopath(x_train, y_train, max_features, min_alpha, max_iter)
+
+        if isinstance(x_test, VirtualDirectProduct):
+            # TODO : write dedicated routine for linear_error on VirtualDirectProduct
+            x_test = x_test.materialize()
+
         return linear_error(x_test, betas.T, intercepts, - y_test)
 
     if cv is None:
@@ -261,7 +265,7 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
     with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
         errors = Parallel(nb_cv_jobs, backend="threading")\
             .map(error_by_rank, ((xx[train], yy[train], xx[test], yy[test]) for train, test in
-                                  cv.split(xx, granularity if granularity is not None else yy)))
+                                 cv.split(xx, granularity if granularity is not None else yy)))
 
     min_dim = min(e.shape[0] for e in errors)
     error_series = np.vstack([e[:min_dim] for e in errors]).sum(axis=0)
