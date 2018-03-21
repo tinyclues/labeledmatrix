@@ -375,6 +375,12 @@ class CrossValidationWrapper(object):
     def cv(self):
         return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
 
+    @property
+    def fold_indices_iter(self):
+        for i in xrange(self.n_splits):
+            fold_slice = slice(i * self.test_size, (i + 1) * self.test_size)
+            yield self.test_indices[fold_slice], self.test_y_hat[fold_slice]
+
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
         X_stacked = VirtualHStack(blocks_x,
                                   nb_threads=kwargs.get('nb_threads', 1),
@@ -424,6 +430,35 @@ class CrossValidationWrapper(object):
                     for name in res[col].column_names if name not in exclude]
             res[col] = res[col].copy(*cols)
         return res
+
+    @staticmethod
+    def create_cv_from_data_and_params(dataframe, parameters):
+        cv_params_dict = dict()
+        cv_params_dict['cv'] = parameters['cv']
+
+        if isinstance(cv_params_dict['cv'], CrossValidationWrapper):
+            return dataframe, cv_params_dict['cv']
+        else:
+            cv_params_dict['n_splits'] = parameters.get('cv_n_splits', 1)
+            cv_params_dict['seed'] = parameters.get('seed')
+
+            y = dataframe[parameters['axis']][:]
+            stratification_col_name = parameters.get('cv_groups')
+
+            if stratification_col_name is None:
+                groups = None
+            else:
+                groups = np.asarray(dataframe[stratification_col_name][:])
+                unique, counts = np.unique(groups, return_counts=True)
+                if np.any(counts == 1):
+                    drop_mask = np.zeros(len(dataframe), dtype=bool)
+                    for g in unique[counts == 1]:
+                        drop_mask += groups == g
+                    kept_indices = np.arange(len(groups))[~drop_mask]
+                    dataframe = dataframe[kept_indices]
+                    groups = groups[kept_indices]
+
+            return dataframe, CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
 
 
 def check_axis_values(y):

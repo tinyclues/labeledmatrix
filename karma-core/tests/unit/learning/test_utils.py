@@ -131,6 +131,17 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         self.assertEqual(len(cv.feat_coefs), cv.n_splits)
         self.assertEqual(len(cv.intercepts), cv.n_splits)
 
+    def test_fold_iter(self):
+        df = self.df.copy()
+        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=6, seed=123)
+        test_indices_list = []
+        test_y_hat_list = []
+        for test_indices, test_y_hat in cv.fold_indices_iter:
+            test_indices_list.append(test_indices)
+            test_y_hat_list.append(test_y_hat)
+        self.assertEqual(len(test_indices_list), cv.n_splits)
+        self.assertEqual(len(test_y_hat_list), cv.n_splits)
+
 
 class VirtualHStackTestCase(unittest.TestCase):
     def test_init(self):
