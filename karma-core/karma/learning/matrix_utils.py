@@ -1595,7 +1595,7 @@ def direct_product(left, right):
         return left.kronii(right)
     else:
         left, right = np.asarray(left, dtype=np.float32), np.asarray(right, dtype=np.float32)
-        return np.einsum('ij, ik -> ijk', left, right).reshape(left.shape[0], -1)
+        return np.einsum('ij, ik -> ijk', left, right, optimize='optimal').reshape(left.shape[0], -1)
 
 
 def direct_product_dot(left, right, rightfactor, power=1):
@@ -1608,9 +1608,9 @@ def direct_product_dot(left, right, rightfactor, power=1):
                                       .format(power))
         rightmatrix = rightfactor.reshape((left.shape[1], right.shape[1]))
         if power == 2:
-            return np.einsum('ij, ij, ik, ik, jk -> i', left, left, right, right, rightmatrix)
+            return np.einsum('ij, ij, ik, ik, jk -> i', left, left, right, right, rightmatrix, optimize='optimal')
         else:
-            return np.einsum('ij, ik, jk -> i', left, right, rightmatrix)
+            return np.einsum('ij, ik, jk -> i', left, right, rightmatrix, optimize='optimal')
 
 
 def direct_product_dot_transpose(left, right, leftfactor, power=1):
