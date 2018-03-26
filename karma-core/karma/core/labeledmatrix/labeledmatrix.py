@@ -24,6 +24,7 @@ from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 from cyperf.tools import logit, logit_inplace, take_indices
 from cyperf.tools.getter import apply_python_dict
 
+from karma.core.utils.collaborative_tools import keep_sparse
 from karma.learning.affinity_propagation import affinity_propagation
 from karma.learning.co_clustering import co_clustering
 from karma.learning.hierarchical import clustering_dispatcher
@@ -2188,8 +2189,14 @@ class LabeledMatrix(object):
         else:
             ranks = rank
         ww, hh = [], []
+
+        if not self.is_sparse and keep_sparse(self.matrix):
+            matrix = self.to_sparse().matrix
+        else:
+            matrix = self.matrix
+
         for rank in ranks:
-            w, h = nmf(self.matrix, rank=rank, max_model_rank=max_model_rank, max_iter=max_iter, svd_init=svd_init)
+            w, h = nmf(matrix, rank=rank, max_model_rank=max_model_rank, max_iter=max_iter, svd_init=svd_init)
             ww.append(w)
             hh.append(h)
         www, hhh = np.hstack(ww), np.hstack(hh)
