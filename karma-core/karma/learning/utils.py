@@ -432,7 +432,7 @@ class CrossValidationWrapper(object):
         return res
 
     @staticmethod
-    def create_cv_from_data_and_params(dataframe, parameters):
+    def create_cv_from_data_and_params(dataframe, **parameters):
         cv_params_dict = dict()
         cv_params_dict['cv'] = parameters['cv']
 
