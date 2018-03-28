@@ -457,8 +457,8 @@ class GridSearch(CVSampler):
                 else:
                     self.training_params['w_warm'] = None
                 penalty_extended = self.extend_and_format_penalty(penalty_value, features)
-                if tuple(penalty_extended) in self.evaluated_reguls[PENALTY_COL_NAME]: # to remove
-                    continue
+                #if tuple(penalty_extended) in self.evaluated_reguls[PENALTY_COL_NAME]: # to remove
+                #    continue
 
                 penalty_summary_df = self.evaluate_and_summarize_cv(penalty_value, features, pred_col_name=PRED_COL_NAME,
                                                                     metric_groups=self.metric_groups)
