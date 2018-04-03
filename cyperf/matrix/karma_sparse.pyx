@@ -704,7 +704,6 @@ cdef class KarmaSparse:
 
         return 1
 
-
     def repair_format(self):
         self.has_sorted_indices = 0
         self.has_canonical_format = 0
@@ -2486,9 +2485,6 @@ cdef class KarmaSparse:
             DTYPE_t[::1] data
             double density
 
-        self.check_positive()
-        other.check_positive()
-
         with nogil, parallel():
             mask = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
             if mask == NULL:
@@ -2580,10 +2576,6 @@ cdef class KarmaSparse:
             LTYPE_t j
             DTYPE_t alpha
 
-        self.check_positive()
-        if np.any(matrix < 0):
-            raise ValueError('Numpy matrix contains negative values while only positive are expected')
-
         for i in prange(self.nrows, nogil=True, schedule='static'):
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 alpha = self.data[j]
@@ -2604,10 +2596,6 @@ cdef class KarmaSparse:
             LTYPE_t j, ind
             DTYPE_t alpha
 
-        self.check_positive()
-        if np.any(matrix < 0):
-            raise ValueError('Numpy matrix contains negative values while only positive are expected')
-
         with nogil:
             for i in xrange(self.nrows):
                 for j in xrange(self.indptr[i], self.indptr[i + 1]):
@@ -2624,6 +2612,11 @@ cdef class KarmaSparse:
                                                                                    ', '.join(supported_reducers)))
         cdef binary_func fn = get_reducer(<string?>reducer)
 
+        if reducer == "max":
+            self.check_positive()
+            if np.any(matrix < 0):
+                raise ValueError('Numpy matrix contains negative values while only positive are expected')
+
         if self.format == CSR:
             return self.aligned_dense_agg(matrix, fn)
         else:
@@ -2638,6 +2631,10 @@ cdef class KarmaSparse:
             raise ValueError('Unsupported reducer "{}", choose one from {}'.format(reducer,
                                                                                    ', '.join(supported_reducers)))
         cdef binary_func fn = get_reducer(<string?>reducer)
+
+        if reducer == "max":
+            self.check_positive()
+            other.check_positive()
 
         if self.format == CSR and other.format == CSR:
             return self.aligned_sparse_agg(other, fn)
