@@ -12,7 +12,7 @@ from karma.learning.bayesian_constants import (BAYES_PRIOR_COEF_VAR_NAME, BAYES_
                                                BAYES_POST_COEF_MEAN_NAME)
 from karma.core.utils.utils import Parallel
 from karma.core.utils.utils import coerce_to_tuple_and_check_all_strings
-
+from multiprocessing.pool import ThreadPool
 
 CV_KEYS = ['cv', 'cv_n_splits', 'seed', 'cv_groups']
 PRED_COL_NAME = 'predictions'
@@ -77,10 +77,10 @@ class CVSampler(object):
     test        2           0           1       1          0.0    nan                   [0.1]        b
     train       0           0           1       1          0.0    nan                   [0.1]        b
     train       0           1           2       0          -1.0   nan                   [0.1]        b
-    train       0           2           4       3          1.0    0.8144                [0.1]        b
-    train       1           0           6       4          1.0    0.8416                [0.1]        b
+    train       0           2           4       3          1.0    0.8143                [0.1]        b
+    train       1           0           6       4          1.0    0.8415                [0.1]        b
     train       1           1           1       0          -1.0   nan                   [0.1]        b
-    train       1           2           2       1          -1.0   1.1287                [0.1]        b
+    train       1           2           2       1          -1.0   1.1288                [0.1]        b
     train       2           0           3       3          0.0    nan                   [0.1]        b
     train       2           1           1       1          0.0    nan                   [0.1]        b
     >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2}, penalty_parameter_name='pre_lasso_penalty', lib_symbol='bayesian_logistic_regression')
@@ -381,7 +381,7 @@ class GridSearch(CVSampler):
     penalty      | fold_type | Count | CountPos | auc    | penalty_hr | features
     ----------------------------------------------------------------------------
     (0.01, 0.01)   test        20      8          0.0833   [0.01]       ['aa']
-    (0.01, 0.01)   train       100     42         0.069    [0.01]       ['aa']
+    (0.01, 0.01)   train       100     42         0.0681   [0.01]       ['aa']
     (0.1, 0.1)     test        20      8          0.0833   [0.1]        ['aa']
     (0.1, 0.1)     train       100     42         0.0755   [0.1]        ['aa']
     >>> _ = gs.sequential_search([0.01, 0.1], ['b'], verbose=False, warm_start=True)
@@ -390,7 +390,7 @@ class GridSearch(CVSampler):
     penalty      | fold_type | Count | CountPos | auc     | penalty_hr | features
     -----------------------------------------------------------------------------
     (0.01, 0.01)   test        20      8          0.0833    [0.01]       ['aa']
-    (0.01, 0.01)   train       100     42         0.069     [0.01]       ['aa']
+    (0.01, 0.01)   train       100     42         0.0681    [0.01]       ['aa']
     (0.1, 0.1)     test        20      8          0.0833    [0.1]        ['aa']
     (0.1, 0.1)     train       100     42         0.0755    [0.1]        ['aa']
     (0.01,)        test        20      8          -0.1667   [0.01]       ['b']
@@ -405,9 +405,9 @@ class GridSearch(CVSampler):
     penalty      | fold_type | Count | CountPos | auc     | penalty_hr | features
     -----------------------------------------------------------------------------
     (0.01, 0.01)   test        20      8          0.0833    [0.01]       ['aa']
-    (0.01, 0.01)   train       100     42         0.069     [0.01]       ['aa']
+    (0.01, 0.01)   train       100     42         0.0681    [0.01]       ['aa']
     (0.1, 0.1)     test        20      8          0.0833    [0.1]        ['aa']
-    (0.1, 0.1)     train       100     42         0.0755    [0.1]        ['aa']
+    (0.1, 0.1)     train       100     42         0.0739    [0.1]        ['aa']
     (0.01,)        test        20      8          -0.1667   [0.01]       ['b']
     (0.01,)        train       100     42         0.0517    [0.01]       ['b']
     (0.1,)         test        20      8          -0.1667   [0.1]        ['b']
@@ -420,9 +420,9 @@ class GridSearch(CVSampler):
     test        [0.01]       ['b']      -0.1667    0.0
     test        [0.1]        ['aa']     0.0833     0.0
     test        [0.1]        ['b']      -0.1667    0.0
-    train       [0.01]       ['aa']     0.069      0.0
+    train       [0.01]       ['aa']     0.0681     0.0
     train       [0.01]       ['b']      0.0517     0.0
-    train       [0.1]        ['aa']     0.0755     0.0
+    train       [0.1]        ['aa']     0.0739     0.0
     train       [0.1]        ['b']      0.0517     0.0
     """
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,

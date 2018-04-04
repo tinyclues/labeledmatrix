@@ -385,7 +385,6 @@ class CrossValidationWrapper(object):
         X_stacked = VirtualHStack(blocks_x,
                                   nb_threads=kwargs.get('nb_threads', 1),
                                   nb_inner_threads=kwargs.get('nb_inner_threads'))
-        dumping_iter_factor = kwargs.pop('cv_dumping_iter_factor', 1.)
         i, j = 0, 0
 
         for (train_idx, test_idx) in self.cv.split(self.classes, self.classes):
@@ -403,8 +402,6 @@ class CrossValidationWrapper(object):
             i += self.test_size
             if warmup_key is not None:
                 kwargs[warmup_key] = np.hstack(betas + [intercept])
-                if 'max_iter' in kwargs:
-                    kwargs['max_iter'] = max(int(dumping_iter_factor * kwargs['max_iter']), 1)
         X_stacked._close_pool()  # Warning should called manually at the exit from class
 
         if method.func_name.startswith('logistic'):
