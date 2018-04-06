@@ -291,7 +291,8 @@ class VirtualHStack(BasicVirtualHStack):
                     return x.T.dot(w.astype(x.dtype, copy=False))
 
                 if self.pool is not None:
-                    return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
+                    with blas_threads(1):
+                        return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
                 else:
                     return np.hstack(map(_dot, range(len(self.X))))
             else:

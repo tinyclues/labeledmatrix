@@ -107,8 +107,7 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     True
     """
     if not isinstance(X, VirtualHStack):
-        X = VirtualHStack(X, nb_threads=nb_threads,
-                          nb_inner_threads=nb_inner_threads)
+        X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
     C = X.adjust_array_to_total_dimension(C, 'C')
 
@@ -116,13 +115,14 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
         w_warm = np.zeros(X.shape[1] + 1, dtype=np.float)
 
     try:
+        lbfgs_params = KarmaSetup.lbfgs_params
         w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                  args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
-                                                 iprint=0, pgtol=KarmaSetup.lbfgs_params.get('pgtol', 1e-7),
-                                                 maxiter=max_iter, m=KarmaSetup.lbfgs_params.get('m', 10),
-                                                 factr=KarmaSetup.lbfgs_params.get('factr', 1e7),
-                                                 maxfun=KarmaSetup.lbfgs_params.get('maxfun', 15000),
-                                                 maxls=KarmaSetup.lbfgs_params.get('maxls', 20))
+                                                 iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
+                                                 maxiter=max_iter, m=lbfgs_params.get('m', 10),
+                                                 factr=lbfgs_params.get('factr', 1e7),
+                                                 maxfun=lbfgs_params.get('maxfun', 15000),
+                                                 maxls=lbfgs_params.get('maxls', 20))
 
         conv_dict = _conv_dict_format(conv_dict, obj_value)
 
@@ -131,7 +131,7 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
         linear_pred += intercept
         betas = X.split_by_dims(beta)
 
-    except Exception as ee:
+    except (KeyboardInterrupt, SystemExit, Exception) as ee:
         X._close_pool()  # avoid memory leak
         raise ee
 
@@ -179,8 +179,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
 
     with timer('BayLogReg_Reg_Init'):
         if not isinstance(X, VirtualHStack):
-            X = VirtualHStack(X, nb_threads=nb_threads,
-                              nb_inner_threads=nb_inner_threads)
+            X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
         if w_priori is None:
             w_priori = np.zeros(X.shape[1], dtype=np.float)
@@ -196,14 +195,15 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
         y = 2. * y.astype(bool) - 1
     try:
         with timer('BayLogReg_Reg_Mean'):
+            lbfgs_params = KarmaSetup.lbfgs_params
             w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                      args=(X, y, alpha_priori, sample_weight, w_priori,
                                                            alpha_intercept, intercept_priori),
-                                                     iprint=0, pgtol=KarmaSetup.lbfgs_params.get('pgtol', 1e-7),
-                                                     maxiter=max_iter, m=KarmaSetup.lbfgs_params.get('m', 10),
-                                                     factr=KarmaSetup.lbfgs_params.get('factr', 1e7),
-                                                     maxfun=KarmaSetup.lbfgs_params.get('maxfun', 15000),
-                                                     maxls=KarmaSetup.lbfgs_params.get('maxls', 20))
+                                                     iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
+                                                     maxiter=max_iter, m=lbfgs_params.get('m', 10),
+                                                     factr=lbfgs_params.get('factr', 1e7),
+                                                     maxfun=lbfgs_params.get('maxfun', 15000),
+                                                     maxls=lbfgs_params.get('maxls', 20))
             intercept, beta = w0[-1], w0[:-1]
 
             conv_dict = _conv_dict_format(conv_dict, obj_value)
@@ -221,7 +221,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
         linear_pred = X.dot(beta) + intercept
         betas = X.split_by_dims(beta)
         feature_C_posts = X.split_by_dims(feature_C_post.astype(np.float))
-    except Exception as ee:
+    except (KeyboardInterrupt, SystemExit, Exception) as ee:
         X._close_pool()  # avoid memory leak
         raise ee
 
