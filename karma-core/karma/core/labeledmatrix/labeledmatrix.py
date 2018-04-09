@@ -1800,7 +1800,7 @@ class LabeledMatrix(object):
                                   coordinates=self.row.list)
             kc += Dot(('_one_hot_vector',), output,
                       rightfactor=self.matrix, coordinates=coordinates)
-        return kc
+        return kc.with_outputs(output)
 
     def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
         """
