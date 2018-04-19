@@ -308,6 +308,8 @@ def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_group
 
 
 def _prepare_and_check_classes(y, groups):
+    if groups is not None:
+        assert len(groups) == len(y)
     if is_binary(y):
         classes = y
         if groups is not None:
@@ -440,7 +442,6 @@ class CrossValidationWrapper(object):
             cv_params_dict['n_splits'] = parameters.get('cv_n_splits', 1)
             cv_params_dict['seed'] = parameters.get('seed')
 
-            y = dataframe[parameters['axis']][:]
             stratification_col_name = parameters.get('cv_groups')
 
             if stratification_col_name is None:
@@ -456,6 +457,7 @@ class CrossValidationWrapper(object):
                     dataframe = dataframe[kept_indices]
                     groups = groups[kept_indices]
 
+            y = dataframe[parameters['axis']][:]
             return dataframe, CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
 
 

@@ -142,6 +142,22 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         self.assertEqual(len(test_indices_list), cv.n_splits)
         self.assertEqual(len(test_y_hat_list), cv.n_splits)
 
+    def test_cv_static_creation(self):
+        dataframe = DataFrame({'y': np.random.randint(0, 2, 55),
+                               'gr': ['a'] * 20 + ['b'] * 30 + ['c', 'd', 'e', 'f', 'g']})
+        df2, cv = CrossValidationWrapper.create_cv_from_data_and_params(dataframe, cv=0.2, cv_groups='gr', axis='y')
+        self.assertEqual(len(df2), 50)
+        self.assertEqual(cv.classes.shape[0], 50)
+        expected_test_size = cv.cv.split(cv.classes, cv.classes).next()[1].shape[0]
+        self.assertEqual(expected_test_size, 10)
+        self.assertEqual(expected_test_size, cv.test_size)
+
+        with self.assertRaises(AssertionError):
+            _ = CrossValidationWrapper(0.2, [1.1, 0.5], ['a', 'b', 'c'])
+
+        with self.assertRaises(AssertionError):
+            _ = CrossValidationWrapper(0.2, [0, 1], ['a', 'b', 'c'])
+
 
 class VirtualHStackTestCase(unittest.TestCase):
     def test_init(self):
