@@ -100,17 +100,17 @@ def lightfm_regression_model(user_features, item_features, interactions, sample_
     return y, y_linear, clf
 
 
-def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, test_mses=None):
+def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, test_mses=None, name=None):
     meta = {'train_MSE': np.mean((y - prediction) ** 2)}
     if np.min(y) >= 0:
-        curves = gain_curve_from_prediction(prediction, y, 'Train')
+        curves = gain_curve_from_prediction(prediction, y, name)
         if with_guess and is_binary(y) and np.max(prediction) <= 1 and np.min(prediction) >= 0:
-            curves.guess = gain_curve_from_prediction(prediction, name='Guess')
+            curves.guess = gain_curve_from_prediction(prediction)
 
         if test_curves is not None:
             if len(test_curves) > 1:
                 curves.tests = test_curves
-            curves.test = compute_mean_curve(test_curves, 'Test')
+            curves.test = compute_mean_curve(test_curves)
 
         meta['curves'] = curves
 
