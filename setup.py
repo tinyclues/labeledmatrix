@@ -3,7 +3,7 @@
 #
 import sys
 from glob import glob
-from pip.req import parse_requirements
+from pip._internal.req import parse_requirements
 
 from setuptools import find_packages, setup
 from Cython.Build import cythonize
