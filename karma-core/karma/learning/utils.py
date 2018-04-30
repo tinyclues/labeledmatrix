@@ -500,9 +500,15 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
     2       207   98           0.0813    1.3582   0.9654
     3       197   98           -0.0155   1.4433   0.9875
     4       202   106          -0.0631   1.4804   1.0649
-
+    >>> calculate_train_test_metrics(df.with_column('z', 'multiply(map(topic, mapping=dict({2: 1}), default=0), obs)'),
+    ...                              'topic', 'pred', 'z').preview()  #doctest: +NORMALIZE_WHITESPACE
+    ---------------------------------------------------
+    topic | #   | # positive | AUC    | NLL    | Calib
+    ---------------------------------------------------
+    2       207   98           0.0813   1.3582   0.9654
     """
-    if is_binary(dataframe[response_col][:]):
+    is_resp_binary = is_binary(dataframe[response_col][:])
+    if is_resp_binary:
         err_agg, err_agg_name = ('normalized_log_loss', 'NLL')
     else:
         err_agg, err_agg_name = ('rmse', 'RMSE')
@@ -515,6 +521,8 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
                  '{}({}) as {}'.format(err_agg, agg_args, err_agg_name),
                  'calibration_ratio({}) as Calib'.format(agg_args))
     metrics = dataframe.group_by(group_by, agg_tuple)
+    if is_resp_binary:
+        metrics = metrics.where_gt('# positive', 0)
     cols = metrics.column_names[len(group_by):]
     if split_col is not None:
         res_df = dataframe.deduplicate_by(group_by_col, take='first').sort_by(group_by_col).copy(group_by_col)
