@@ -5,13 +5,16 @@
 import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
-from karma.learning.matrix_utils import safe_dot, safe_argmax, safe_sum, safe_min, idiv
-from karma.learning.matrix_utils import normalize
+from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
+from numexpr import evaluate, set_num_threads
+
+set_num_threads(8)
+
 
 __all__ = ['co_clustering']
 
 
-def co_clustering(matrix, ranks=[2, 2], max_iter=50, nb_preruns=20, pre_iter=4):
+def co_clustering(matrix, ranks=(2, 2), max_iter=50, nb_preruns=20, pre_iter=4):
     """
     >>> matrix = np.array([[5, 5, 5, 0, 0, 0],
     ...                    [5, 5, 5, 0, 0, 0],
@@ -51,153 +54,143 @@ def co_clustering(matrix, ranks=[2, 2], max_iter=50, nb_preruns=20, pre_iter=4):
     >>> normalized_mutual_info_score(labels_true, wmap) > 1 - 10 ** (-5)
     True
 
-    ### >>> n = 100000
-    ### >>> matrix = sp.rand(n, n, 0.0001) + sp.eye(n)
-    ### >>> wmap, hmap = co_clustering(matrix, ranks=[20, 20], max_iter=50)
-    ### >>> matrix = block_diag(np.random.rand(1000, 1000),
-    ### ...              np.random.rand(1000, 1000), np.random.rand(1000, 1000))
-    ### ...               + np.random.rand(3000, 3000)/2.
-    ### >>> import time
-    ### >>> t0 = time.time()
-    ### >>> wmap, hmap = co_clustering(matrix, ranks=[2, 2],
-    ### ...                max_iter=10, nb_preruns=0, pre_iter=0)
-    ### >>> time.time() - t0
-    ### 1.2s
     """
     clust = CoClustering(matrix, ranks)
     clust.smart_run(nb_preruns, pre_iter, max_iter)
-    return clust.wmap, clust.hmap
+    return clust.w.indices, clust.h.indices
 
 
 class CoClustering(object):
+
     def __init__(self, matrix, ranks):
-        self._epsilon = 10 ** (-10)
+        self._epsilon = 1e-10
+
         if is_scipy_sparse(matrix):
-            matrix = KarmaSparse(matrix, format="csr")
-        if safe_min(matrix) < 0:
-            raise ValueError("in tensor, entries should be positives")
+            matrix = KarmaSparse(matrix, format="csr", copy=False)
+
+        if matrix.min() < 0:
+            raise ValueError("in matrix, entries should be positives")
+        if matrix.sum(axis=1).min() == 0:
+            raise ValueError("in matrix, not all entries in a row can be zero")
+        if matrix.sum(axis=0).min() == 0:
+            raise ValueError("in matrix, not all entries in a column can be zero")
+
         self.n, self.m = matrix.shape
-        if (ranks[0] > self.n) or (ranks[1] > self.m):
+        if ranks[0] > self.n or ranks[1] > self.m:
             print 'ranks {0} is large than matrix shape {1}'.format(ranks, (self.n, self.m))
-        self.ranks = [min(ranks[0], self.n), min(ranks[1], self.m)]
-        if np.min(matrix.sum(axis=1)) == 0:
-            raise ValueError("in tensor, not all entries in a row can be zero")
-        if np.min(matrix.sum(axis=0)) == 0:
-            raise ValueError("in tensor, not all entries in a column can be zero")
+
+        self.ranks = (min(ranks[0], self.n), min(ranks[1], self.m))
         self.matrix = matrix.clip(self._epsilon)
         self.set_marginal()
 
     def set_marginal(self):
         # a priory marginal
-        self.p_x = safe_sum(self.matrix, axis=1)
-        self.p_y = safe_sum(self.matrix, axis=0)
+        self.p_x = self.matrix.sum(axis=1)
+        self.p_y = self.matrix.sum(axis=0)
         self.pcond_y_vs_x = normalize(self.matrix, norm='l1', axis=1)
         self.pcond_x_vs_y = normalize(self.matrix, norm='l1', axis=0)
+
+        if is_karmasparse(self.matrix):
+            self.pcond_y_vs_x = self.pcond_y_vs_x.tocsr()
+            self.pcond_x_vs_y = self.pcond_x_vs_y.tocsc()
 
     def smart_run(self, nb_preruns, pre_iter, max_iter):
         self.initial_clustering()
         self.iterate(pre_iter)
-        best_wmap = self.wmap
-        best_hmap = self.hmap
+        best_w, best_h = self.w, self.h
         best_dist = idiv(self.matrix, self.approximate_matrix())  # To fix the common mask
-        for prerun in xrange(nb_preruns):
+
+        for _ in xrange(nb_preruns):
                 self.initial_clustering()
                 self.iterate(pre_iter)
                 cand_dist = idiv(self.matrix, self.approximate_matrix())
                 if cand_dist < best_dist:
-                    best_dist, best_wmap, best_hmap = cand_dist, self.wmap, self.hmap
+                    best_dist = cand_dist
+                    best_w, best_h = self.w, self.h
+
         # True main loop
-        self.initial_clustering(wmap=best_wmap, hmap=best_hmap)
+        self.initial_clustering(w=best_w, h=best_h)
         self.iterate(max_iter)
 
-    def initial_clustering(self, wmap=None, hmap=None):
-        if wmap is None:
-            self.wmap = np.random.randint(0, self.ranks[0], self.n)
+    def initial_clustering(self, w=None, h=None):
+        if w is None:
+            w_indices = np.random.randint(0, self.ranks[0], self.n)
+            self.w = KarmaSparse((np.ones(self.n), w_indices, np.arange(self.n + 1)),
+                                 shape=((self.n, self.ranks[0])),
+                                 format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
         else:
-            self.wmap = wmap
-        self.old_wmap = self.wmap
+            self.w = w
+        self.w_old = self.w
 
-        if hmap is None:
-            self.hmap = np.random.randint(0, self.ranks[1], self.m)
+        if h is None:
+            h_indices = np.random.randint(0, self.ranks[1], self.m)
+            self.h = KarmaSparse((np.ones(self.m), h_indices, np.arange(self.m + 1)),
+                                 shape=((self.m, self.ranks[1])),
+                                 format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
         else:
-            self.hmap = hmap
-        self.old_hmap = self.hmap
-        self.update_initial()
-
-    def update_initial(self):
-        self.matrix_convert_w()
-        self.matrix_convert_h()
+            self.h = h
+        self.h_old = self.h
 
     def iterate(self, max_iter):
         for _ in xrange(max_iter):
-            self.idiv_update()
+            self.idiv_update_right()
+            self.idiv_update_left()
             if self.check_convergence():
                 break
 
-    def idiv_update(self):
-        self.idiv_update_right()
-        self.idiv_update_left()
+    def check_convergence(self):
+        if np.all(self.w_old.indices == self.w.indices) and np.all(self.h_old.indices == self.h.indices):
+            return True
+        else:
+            self.w_old, self.h_old = self.w, self.h
+            return False
 
     def idiv_update_right(self):
         self.get_hat_matrix()
         self.get_cond_y_vs_haty()
-        logg = np.log(safe_dot(self.pcond_y_vs_haty,
-                               normalize(self.hat_matrix, norm='l1', axis=1).transpose()))
-        self.wmap = safe_argmax(safe_dot(self.pcond_y_vs_x, logg), axis=1)
-        self.matrix_convert_w()
+        logg = self.pcond_y_vs_haty.dot(normalize(self.hat_matrix, norm='l1', axis=1).transpose())
+        evaluate('log(logg)', out=logg)
+        self.w = nonzero_mask(KarmaSparse(
+            truncate_by_count(self.pcond_y_vs_x.dot(logg), axis=1, max_rank=1), copy=False))
 
     def idiv_update_left(self):
         self.get_hat_matrix()
         self.get_cond_x_vs_hatx()
-        logg = np.log(safe_dot(self.pcond_x_vs_hatx,
-                               normalize(self.hat_matrix, norm='l1', axis=0)))
-        self.hmap = safe_argmax(safe_dot(self.pcond_x_vs_y.transpose(), logg), axis=1)
-        self.matrix_convert_h()
-
-    def check_convergence(self):
-        if np.all(self.old_wmap == self.wmap) and np.all(self.old_hmap == self.hmap):
-            return True
-        else:
-            self.old_wmap = self.wmap
-            self.old_hmap = self.hmap
-            return False
-
-    # utils functions below
-    def matrix_convert_w(self):
-        self.w = np.zeros((self.n, self.ranks[0]), dtype=np.ubyte)
-        self.w[np.arange(self.n), self.wmap] = 1
-
-    def matrix_convert_h(self):
-        self.h = np.zeros((self.m, self.ranks[1]), dtype=np.ubyte)
-        self.h[np.arange(self.m), self.hmap] = 1
+        logg = self.pcond_x_vs_hatx.dot(normalize(self.hat_matrix, norm='l1', axis=0))
+        evaluate('log(logg)', out=logg)
+        self.h = nonzero_mask(KarmaSparse(
+            truncate_by_count(self.pcond_x_vs_y.transpose().dot(logg), axis=1, max_rank=1), copy=False))
 
     def get_hat_matrix(self):
-        self.hat_matrix = safe_dot(safe_dot(self.w.transpose(), self.matrix), self.h)
-        self.hat_matrix = self.hat_matrix.clip(self._epsilon)
+        # we should use logic from
+        # https://docs.scipy.org/doc/numpy-1.14.0/reference/generated/numpy.linalg.multi_dot.html
+        if self.n >= self.m:
+            self.hat_matrix = self.w.transpose().dot(self.matrix.dot(self.h))
+        else:
+            self.hat_matrix = self.w.transpose().dot(self.matrix).dot(self.h)
+
+        self.hat_matrix = np.asarray(self.hat_matrix)
+        self.hat_matrix.clip(self._epsilon, out=self.hat_matrix)
 
     def get_cond_x_vs_hatx(self):
-        self.pcond_x_vs_hatx = np.zeros((self.n, self.ranks[0]))
-        self.pcond_x_vs_hatx[np.arange(self.n), self.wmap] = \
-            self.p_x / self.hat_matrix.sum(axis=1)[self.wmap]
+        self.pcond_x_vs_hatx = self.w.copy()
+        self.pcond_x_vs_hatx.data[:] = self.p_x / self.hat_matrix.sum(axis=1)[self.pcond_x_vs_hatx.indices]
 
     def get_cond_y_vs_haty(self):
-        self.pcond_y_vs_haty = np.zeros((self.m, self.ranks[1]))
-        self.pcond_y_vs_haty[np.arange(self.m), self.hmap] = \
-            self.p_y / self.hat_matrix.sum(axis=0)[self.hmap]
+        self.pcond_y_vs_haty = self.h.copy()
+        self.pcond_y_vs_haty.data[:] = self.p_y / self.hat_matrix.sum(axis=0)[self.pcond_y_vs_haty.indices]
 
     def approximate_matrix(self):
         self.get_hat_matrix()
         self.get_cond_x_vs_hatx()
         self.get_cond_y_vs_haty()
         if not is_karmasparse(self.matrix):
-            return safe_dot(safe_dot(self.pcond_x_vs_hatx, self.hat_matrix),
-                            self.pcond_y_vs_haty.transpose())
-        elif self.ranks[0] >= self.ranks[1]:
-            return safe_dot(safe_dot(self.pcond_x_vs_hatx, self.hat_matrix),
+            return self.pcond_x_vs_hatx.dot(self.hat_matrix).dot(self.pcond_y_vs_haty.transpose())
+        elif self.n <= self.m:  # to write condition correctly
+            return safe_dot(self.pcond_x_vs_hatx.dot(self.hat_matrix),
                             self.pcond_y_vs_haty.transpose(),
                             self.matrix)
         else:
             return safe_dot(self.pcond_x_vs_hatx,
-                            safe_dot(self.pcond_y_vs_haty,
-                                     self.hat_matrix.transpose()).transpose(),
+                            self.pcond_y_vs_haty.dot(self.hat_matrix.transpose()).transpose(),
                             self.matrix)

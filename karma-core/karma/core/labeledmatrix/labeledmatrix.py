@@ -2228,7 +2228,7 @@ class LabeledMatrix(object):
         return LabeledMatrix((source.row, right_factor.column), left_factor_matrix,
                              deco=(source.row_deco, right_factor.column_deco))
 
-    def co_clustering(self, ranks, max_iter=120):
+    def co_clustering(self, ranks, max_iter=120, nb_preruns=30, pre_iter=4):
         """
         >>> matrix = np.array([[5, 5, 5, 0, 0, 0],
         ...                    [5, 5, 5, 0, 0, 0],
@@ -2255,8 +2255,7 @@ class LabeledMatrix(object):
         >>> h.dict_argmax()[0] == h.dict_argmax()[1] == h.dict_argmax()[2]
         True
         """
-        w, h = co_clustering(self.matrix, ranks=ranks, max_iter=max_iter,
-                             nb_preruns=60, pre_iter=6)
+        w, h = co_clustering(self.matrix, ranks=ranks, max_iter=max_iter, nb_preruns=nb_preruns, pre_iter=pre_iter)
         lmw = lm_occurence(self.row, w)
         lmw.set_deco(row_deco=self.row_deco)
         lmh = lm_occurence(self.column, h)
