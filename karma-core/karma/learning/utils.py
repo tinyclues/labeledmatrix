@@ -14,7 +14,7 @@ from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float
                                          direct_product, direct_product_dot,
                                          direct_product_dot_transpose,
                                          direct_product_second_moment)
-from karma.learning.regression import create_meta_of_regression
+from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
 from karma.thread_setter import blas_threads, open_mp_threads
 
 NB_THREADS_MAX = 16
@@ -374,6 +374,9 @@ class CrossValidationWrapper(object):
         self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
         self.intercepts, self.feat_coefs = [None] * self.n_splits, [None] * self.n_splits
 
+        from karma.core.dataframe import DataFrame
+        self.summary = DataFrame()
+
     @property
     def cv(self):
         return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
@@ -389,6 +392,11 @@ class CrossValidationWrapper(object):
                                   nb_threads=kwargs.get('nb_threads', 1),
                                   nb_inner_threads=kwargs.get('nb_inner_threads'))
         i, j = 0, 0
+        compute_gaincurves = kwargs.pop('compute_gaincurves', True)
+        compute_summary = kwargs.pop('compute_summary', False)
+        metrics = kwargs.pop('metrics', 'auc')
+        metric_groups = kwargs.pop('metric_groups', None)
+
 
         for (train_idx, test_idx) in self.cv.split(self.classes, self.classes):
             train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
@@ -402,15 +410,24 @@ class CrossValidationWrapper(object):
             self.test_y_hat[i:i + self.test_size] = np.asarray(
                 X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
             self.test_indices[i:i + self.test_size] = test_idx
+
+            if compute_summary and method.func_name in ['logistic_coefficients', 'logistic_coefficients_and_posteriori']:
+                predictions = logit_inplace(self.test_y_hat[i:i + self.test_size])
+                fold_summary = create_summary_of_regression(prediction=predictions, y=y[test_idx],
+                                                            metrics = metrics, metric_groups = metric_groups)
+                from karma.macros import squash
+                self.summary = squash(self.summary, fold_summary)
+
             i += self.test_size
             if warmup_key is not None:
                 kwargs[warmup_key] = np.hstack(betas + [intercept])
         X_stacked._close_pool()  # Warning should called manually at the exit from class
 
-        if method.func_name.startswith('logistic'):
+        if method.func_name in ['logistic_coefficients', 'logistic_coefficients_and_posteriori']:
             logit_inplace(self.test_y_hat)
 
-        self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)
+        if compute_gaincurves:
+            self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)
 
     def calculate_train_test_metrics(self, trained_dataframe, group_by_cols, pred_col, response_col):
         from karma.core.column import create_column_from_data

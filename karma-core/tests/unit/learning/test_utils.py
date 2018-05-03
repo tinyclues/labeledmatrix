@@ -13,6 +13,7 @@ from karma.learning.matrix_utils import as_vector_batch
 from karma.learning.utils import (CrossValidationWrapper, validate_regression_model, VirtualDirectProduct,
                                   BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX)
 from karma.lib.logistic_regression import logistic_regression
+from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
@@ -157,6 +158,26 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             _ = CrossValidationWrapper(0.2, [0, 1], ['a', 'b', 'c'])
+
+    def test_summary_in_validate(self):
+        df = self.df.copy()
+
+        cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
+        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_summary': True})
+        self.assertEqual(len(cv.summary), 1)
+        cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
+        _ = bayesian_logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_summary': True})
+        self.assertEqual(len(cv.summary), 1)
+
+    def test_nogaincurves_in_validate(self):
+        df = self.df.copy()
+
+        cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
+        _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_gaincurves': False})
+        self.assertTrue(cv.meta is None)
+        cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
+        _ = bayesian_logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_gaincurves': False})
+        self.assertTrue(cv.meta is None)
 
 
 class VirtualHStackTestCase(unittest.TestCase):

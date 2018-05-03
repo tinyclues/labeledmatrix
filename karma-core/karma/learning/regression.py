@@ -9,6 +9,7 @@ from sklearn.linear_model import Ridge
 
 from cyperf.matrix.karma_sparse import is_karmasparse
 
+from karma.core.utils.utils import coerce_to_tuple_and_check_all_strings
 from karma.core.curve import compute_mean_curve, gain_curve_from_prediction
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import to_scipy_sparse
@@ -118,3 +119,14 @@ def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, 
         meta['test_MSEs'] = test_mses
 
     return meta
+
+def create_summary_of_regression(prediction, y, metrics='auc', metric_groups=None):
+    metrics = coerce_to_tuple_and_check_all_strings(metrics)
+    from karma.core.dataframe import DataFrame
+    initial_df = DataFrame({'predictions': prediction, 'true_values': y})
+
+    metric_agg_tuple = tuple('{0}(predictions, true_values) as {0}'.format(metric) for metric in metrics)
+    agg_tuple = ('# as Count', 'sum(true_values) as CountPos',) + metric_agg_tuple # only makes sense for binary target
+    df_grouped = initial_df.group_by(metric_groups, agg_tuple)
+
+    return df_grouped
