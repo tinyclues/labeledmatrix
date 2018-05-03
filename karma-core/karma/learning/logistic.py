@@ -2,6 +2,7 @@ from collections import OrderedDict
 from copy import deepcopy
 import numpy as np
 import numexpr as ne
+from time import time
 from cyperf.tools.getter import build_safe_decorator
 from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.optimize import fmin_l_bfgs_b
@@ -116,6 +117,7 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
 
     try:
         lbfgs_params = KarmaSetup.lbfgs_params
+        start_lbfgs = time()
         w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                  args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
                                                  iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
@@ -123,8 +125,10 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
                                                  factr=lbfgs_params.get('factr', 1e7),
                                                  maxfun=lbfgs_params.get('maxfun', 15000),
                                                  maxls=lbfgs_params.get('maxls', 20))
+        end_lbfgs = time()
+        lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
-        conv_dict = _conv_dict_format(conv_dict, obj_value)
+        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing)
 
         intercept, beta = w0[-1], w0[:-1]
         linear_pred = X.dot(beta)
@@ -196,6 +200,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
     try:
         with timer('BayLogReg_Reg_Mean'):
             lbfgs_params = KarmaSetup.lbfgs_params
+            start_lbfgs = time()
             w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
                                                      args=(X, y, alpha_priori, sample_weight, w_priori,
                                                            alpha_intercept, intercept_priori),
@@ -204,9 +209,11 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
                                                      factr=lbfgs_params.get('factr', 1e7),
                                                      maxfun=lbfgs_params.get('maxfun', 15000),
                                                      maxls=lbfgs_params.get('maxls', 20))
+            end_lbfgs = time()
+            lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
             intercept, beta = w0[-1], w0[:-1]
 
-            conv_dict = _conv_dict_format(conv_dict, obj_value)
+        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing)
 
         with timer('BayLogReg_Reg_Variance'):
             if full_hessian:
@@ -375,43 +382,44 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
 
 @build_safe_decorator({})
-def _conv_dict_format(conv_dict, obj_value):
+def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing):
     """Pretty printing of lbfgs convergence information.
     """
-    conv_dict = deepcopy(conv_dict)
-    conv_dict['objective_value'] = obj_value
+    conv_dict_copy = deepcopy(conv_dict)
+    conv_dict_copy['objective_value'] = obj_value
 
-    gradient = conv_dict.pop('grad', None)
+    gradient = conv_dict_copy.pop('grad', None)
     if gradient is None:
         norm_grad = None
+        max_grad = None
     else:
         norm_grad = np.linalg.norm(gradient)
-    conv_dict['gradient_l2_norm_at_min'] = norm_grad
-    conv_dict['stopping_criterion'] = conv_dict.pop('task')
+        max_grad = np.max(gradient)
+    conv_dict_copy['gradient_l2_norm_at_min'] = norm_grad
+    conv_dict_copy['gradient_max_coordinate_at_min'] = max_grad
 
-    warn_flag_translation_dict = {0: 'converged',
-                                  1: 'too many function evaluations',
-                                  2: 'stopping criterion not reached'}
+    conv_dict_copy['stopping_criterion'] = conv_dict_copy.pop('task')
 
-    conv_dict['warnflag_hr'] = warn_flag_translation_dict[conv_dict['warnflag']]  # hr -> human readable
-    conv_dict['design_width'] = len(gradient)
+    warn_flag_translation_dict = {0: 'Convergence',
+                                  1: 'No Convergence: too many function evaluations',
+                                  2: 'No Convergence: stopping criterion not reached'}
 
-    ordered_keys = ['nit', 'funcalls', 'warnflag_hr', 'stopping_criterion', 'gradient_l2_norm_at_min',
-                    'design_width']
-    conv_dict_ordered = OrderedDict([(key, conv_dict[key]) for key in ordered_keys])
+    conv_dict_copy['status'] = warn_flag_translation_dict[conv_dict['warnflag']]
+    conv_dict_copy['design_width'] = len(gradient)
+
+    conv_dict_copy['n_iterations'] = conv_dict['nit']
+    conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
+    conv_dict_copy['design_depth'] = n_obs_design
+    conv_dict_copy['outer_threads'] = nb_threads
+    conv_dict_copy['inner_threads'] = nb_inner_threads
+    conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
+
+    ordered_keys = ['status', 'n_iterations', 'n_funcalls', 'gradient_l2_norm_at_min', 'gradient_max_coordinate_at_min',
+                    'design_depth', 'design_width', 'outer_threads', 'inner_threads', 'time_by_iteration']
+    conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 
     if KarmaSetup.verbose:
         from karma.core.dataframe import DataFrame
         DataFrame(conv_dict_ordered, one_line=True).preview()
-
-    #if conv_dict['warnflag'] in [1, 2]:
-    #    error_string = 'Convergence of lbfgs failed since {}.\n'.format(conv_dict['warnflag_hr'])
-    #    if conv_dict['warnflag'] == 1:
-    #        error_string += 'Used {} as stopping criterion.\n'.format(conv_dict['stopping_criterion'])
-    #    if conv_dict['warnflag'] == 2:
-    #        error_string += 'Solver error: {}.\n'.format(conv_dict['stopping_criterion'])
-    #    error_string += 'Final gradient norm: {}.\n'.format(conv_dict['gradient_l2_norm_at_min'])
-    #    print(error_string)
-    #    LOGGER.warn(error_string)
 
     return conv_dict_ordered
