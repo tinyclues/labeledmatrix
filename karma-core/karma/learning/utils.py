@@ -487,7 +487,7 @@ def check_axis_values(y):
 
 def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col, split_col=None):
     """
-    Return a DataFrame with AUC, RMSE/NLL and Calibration metrics
+    Return a DataFrame with AUC, RMSE/RIG and Calibration metrics
     Args:
         dataframe: input DataFrame with data samples
         group_by_col: group of events for which we want to calculate metrics (example: 'topic_id', 'universe')
@@ -501,32 +501,32 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
     ...         'obs': np.random.randint(0, 2, 1000), 'label': ['Train'] * 800 + ['Test'] * 200})
     >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs', 'label').preview() #doctest: +NORMALIZE_WHITESPACE
     --------------------------------------------------------------------------------------------------------------------------------------
-    topic | # Train | # Test | # positive Train | # positive Test | AUC Train | AUC Test | NLL Train | NLL Test | Calib Train | Calib Test
+    topic | # Train | # Test | # positive Train | # positive Test | AUC Train | AUC Test | RIG Train | RIG Test | Calib Train | Calib Test
     --------------------------------------------------------------------------------------------------------------------------------------
-    0       168       39       96                 22                -0.1117     -0.0053    1.6616      1.3572     1.1391        1.03
-    1       140       47       76                 25                -0.1439     -0.0945    1.5192      1.6478     0.945         1.0744
-    2       160       47       76                 22                0.1419      -0.1164    1.3041      1.5429     0.9598        0.9852
-    3       163       34       78                 20                -0.0042     -0.0929    1.4236      1.5821     0.9673        1.0748
-    4       169       33       92                 14                -0.026      -0.2707    1.4532      1.674      1.0984        0.8872
+    0       168       39       96                 22                -0.1117     -0.0053    -0.6616     -0.3572     1.1391        1.03
+    1       140       47       76                 25                -0.1439     -0.0945    -0.5192     -0.6478     0.945         1.0744
+    2       160       47       76                 22                0.1419      -0.1164    -0.3041     -0.5429     0.9598        0.9852
+    3       163       34       78                 20                -0.0042     -0.0929    -0.4236     -0.5821     0.9673        1.0748
+    4       169       33       92                 14                -0.026      -0.2707    -0.4532     -0.674      1.0984        0.8872
     >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs').preview() #doctest: +NORMALIZE_WHITESPACE
-    ----------------------------------------------------
-    topic | #   | # positive | AUC     | NLL    | Calib
-    ----------------------------------------------------
-    0       207   118          -0.091    1.6041   1.117
-    1       187   101          -0.117    1.5515   0.974
-    2       207   98           0.0813    1.3582   0.9654
-    3       197   98           -0.0155   1.4433   0.9875
-    4       202   106          -0.0631   1.4804   1.0649
+    -----------------------------------------------------
+    topic | #   | # positive | AUC     | RIG     | Calib
+    -----------------------------------------------------
+    0       207   118          -0.091    -0.6041   1.117
+    1       187   101          -0.117    -0.5515   0.974
+    2       207   98           0.0813    -0.3582   0.9654
+    3       197   98           -0.0155   -0.4433   0.9875
+    4       202   106          -0.0631   -0.4804   1.0649
     >>> calculate_train_test_metrics(df.with_column('z', 'multiply(map(topic, mapping=dict({2: 1}), default=0), obs)'),
     ...                              'topic', 'pred', 'z').preview()  #doctest: +NORMALIZE_WHITESPACE
-    ---------------------------------------------------
-    topic | #   | # positive | AUC    | NLL    | Calib
-    ---------------------------------------------------
-    2       207   98           0.0813   1.3582   0.9654
+    ----------------------------------------------------
+    topic | #   | # positive | AUC    | RIG     | Calib
+    ----------------------------------------------------
+    2       207   98           0.0813   -0.3582   0.9654
     """
     is_resp_binary = is_binary(dataframe[response_col][:])
     if is_resp_binary:
-        err_agg, err_agg_name = ('normalized_log_loss', 'NLL')
+        err_agg, err_agg_name = ('relative_information_gain', 'RIG')
     else:
         err_agg, err_agg_name = ('rmse', 'RMSE')
 
