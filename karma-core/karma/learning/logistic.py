@@ -8,7 +8,7 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.optimize import fmin_l_bfgs_b
 from sklearn.linear_model.logistic import LogisticRegression
 
-from karma.core.utils import create_timer
+from karma.core.utils import create_timer, use_seed
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
 from karma.learning.regression import regression_on_blocks
 from karma.learning.utils import VirtualHStack, VirtualDirectProduct, vdp_materilaze
@@ -61,8 +61,7 @@ def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
     if w0 is None:
         w0 = np.zeros_like(w)
 
-    # Downcast to have faster expit and _log_logistic_inplace
-    yz = X.dot(w).astype(np.float32, copy=False)
+    yz = X.dot(w)
     yz += c
     yz *= y
     z0 = _expit_m1_times_y(yz, y)
@@ -113,7 +112,9 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     C = X.adjust_array_to_total_dimension(C, 'C')
 
     if w_warm is None:
-        w_warm = np.zeros(X.shape[1] + 1, dtype=np.float)
+        with use_seed(seed=X.shape[1]):
+            w_warm_betas = 0.1 * np.random.randn(X.shape[1])
+            w_warm = np.hstack([w_warm_betas, 0.])
 
     try:
         lbfgs_params = KarmaSetup.lbfgs_params
@@ -186,7 +187,8 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
             X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
         if w_priori is None:
-            w_priori = np.zeros(X.shape[1], dtype=np.float)
+            with use_seed(seed=X.shape[1]):
+                w_priori = 0.1 * np.random.randn(X.shape[1])
 
         C_priori = X.adjust_array_to_total_dimension(C_priori, 'C_priori')
         w_priori = X.adjust_array_to_total_dimension(w_priori, 'w_priori')

@@ -407,7 +407,7 @@ class GridSearch(CVSampler):
     (0.01, 0.01)   test        20      8          0.0833    [0.01]       ['aa']
     (0.01, 0.01)   train       100     42         0.0681    [0.01]       ['aa']
     (0.1, 0.1)     test        20      8          0.0833    [0.1]        ['aa']
-    (0.1, 0.1)     train       100     42         0.0739    [0.1]        ['aa']
+    (0.1, 0.1)     train       100     42         0.0755    [0.1]        ['aa']
     (0.01,)        test        20      8          -0.1667   [0.01]       ['b']
     (0.01,)        train       100     42         0.0517    [0.01]       ['b']
     (0.1,)         test        20      8          -0.1667   [0.1]        ['b']
@@ -422,7 +422,7 @@ class GridSearch(CVSampler):
     test        [0.1]        ['b']      -0.1667    0.0
     train       [0.01]       ['aa']     0.0681     0.0
     train       [0.01]       ['b']      0.0517     0.0
-    train       [0.1]        ['aa']     0.0739     0.0
+    train       [0.1]        ['aa']     0.0755     0.0
     train       [0.1]        ['b']      0.0517     0.0
     """
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,
