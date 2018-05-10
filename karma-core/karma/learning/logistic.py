@@ -2,6 +2,7 @@ from collections import OrderedDict
 from copy import deepcopy
 import numpy as np
 import numexpr as ne
+from scipy.stats import truncnorm
 from time import time
 from cyperf.tools.getter import build_safe_decorator
 from cyperf.matrix.karma_sparse import is_karmasparse
@@ -109,20 +110,21 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     if not isinstance(X, VirtualHStack):
         X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
-    C = X.adjust_array_to_total_dimension(C, 'C')
+    C_priori = X.adjust_array_to_total_dimension(C, 'C')
 
     if w_warm is None:
         with use_seed(seed=X.shape[1]):
-            w_warm_betas = 0.1 * np.random.randn(X.shape[1])
-            w_warm = np.hstack([w_warm_betas, 0.])
+            # random perturbation of starting point
+            w_warm = np.minimum(C_priori, 1) * truncnorm(-1, 1).rvs(X.shape[1])
+            w_warm = np.hstack([w_warm, 0.])
 
     try:
         lbfgs_params = KarmaSetup.lbfgs_params
         start_lbfgs = time()
         w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
-                                                 args=(X, 2. * y.astype(bool) - 1, 1. / C, sample_weight),
+                                                 args=(X, 2. * y.astype(bool) - 1, 1. / C_priori, sample_weight),
                                                  iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
-                                                 maxiter=max_iter, m=lbfgs_params.get('m', 10),
+                                                 maxiter=max_iter, m=lbfgs_params.get('m', 100),
                                                  factr=lbfgs_params.get('factr', 1e7),
                                                  maxfun=lbfgs_params.get('maxfun', 15000),
                                                  maxls=lbfgs_params.get('maxls', 20))
@@ -163,8 +165,7 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
                           w_warm=None, sample_weight=None, nb_threads=1,
                           nb_inner_threads=None):
     if solver != 'lbfgs':
-        return logistic_coefficients_fall_back(X, y, max_iter, solver,
-                                               C=C, sample_weight=sample_weight)
+        return logistic_coefficients_fall_back(X, y, max_iter, solver, C=C, sample_weight=sample_weight)
     else:
         linear_pred, intercept, beta, conv_dict = logistic_coefficients_lbfgs(X, y, max_iter=max_iter, C=C,
                                                                               w_warm=w_warm,
@@ -187,14 +188,16 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
             X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
         if w_priori is None:
-            with use_seed(seed=X.shape[1]):
-                w_priori = 0.1 * np.random.randn(X.shape[1])
+            w_priori = np.zeros(X.shape[1], dtype=np.float)
 
         C_priori = X.adjust_array_to_total_dimension(C_priori, 'C_priori')
         w_priori = X.adjust_array_to_total_dimension(w_priori, 'w_priori')
 
         if w_warm is None:
             w_warm = np.hstack([w_priori, intercept_priori])
+            with use_seed(seed=X.shape[1]):
+                # random perturbation of starting point
+                w_warm[:-1] += np.minimum(C_priori, 1) * truncnorm(-1, 1).rvs(w_priori.shape[0])
 
         alpha_priori = 1. / C_priori
         alpha_intercept = 1. / intercept_C_priori
@@ -207,7 +210,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
                                                      args=(X, y, alpha_priori, sample_weight, w_priori,
                                                            alpha_intercept, intercept_priori),
                                                      iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
-                                                     maxiter=max_iter, m=lbfgs_params.get('m', 10),
+                                                     maxiter=max_iter, m=lbfgs_params.get('m', 100),
                                                      factr=lbfgs_params.get('factr', 1e7),
                                                      maxfun=lbfgs_params.get('maxfun', 15000),
                                                      maxls=lbfgs_params.get('maxls', 20))
