@@ -42,7 +42,7 @@ class CVSampler(object):
     ...                            'group_col': np.random.randint(3, size=20),
     ...                            'strat_col': np.random.randint(3, size=20),
     ...                            'y': np.random.randint(2, size=20)})
-    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 2})
+    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 2, 'verbose': False})
     >>> cvs.evaluate_and_summarize_cv(0.1, features=['aa', 'b']).copy(exclude=['penalty', 'full_betas']).preview() # doctest: +NORMALIZE_WHITESPACE
     ----------------------------------------------------------------
     fold_type | Count | CountPos | auc    | penalty_hr | features
@@ -50,7 +50,7 @@ class CVSampler(object):
     test        4       3          1.0      [0.1 0.1]    ['aa', 'b']
     test        4       3          -1.0     [0.1 0.1]    ['aa', 'b']
     train       20      13         0.8022   [0.1 0.1]    ['aa', 'b']
-    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2}, metrics=['auc', 'normalized_log_loss'])
+    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2, 'verbose': False}, metrics=['auc', 'normalized_log_loss'])
     >>> cvs.evaluate_and_summarize_cv(0.1, features=['aa', 'b']).copy(exclude=['penalty', 'full_betas']).preview() # doctest: +NORMALIZE_WHITESPACE
     --------------------------------------------------------------------------------------
     fold_type | Count | CountPos | auc    | normalized_log_loss | penalty_hr | features
@@ -83,7 +83,8 @@ class CVSampler(object):
     train       1           2           2       1          -1.0   1.1288                [0.1]        b
     train       2           0           3       3          0.0    nan                   [0.1]        b
     train       2           1           1       1          0.0    nan                   [0.1]        b
-    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2}, penalty_parameter_name='pre_lasso_penalty', lib_symbol='bayesian_logistic_regression')
+    >>> cvs = CVSampler(random_df, {'axis': 'y', 'cv': 0.2, 'verbose': False}, penalty_parameter_name='pre_lasso_penalty',
+    ...                 lib_symbol='bayesian_logistic_regression')
     >>> cvs.evaluate_and_summarize_cv(0.1, features=['aa', 'b']).copy(exclude=['penalty', 'full_betas']).preview() # doctest: +NORMALIZE_WHITESPACE
     -------------------------------------------------------------
     fold_type | Count | CountPos | auc | penalty_hr | features
@@ -292,7 +293,7 @@ class GridEvaluator(object):
         >>> from karma.core.utils.utils import use_seed
         >>> with use_seed(42):
         ...     my_df = DataFrame({'a': np.random.randn(100, 5), 'b': np.random.randn(100, 7), 'y': np.random.binomial(1, 0.75, size=100)})
-        >>> my_params = {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 1}
+        >>> my_params = {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 1, 'verbose': False}
         >>> gs = GridSearch(my_df, my_params)
         >>> _ = gs.sequential_search([0.1, 1], ['a', 'b'], verbose=False)
         >>> evaluator = GridEvaluator()
@@ -349,7 +350,7 @@ class GridSearch(CVSampler):
     >>> from karma.core.utils.utils import use_seed
     >>> with use_seed(42):
     ...     df = DataFrame({"aa": np.random.randn(100, 2), "b": np.random.randn(100, 1), "y": np.random.randint(2, size=100)})
-    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 2})
+    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 2, 'verbose': False})
     >>> _ = gs.sequential_search([0.1, 1, 2], ['aa', 'b'], warm_start=False, verbose=False, n_jobs=2)
     >>> gs.evaluated_reguls.copy(exclude='full_betas').preview() # doctest: +NORMALIZE_WHITESPACE
     -----------------------------------------------------------------------------------
@@ -374,7 +375,7 @@ class GridSearch(CVSampler):
     train       [0.1 0.1]    ['aa', 'b']   0.0837     0.0
     train       [1 1]        ['aa', 'b']   0.0878     0.0
     train       [2 2]        ['aa', 'b']   0.0862     0.0
-    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2}, lib_symbol='logistic_regression')
+    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2, 'verbose': False}, lib_symbol='logistic_regression')
     >>> _ = gs.sequential_search([0.01, 0.1], ['aa'], verbose=False, warm_start=True)
     >>> gs.evaluated_reguls.copy(exclude='full_betas').preview() # doctest: +NORMALIZE_WHITESPACE
     ----------------------------------------------------------------------------
@@ -397,7 +398,7 @@ class GridSearch(CVSampler):
     (0.01,)        train       100     42         0.0517    [0.01]       ['b']
     (0.1,)         test        20      8          -0.1667   [0.1]        ['b']
     (0.1,)         train       100     42         0.0517    [0.1]        ['b']
-    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2}, lib_symbol='logistic_regression')
+    >>> gs = GridSearch(df, {'axis': 'y', 'cv': 0.2, 'verbose': False}, lib_symbol='logistic_regression')
     >>> _ = gs.sequential_search([0.01, 0.1], ['aa'], verbose=False, warm_start=True, n_jobs=2)
     >>> _ = gs.sequential_search([0.01, 0.1], ['b'], verbose=False, warm_start=True)
     >>> gs.evaluated_reguls.copy(exclude='full_betas').preview() # doctest: +NORMALIZE_WHITESPACE
@@ -500,7 +501,8 @@ class LogisticPenaltySelector(object):
     >>> from karma.core.utils.utils import use_seed
     >>> with use_seed(62):
     ...     df = DataFrame({"aa": np.random.randn(100, 2), "b": np.random.randn(100, 1), "y": np.random.randint(2, size=100)})
-    >>> ps = LogisticPenaltySelector(df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 1, 'nb_threads': 1, 'nb_inner_threads': 1})
+    >>> ps = LogisticPenaltySelector(df, {'axis': 'y', 'cv': 0.2, 'cv_n_splits': 1, 'nb_threads': 1,
+    ...                                   'verbose': False, 'nb_inner_threads': 1})
     >>> ps.by_features_search(['b', 'aa'], verbose=False) # doctest: +NORMALIZE_WHITESPACE
     ({'aa': (0.1, 0.1), 'b': (0.1,)}, {'aa': ('auc', -0.3), 'b': ('auc', -0.04)})
     >>> ps.naive_diagonal_search(['aa', 'b'], verbose=False)

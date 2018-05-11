@@ -85,7 +85,7 @@ def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
 
 
 def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weight=None,
-                                nb_threads=1, nb_inner_threads=None):
+                                nb_threads=1, nb_inner_threads=None, verbose=True):
     """
     >>> from karma.core.dataframe import DataFrame
     >>> from karma.core.utils.utils import use_seed
@@ -94,14 +94,16 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
     ...                     'c': np.random.poisson(15, size=(1000, 14)), 'y': np.random.randint(0, 2, 1000)})
     >>> with use_seed(1237):
     ...     res1 = df.build_lib_column('logistic_regression', ('a', 'b', 'c'),
-    ...                 {'solver': 'lbfgs', 'axis': 'y', 'C': np.array([10.] * 10 + [1000.] * 3 + [10000000.] * 14)})
+    ...                 {'solver': 'lbfgs', 'axis': 'y', 'verbose': False,
+    ...                  'C': np.array([10.] * 10 + [1000.] * 3 + [10000000.] * 14)})
     >>> with use_seed(1237):
     ...     res2 = df.build_lib_column('logistic_regression', ('a', 'b', 'c'),
-    ...                 {'solver': 'lbfgs', 'axis': 'y', 'C': [10., 1000., 10000000.]})
+    ...                 {'solver': 'lbfgs', 'axis': 'y', 'verbose': False,
+    ...                  'C': [10., 1000., 10000000.]})
     >>> np.array_equal(res1[:], res2[:])
     True
     >>> df['0'] = df.build_lib_column('logistic_regression', ('a', 'b', 'c'),
-    ...                 {'solver': 'lbfgs', 'axis': 'y', 'C': [1e10, 1e-5, 1e-5]})
+    ...                 {'solver': 'lbfgs', 'axis': 'y', 'verbose': False, 'C': [1e10, 1e-5, 1e-5]})
     >>> np.abs(df.karmacode('0').instructions[0].rightfactor).sum() > 0.1
     True
     >>> np.abs(df.karmacode('0').instructions[2].rightfactor).sum() < 0.01
@@ -131,7 +133,8 @@ def logistic_coefficients_lbfgs(X, y, max_iter, C=1e10, w_warm=None, sample_weig
         end_lbfgs = time()
         lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
-        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing)
+        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing,
+                                      verbose)
 
         intercept, beta = w0[-1], w0[:-1]
         linear_pred = X.dot(beta)
@@ -163,7 +166,7 @@ def logistic_coefficients_fall_back(X, y, max_iter, solver='liblinear', C=1e10, 
 
 def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
                           w_warm=None, sample_weight=None, nb_threads=1,
-                          nb_inner_threads=None):
+                          nb_inner_threads=None, verbose=True):
     if solver != 'lbfgs':
         return logistic_coefficients_fall_back(X, y, max_iter, solver, C=C, sample_weight=sample_weight)
     else:
@@ -171,7 +174,8 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
                                                                               w_warm=w_warm,
                                                                               sample_weight=sample_weight,
                                                                               nb_threads=nb_threads,
-                                                                              nb_inner_threads=nb_inner_threads)
+                                                                              nb_inner_threads=nb_inner_threads,
+                                                                              verbose=verbose)
 
         return expit(linear_pred), intercept, beta, conv_dict
 
@@ -179,7 +183,7 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
 def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercept_priori=0.,
                                          C_priori=1e10, intercept_C_priori=1e10,
                                          sample_weight=None, w_warm=None, nb_threads=1,
-                                         nb_inner_threads=None, full_hessian=True, timer=None):
+                                         nb_inner_threads=None, full_hessian=True, timer=None, verbose=True):
     if timer is None:
         timer = create_timer(None)
 
@@ -218,7 +222,8 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
             lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
             intercept, beta = w0[-1], w0[:-1]
 
-        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing)
+        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing,
+                                      verbose)
 
         with timer('BayLogReg_Reg_Variance'):
             if full_hessian:
@@ -387,7 +392,7 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
 
 @build_safe_decorator({})
-def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing):
+def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, verbose=True):
     """Pretty printing of lbfgs convergence information.
     """
     conv_dict_copy = deepcopy(conv_dict)
@@ -400,8 +405,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     else:
         norm_grad = np.linalg.norm(gradient)
         max_grad = np.max(gradient)
-    conv_dict_copy['gradient_l2_norm_at_min'] = norm_grad
-    conv_dict_copy['gradient_max_coordinate_at_min'] = max_grad
+    conv_dict_copy['gradient_l2_momentum'] = norm_grad / len(gradient)
+    conv_dict_copy['gradient_max'] = max_grad
 
     conv_dict_copy['stopping_criterion'] = conv_dict_copy.pop('task')
 
@@ -414,16 +419,17 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
 
     conv_dict_copy['n_iterations'] = conv_dict['nit']
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
-    conv_dict_copy['design_depth'] = n_obs_design
-    conv_dict_copy['outer_threads'] = nb_threads
-    conv_dict_copy['inner_threads'] = nb_inner_threads
+    conv_dict_copy['design_height'] = n_obs_design
+    conv_dict_copy['outer_threads'] = nb_threads or 1
+    conv_dict_copy['inner_threads'] = nb_inner_threads or 1
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
+    conv_dict_copy['cols_to_rows_ratio'] =  conv_dict_copy['design_width'] / float(n_obs_design)
 
-    ordered_keys = ['status', 'n_iterations', 'n_funcalls', 'gradient_l2_norm_at_min', 'gradient_max_coordinate_at_min',
-                    'design_depth', 'design_width', 'outer_threads', 'inner_threads', 'time_by_iteration']
+    ordered_keys = ['status', 'n_iterations', 'n_funcalls', 'gradient_l2_momentum', 'gradient_max',
+                    'design_width', 'cols_to_rows_ratio', 'outer_threads', 'inner_threads', 'time_by_iteration']
     conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 
-    if KarmaSetup.verbose:
+    if KarmaSetup.verbose or verbose:
         from karma.core.dataframe import DataFrame
         DataFrame(conv_dict_ordered, one_line=True).preview()
 
