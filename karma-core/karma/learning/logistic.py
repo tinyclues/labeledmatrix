@@ -16,6 +16,8 @@ from karma.learning.utils import VirtualHStack, VirtualDirectProduct, vdp_materi
 from karma.thread_setter import blas_threads, open_mp_threads
 from karma.runtime import KarmaSetup
 
+from karma.learning.utils import NB_THREADS_MAX
+
 
 __all__ = ['logistic_coefficients', 'logistic_coefficients_and_posteriori', 'expit']
 
@@ -421,7 +423,15 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
     conv_dict_copy['design_height'] = n_obs_design
     conv_dict_copy['outer_threads'] = nb_threads or 1
-    conv_dict_copy['inner_threads'] = nb_inner_threads or 1
+
+    if nb_inner_threads is None:
+        if nb_threads is None or nb_threads == 1:
+            conv_dict_copy['inner_threads'] = NB_THREADS_MAX
+        else:
+            conv_dict_copy['inner_threads'] = min(NB_THREADS_MAX, max(1, int(2 * 32. / nb_threads)))
+    else:
+        conv_dict_copy['inner_threads'] = nb_inner_threads
+
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
     conv_dict_copy['cols_to_rows_ratio'] =  conv_dict_copy['design_width'] / float(n_obs_design)
 
