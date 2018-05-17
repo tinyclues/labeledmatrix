@@ -407,8 +407,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     else:
         norm_grad = np.linalg.norm(gradient)
         max_grad = np.max(gradient)
-    conv_dict_copy['gradient_l2_momentum'] = norm_grad / len(gradient)
-    conv_dict_copy['gradient_max'] = max_grad
+    conv_dict_copy['grad_l2_momentum'] = norm_grad / len(gradient)
+    conv_dict_copy['grad_max'] = max_grad
 
     conv_dict_copy['stopping_criterion'] = conv_dict_copy.pop('task')
 
@@ -417,26 +417,26 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
                                   2: 'No Convergence: stopping criterion not reached'}
 
     conv_dict_copy['status'] = warn_flag_translation_dict[conv_dict['warnflag']]
-    conv_dict_copy['design_width'] = len(gradient)
+    conv_dict_copy['width'] = len(gradient)
 
-    conv_dict_copy['n_iterations'] = conv_dict['nit']
+    conv_dict_copy['nit'] = conv_dict['nit']
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
-    conv_dict_copy['design_height'] = n_obs_design
-    conv_dict_copy['outer_threads'] = nb_threads or 1
+    conv_dict_copy['height'] = n_obs_design
+    conv_dict_copy['outer_thr'] = nb_threads or 1
 
     if nb_inner_threads is None:
         if nb_threads is None or nb_threads == 1:
-            conv_dict_copy['inner_threads'] = NB_THREADS_MAX
+            conv_dict_copy['inner_thr'] = NB_THREADS_MAX
         else:
-            conv_dict_copy['inner_threads'] = min(NB_THREADS_MAX, max(1, int(2 * 32. / nb_threads)))
+            conv_dict_copy['inner_thr'] = min(NB_THREADS_MAX, max(1, int(2 * 32. / nb_threads)))
     else:
-        conv_dict_copy['inner_threads'] = nb_inner_threads
+        conv_dict_copy['inner_thr'] = nb_inner_threads
 
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
-    conv_dict_copy['cols_to_rows_ratio'] =  conv_dict_copy['design_width'] / float(n_obs_design)
+    conv_dict_copy['cols_to_rows_ratio'] =  conv_dict_copy['width'] / float(n_obs_design)
 
-    ordered_keys = ['status', 'n_iterations', 'n_funcalls', 'gradient_l2_momentum', 'gradient_max',
-                    'design_width', 'cols_to_rows_ratio', 'outer_threads', 'inner_threads', 'time_by_iteration']
+    ordered_keys = ['status', 'nit', 'grad_l2_momentum', 'grad_max',
+                    'width', 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
     conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 
     if KarmaSetup.verbose or verbose:
