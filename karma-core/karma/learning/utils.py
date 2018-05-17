@@ -8,7 +8,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace
 
-from karma.core.utils import is_iterable
+from karma.core.utils import is_iterable, quantile_boundaries
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
                                          direct_product, direct_product_dot,
@@ -310,20 +310,25 @@ def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_group
 def _prepare_and_check_classes(y, groups):
     if groups is not None:
         assert len(groups) == len(y)
+    y = np.asarray(y)
     if is_binary(y):
         classes = y
-        if groups is not None:
-            groups = np.char.asarray(groups)
-            classes = np.char.asarray(classes) + '_' + groups
-            unique, counts = np.unique(classes, return_counts=True)
-
-            groups_to_clean = set()
-            for _class in unique[counts == 1]:
-                groups_to_clean.add(groups[classes == _class][0])
-            for group in groups_to_clean:
-                classes[groups == group] = group
     else:
-        classes = groups if groups is not None else np.zeros(len(y))
+        # in case the response is not binary, stratify by quantile
+        # at most 10, but never less than 100 lines per quantile
+        y_boundaries = quantile_boundaries(y, nb=min(max(len(y) / 100, 1), 10))
+        classes = y_boundaries.searchsorted(y)
+
+    if groups is not None:
+        groups = np.char.asarray(groups)
+        classes = np.char.asarray(classes) + '_' + groups
+        unique, counts = np.unique(classes, return_counts=True)
+
+        groups_to_clean = set()
+        for _class in unique[counts == 1]:
+            groups_to_clean.add(groups[classes == _class][0])
+        for group in groups_to_clean:
+            classes[groups == group] = group
 
     _, counts = np.unique(classes, return_counts=True)
     if not np.all(counts > 1):

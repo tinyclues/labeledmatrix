@@ -11,7 +11,7 @@ from karma.core.utils.utils import use_seed
 from karma.learning.logistic import logistic_coefficients
 from karma.learning.matrix_utils import as_vector_batch
 from karma.learning.utils import (CrossValidationWrapper, validate_regression_model, VirtualDirectProduct,
-                                  BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX)
+                                  BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX, _prepare_and_check_classes)
 from karma.lib.logistic_regression import logistic_regression
 from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
 
@@ -179,6 +179,21 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         _ = bayesian_logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_gaincurves': False})
         self.assertTrue(cv.meta is None)
 
+
+    def test__prepare_and_check_classes(self):
+        with use_seed(1234567):
+            y_bin = np.random.randint(2, size=1000)
+            y = 10 * np.exp(np.random.normal(size=1000))
+            groups = np.random.randint(10, size=1000)
+
+        np.testing.assert_array_equal(_prepare_and_check_classes(y_bin, None)[:4], [1, 1, 0, 0])
+        np.testing.assert_array_equal(_prepare_and_check_classes(y_bin, groups)[:4], ['1_2', '1_4', '0_3', '0_5'])
+
+        np.testing.assert_array_equal(_prepare_and_check_classes(y, None)[:4], [6, 4, 6, 8])
+        np.testing.assert_array_equal(_prepare_and_check_classes(y, groups)[:4], ['6_2', '4_4', '6_3', '8_5'])
+
+        np.testing.assert_array_equal(_prepare_and_check_classes(y[:50], None)[:4], [0, 0, 0, 0])
+        np.testing.assert_array_equal(_prepare_and_check_classes(y * 0, groups)[:4], ['0_2', '0_4', '0_3', '0_5'])
 
 class VirtualHStackTestCase(unittest.TestCase):
     def test_init(self):
