@@ -1650,3 +1650,20 @@ def direct_product_second_moment(left, right):
         # less memory consuming version :
         # res = np.einsum('ij, ik, il, im -> jklm', left, right, right, left, optimize='optimal')
         return second_moment(direct_product(left, right))
+
+
+def default_row(matrix, default):
+    from karma.core.labeledmatrix.labeledmatrix import LabeledMatrixException
+    if is_karmasparse(matrix):
+        raise LabeledMatrixException("Creating a default row is not supported on sparse")
+    if default == "uniform":
+        v_default = np.repeat(1. / matrix.shape[1], matrix.shape[1])
+    elif default == "zero":
+        v_default = np.zeros(matrix.shape[1])
+    elif default == "mean":
+        v_default = matrix.mean(axis=0)
+    elif isinstance(default, np.ndarray) and default.shape == (matrix.shape[1],):
+        v_default = default
+    else:
+        raise LabeledMatrixException("Unknown default {}".format(default))
+    return v_default

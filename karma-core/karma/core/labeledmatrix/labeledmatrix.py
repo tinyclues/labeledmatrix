@@ -1778,17 +1778,8 @@ class LabeledMatrix(object):
         """
         kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
         if not self.is_sparse:
-            if default == "uniform":
-                v_default = np.repeat(1. / self.matrix.shape[1], self.matrix.shape[1])
-            elif default == "zero":
-                v_default = np.zeros(self.matrix.shape[1])
-            elif default == "mean":
-                v_default = self.matrix.mean(axis=0)
-            else:
-                raise LabeledMatrixException("Unknown default {}".format(default))
-
             kc += Map(inputs, output, (self.row.list, self.matrix),
-                      v_default, coordinates=coordinates)
+                        default_row(self.matrix, default), coordinates=coordinates)
         else:
             if default != 'zero':
                 raise ValueError('Sparse LabeledMatrix supports only *zero* default values')
