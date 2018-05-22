@@ -15,7 +15,7 @@ from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import to_scipy_sparse
 
 __all__ = ['regression_on_blocks', 'linear_regression_coefficients', 'sklearn_regression_model',
-           'create_meta_of_regression']
+           'create_meta_of_regression', 'create_summary_of_regression']
 
 
 def regression_on_blocks(regression_method):
@@ -119,6 +119,7 @@ def create_meta_of_regression(prediction, y, with_guess=True, test_curves=None, 
         meta['test_MSEs'] = test_mses
 
     return meta
+
 
 def create_summary_of_regression(prediction, y, metrics='auc', metric_groups=None):
     metrics = coerce_to_tuple_and_check_all_strings(metrics)

@@ -13,6 +13,8 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
     if timer is None:
         timer = create_timer(None)
 
+    conv_dict = {}
+
     with timer('BayLinReg_Reg_Init'):
         if not isinstance(X, BasicVirtualHStack):
             X = BasicVirtualHStack(X)
@@ -56,4 +58,4 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
 
     return (y_hat_post,
             intercept_post, w_post,
-            intercept_C_post, w_C_post)
+            intercept_C_post, w_C_post, conv_dict)

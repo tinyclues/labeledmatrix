@@ -7,6 +7,7 @@ from math import ceil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace
+from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
 
 from karma.core.utils import is_iterable, quantile_boundaries
 from karma.core.utils.array import is_binary
@@ -18,7 +19,7 @@ from karma.learning.regression import create_meta_of_regression, create_summary_
 from karma.thread_setter import blas_threads, open_mp_threads
 
 NB_THREADS_MAX = 16
-
+KNOWN_LOGISTIC_METHODS = ['logistic_coefficients', 'logistic_coefficients_and_posteriori']
 
 class VirtualDirectProduct(object):
     """
@@ -401,7 +402,7 @@ class CrossValidationWrapper(object):
         compute_summary = kwargs.pop('compute_summary', False)
         metrics = kwargs.pop('metrics', 'auc')
         metric_groups = kwargs.pop('metric_groups', None)
-
+        kc_formatter = kwargs.pop('kc_formatter', None)
 
         for (train_idx, test_idx) in self.cv.split(self.classes, self.classes):
             train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
@@ -412,14 +413,21 @@ class CrossValidationWrapper(object):
             self.feat_coefs[j] = betas
             j += 1
 
-            self.test_y_hat[i:i + self.test_size] = np.asarray(
-                X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
+            if kc_formatter is None:
+                y_hat = np.asarray(X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
+                if method.func_name in KNOWN_LOGISTIC_METHODS:
+                    logit_inplace(y_hat)
+            else:
+                assert isinstance(kc_formatter, RegressionKarmaCodeFormatter)
+                kc = kc_formatter.format(self.method_output)
+                y_hat = kc.bulk_call(X_stacked[test_idx].X)[0]
+
+            self.test_y_hat[i:i + self.test_size] = y_hat
             self.test_indices[i:i + self.test_size] = test_idx
 
-            if compute_summary and method.func_name in ['logistic_coefficients', 'logistic_coefficients_and_posteriori']:
-                predictions = logit_inplace(self.test_y_hat[i:i + self.test_size])
-                fold_summary = create_summary_of_regression(prediction=predictions, y=y[test_idx],
-                                                            metrics = metrics, metric_groups = metric_groups)
+            if compute_summary and method.func_name in KNOWN_LOGISTIC_METHODS:
+                fold_summary = create_summary_of_regression(prediction=y_hat, y=y[test_idx],
+                                                            metrics=metrics, metric_groups=metric_groups)
                 from karma.macros import squash
                 self.summary = squash(self.summary, fold_summary)
 
@@ -427,9 +435,6 @@ class CrossValidationWrapper(object):
             if warmup_key is not None:
                 kwargs[warmup_key] = np.hstack(betas + [intercept])
         X_stacked._close_pool()  # Warning should called manually at the exit from class
-
-        if method.func_name in ['logistic_coefficients', 'logistic_coefficients_and_posteriori']:
-            logit_inplace(self.test_y_hat)
 
         if compute_gaincurves:
             self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)
