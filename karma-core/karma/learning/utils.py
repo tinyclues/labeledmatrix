@@ -14,7 +14,7 @@ from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
                                          direct_product, direct_product_dot,
                                          direct_product_dot_transpose,
-                                         direct_product_second_moment)
+                                         direct_product_second_moment, cast_2dim_float32_transpose)
 from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
 from karma.thread_setter import blas_threads, open_mp_threads
 
@@ -146,7 +146,8 @@ class BasicVirtualHStack(object):
             for i in integer_entries:
                 X[i] = np.zeros((common_shape0 or 1, X[i]))
 
-            X = [xx if isinstance(xx, VirtualDirectProduct) else cast_float32(xx) for xx in X]
+            X = [xx if isinstance(xx, VirtualDirectProduct) 
+                    else cast_2dim_float32_transpose(xx, min_dtype=np.float32) for xx in X]
             self.dims = np.cumsum([0] + [x.shape[1] for x in X])
         else:
             X = X if isinstance(X, VirtualDirectProduct) else cast_float32(X)
