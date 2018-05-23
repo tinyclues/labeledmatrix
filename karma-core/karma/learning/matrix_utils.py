@@ -1193,6 +1193,8 @@ def truncated_dot(mat1, mat2, nb):
 
 def align_along_axis(matrix, indices, axis, extend=False):
     """
+    indices can be either a number of lines to add (if extend) or indices to extract after adding a single line
+
     >>> from karma.core.labeledmatrix.utils import aeq
     >>> matrix = np.random.rand(10, 5)
     >>> aeq(matrix[[3,2]], align_along_axis(matrix, [3,2], 1))
@@ -1227,48 +1229,23 @@ def align_along_axis(matrix, indices, axis, extend=False):
     True
 
     """
-    def _numpy_zeros_extension(matrix, nx, ny):
-        if nx > 0 and ny > 0:
-            return block_diag(matrix, np.zeros((nx, ny), dtype=matrix.dtype))
-        elif nx > 0:
-            return np.concatenate((matrix, np.zeros((nx, matrix.shape[1]),
-                                                    dtype=matrix.dtype)), axis=0)
-        elif ny > 0:
-            return np.concatenate((matrix, np.zeros((matrix.shape[0], ny),
-                                                    dtype=matrix.dtype)), axis=1)
+    if axis not in {0, 1}:
+        raise ValueError("Axis should one of [0,1], got {}".format(axis))
+
+    if extend:
+        n = indices if np.isscalar(indices) else 1
+
+        if is_karmasparse(matrix):
+            shape = (matrix.shape[0] + n, matrix.shape[1]) if axis == 1 else (matrix.shape[0], matrix.shape[1] + n)
+            matrix = matrix.extend(shape, copy=not(np.isscalar(indices)))  # in that case the getitem will do the copy
         else:
+            shape = (n, matrix.shape[axis]) if axis else (matrix.shape[axis], n)
+            matrix = np.concatenate((matrix, np.zeros(shape, dtype=matrix.dtype)), axis=1 - axis)
+
+        if np.isscalar(indices): # simple extension by adding zeros rows/columns
             return matrix
 
-    if axis == 1:
-        if extend:
-            if np.isscalar(indices):  # simple extension by adding zeros rows
-                if is_karmasparse(matrix):
-                    matrix = matrix.extend((matrix.shape[0] + indices, matrix.shape[1]))
-                else:
-                    matrix = _numpy_zeros_extension(matrix, indices, 0)
-                return matrix
-            else:
-                if is_karmasparse(matrix):
-                    matrix = matrix.extend((matrix.shape[0] + 1, matrix.shape[1]), copy=False)
-                else:
-                    matrix = _numpy_zeros_extension(matrix, 1, 0)
-        return matrix[indices]
-    elif axis == 0:
-        if extend:
-            if np.isscalar(indices):  # simple extension by adding zeros columns
-                if is_karmasparse(matrix):
-                    matrix = matrix.extend((matrix.shape[0], matrix.shape[1] + indices))
-                else:
-                    matrix = _numpy_zeros_extension(matrix, 0, indices)
-                return matrix
-            else:
-                if is_karmasparse(matrix):
-                    matrix = matrix.extend((matrix.shape[0], matrix.shape[1] + 1), copy=False)
-                else:
-                    matrix = _numpy_zeros_extension(matrix, 0, 1)
-        return matrix[:, indices]
-    else:
-        raise ValueError("Axis should one of [0,1], got {}".format(axis))
+    return matrix[indices] if axis == 1 else matrix[:, indices]
 
 
 def safe_add(matrix1, matrix2):
