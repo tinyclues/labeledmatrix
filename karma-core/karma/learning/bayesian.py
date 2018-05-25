@@ -1,6 +1,7 @@
 import numpy as np
 
 from karma.core.utils import create_timer
+from karma.learning.logistic import CONVERGENCE_INFO_DESIGN_WIDTH
 from karma.learning.utils import BasicVirtualHStack
 from karma.learning.matrix_utils import diagonal_of_inverse_symposdef
 from karma.learning.regression import linear_regression_coefficients
@@ -18,6 +19,7 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
     with timer('BayLinReg_Reg_Init'):
         if not isinstance(X, BasicVirtualHStack):
             X = BasicVirtualHStack(X)
+        conv_dict[CONVERGENCE_INFO_DESIGN_WIDTH] = X.shape[-1]
         XX = X.materialize()
         XX = np.hstack((XX, np.ones((XX.shape[0], 1), dtype=np.float32)))
 

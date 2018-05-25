@@ -19,7 +19,11 @@ from karma.runtime import KarmaSetup
 from karma.learning.utils import NB_THREADS_MAX
 
 
-__all__ = ['logistic_coefficients', 'logistic_coefficients_and_posteriori', 'expit']
+__all__ = ['logistic_coefficients', 'logistic_coefficients_and_posteriori', 'expit',
+           'CONVERGENCE_INFO_STATUS', 'CONVERGENCE_INFO_DESIGN_WIDTH']
+
+CONVERGENCE_INFO_STATUS = 'status'
+CONVERGENCE_INFO_DESIGN_WIDTH = 'width'
 
 
 # TODO : I want to have a context for this
@@ -416,8 +420,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
                                   1: 'No Convergence: too many function evaluations',
                                   2: 'No Convergence: stopping criterion not reached'}
 
-    conv_dict_copy['status'] = warn_flag_translation_dict[conv_dict['warnflag']]
-    conv_dict_copy['width'] = len(gradient)
+    conv_dict_copy[CONVERGENCE_INFO_STATUS] = warn_flag_translation_dict[conv_dict['warnflag']]
+    conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] = len(gradient)
 
     conv_dict_copy['nit'] = conv_dict['nit']
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
@@ -435,8 +439,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
     conv_dict_copy['cols_to_rows_ratio'] =  conv_dict_copy['width'] / float(n_obs_design)
 
-    ordered_keys = ['status', 'nit', 'grad_l2_momentum', 'grad_max',
-                    'width', 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
+    ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max',
+                    CONVERGENCE_INFO_DESIGN_WIDTH, 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
     conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 
     if KarmaSetup.verbose or verbose:
