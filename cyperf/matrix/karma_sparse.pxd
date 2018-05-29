@@ -245,7 +245,7 @@ cdef class KarmaSparse:
 
     cdef bool check_internal_structure(self, bool full=*) except 0
 
-    cdef bool check_positive(self) except 0
+    cpdef bool check_positive(self) except 0
 
     cdef bool prune(self) except 0
 

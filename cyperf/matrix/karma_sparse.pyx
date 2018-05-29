@@ -694,7 +694,7 @@ cdef class KarmaSparse:
             raise ValueError("KarmaSparse should have canonical format")
         self.check_internal_structure(1)
 
-    cdef bool check_positive(self) except 0:
+    cpdef bool check_positive(self) except 0:
         cdef LTYPE_t total_nnz = self.data.shape[0]
         cdef LTYPE_t j
 
