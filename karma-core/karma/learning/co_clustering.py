@@ -6,9 +6,7 @@ import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
 from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
-from numexpr import evaluate, set_num_threads
-
-set_num_threads(8)
+from numexpr import evaluate
 
 
 __all__ = ['co_clustering']

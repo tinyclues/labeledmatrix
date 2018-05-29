@@ -26,10 +26,6 @@ CONVERGENCE_INFO_STATUS = 'status'
 CONVERGENCE_INFO_DESIGN_WIDTH = 'width'
 
 
-# TODO : I want to have a context for this
-ne.set_num_threads(4)
-
-
 def expit(x):
     """
     # It about x3 faster with numexpr
@@ -58,7 +54,6 @@ def _log_logistic_inplace_sample_weight(x, sw):
 
 def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
                            w0=None, alpha_intercept=0., intercept0=0.):
-
     n_samples, n_features = X.shape
     grad = np.empty_like(w)
 
@@ -189,7 +184,8 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
 def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercept_priori=0.,
                                          C_priori=1e10, intercept_C_priori=1e10,
                                          sample_weight=None, w_warm=None, nb_threads=1,
-                                         nb_inner_threads=None, full_hessian=True, timer=None, verbose=True):
+                                         nb_inner_threads=None, full_hessian=True,
+                                         timer=None, verbose=True):
     if timer is None:
         timer = create_timer(None)
 
@@ -217,8 +213,8 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
             lbfgs_params = KarmaSetup.lbfgs_params
             start_lbfgs = time()
             w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
-                                                     args=(X, y, alpha_priori, sample_weight, w_priori,
-                                                           alpha_intercept, intercept_priori),
+                                                     args=(X, y, alpha_priori, sample_weight,
+                                                           w_priori, alpha_intercept, intercept_priori),
                                                      iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
                                                      maxiter=max_iter, m=lbfgs_params.get('m', 100),
                                                      factr=lbfgs_params.get('factr', 1e7),
@@ -249,6 +245,7 @@ def logistic_coefficients_and_posteriori(X, y, max_iter, w_priori=None, intercep
         raise ee
 
     X._close_pool()  # Warning should called manually at the exit from class
+
     return (expit(linear_pred),
             intercept, betas,
             intercept_C_post, feature_C_posts, conv_dict)
