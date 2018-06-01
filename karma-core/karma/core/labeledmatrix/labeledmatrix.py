@@ -1,6 +1,7 @@
 #
 # Copyright tinyclues, All rights reserved
 #
+from itertools import izip
 
 from cytoolz.dicttoolz import keymap
 from collections import OrderedDict
@@ -1563,7 +1564,7 @@ class LabeledMatrix(object):
                [0. , 0. , 0. , 0. ]])
         """
         x, y = self.matrix.nonzero()
-        factor = np.array([lambda_((self.row[i], self.column[j])) for i, j in zip(x, y)])
+        factor = np.array([lambda_((self.row[i], self.column[j])) for i, j in izip(x, y)])
         if self.is_sparse:
             data = self.matrix.data * factor
             matrix = KarmaSparse((data, (x, y)), shape=self.matrix.shape)
@@ -1751,7 +1752,7 @@ class LabeledMatrix(object):
         True
         """
         lm_nonzero = self.without_zeros()
-        return dict(zip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
+        return dict(izip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
 
     @enforce_lib_closure
     def to_karmacode(self, inp, output, default="zero"):
@@ -3102,7 +3103,7 @@ class LabeledMatrix(object):
         if mapping is None:
             mapping = {}
         rows = ['{}{}{}'.format(prefix, r, suffix) for r in apply_python_dict(mapping, self.row, None, keep_same=True)]
-        row_deco = keymap(dict(zip(self.row, rows)).get, self.row_deco)
+        row_deco = keymap(dict(izip(self.row, rows)).get, self.row_deco)
         return LabeledMatrix((rows, self.column), self.matrix, (row_deco, self.column_deco))
 
     def rename_column(self, prefix='', suffix='', mapping=None):
