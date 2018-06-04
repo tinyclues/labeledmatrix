@@ -1627,6 +1627,18 @@ class LabeledMatrix(object):
             return np.maximum(1. - np.exp(-x / threshold), 0)
         return self.apply_numpy_function(np_soft_cutoff, [threshold])
 
+    def clip(self, lower=None, upper=None):
+        """
+        >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
+        >>> lm.clip(0.1, 0.25).matrix
+        array([[0.25, 0.1 ],
+               [0.1 , 0.  ]])
+        >>> lm.to_sparse().clip(0.1, 0.25).matrix.toarray()
+        array([[0.25, 0.1 ],
+               [0.1 , 0.  ]])
+        """
+        return self.apply_numpy_function(np.clip, [lower, upper])
+
     def logistic(self, shift, coef=1.):
         """
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']),
