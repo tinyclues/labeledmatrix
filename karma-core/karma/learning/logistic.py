@@ -407,7 +407,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
         max_grad = None
     else:
         norm_grad = np.linalg.norm(gradient)
-        max_grad = np.max(gradient)
+        max_grad = np.max(np.abs(gradient))
     conv_dict_copy['grad_l2_momentum'] = norm_grad / len(gradient)
     conv_dict_copy['grad_max'] = max_grad
 
