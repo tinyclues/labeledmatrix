@@ -1407,11 +1407,16 @@ cast_float32 = curry(to_array_if_needed)(force_dim2=False, min_dtype=np.float32)
 to_array_if_needed_dim2 = curry(to_array_if_needed)(force_dim2=True)
 
 
-def safe_hstack(args):
-    if any(is_karmasparse(x) for x in args):
-        return ks_hstack(args)
+def safe_hstack(args, output_format=None):
+    if output_format is None:
+        output_format = 'sparse' if any(is_karmasparse(x) for x in args) else 'dense'
+    if output_format == 'sparse':
+        return ks_hstack(map(as_sparse, args))
+    elif output_format == 'dense':
+        my_args = [as_vector_batch(np.asarray(x)) for x in args]
+        return np.hstack(my_args) if len(my_args) > 1 else my_args[0]
     else:
-        return np.hstack(args)
+        raise ValueError('Unknown output format: {}'.format(output_format))
 
 
 def safe_vstack(args):
