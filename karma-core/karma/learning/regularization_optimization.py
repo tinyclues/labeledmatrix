@@ -94,6 +94,7 @@ class CVSampler(object):
     """
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,
                  lib_symbol='logistic_regression', metrics='auc'):
+        self.dataframe = dataframe
 
         self.lib_symbol = lib_symbol
         self.penalty_parameter_name = penalty_parameter_name
@@ -102,8 +103,7 @@ class CVSampler(object):
         for cv_key in CV_KEYS:
             self.training_params.pop(cv_key, None)
 
-        self.dataframe, self.cv_wrapper = CrossValidationWrapper.create_cv_from_data_and_params(dataframe,
-                                                                                                **lib_parameters)
+        self.cv_wrapper = CrossValidationWrapper.create_cv_from_data_and_params(dataframe, **lib_parameters)
         self.training_params['cv'] = self.cv_wrapper
 
         self.metrics = coerce_to_tuple_and_check_all_strings(metrics)

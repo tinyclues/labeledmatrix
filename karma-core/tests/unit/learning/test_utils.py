@@ -86,18 +86,18 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         cv = CrossValidationWrapper(0.2,
                                     [1, 1, 0, 1, 1, 0],
                                     [2, 2, 1, 1, 1, 1], n_splits=1, seed=None)
-        assert_equal(cv.classes, ['1_2', '1_2', '0_1', '1_1', '1_1', '0_1'])
+        assert_equal(cv._classes, ['1_2', '1_2', '0_1', '1_1', '1_1', '0_1'])
 
         # class of size 1
         cv = CrossValidationWrapper(0.2,
                                     [1, 0, 0, 1, 1, 0],
                                     [2, 2, 1, 1, 1, 1], n_splits=1, seed=None)
-        assert_equal(cv.classes, ['2', '2', '0_1', '1_1', '1_1', '0_1'])
+        assert_equal(cv._classes, ['2', '2', '0_1', '1_1', '1_1', '0_1'])
 
         cv = CrossValidationWrapper(0.2,
                                     [1, 0, 0, 1, 1, 0, 0],
                                     [2, 2, 1, 1, 1, 1, 2], n_splits=1, seed=None)
-        assert_equal(cv.classes, ['2', '2', '0_1', '1_1', '1_1', '0_1', '2'])
+        assert_equal(cv._classes, ['2', '2', '0_1', '1_1', '1_1', '0_1', '2'])
 
         with self.assertRaises(ValueError) as e:
             _ = CrossValidationWrapper(0.2,
@@ -146,10 +146,11 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
     def test_cv_static_creation(self):
         dataframe = DataFrame({'y': np.random.randint(0, 2, 55),
                                'gr': ['a'] * 20 + ['b'] * 30 + ['c', 'd', 'e', 'f', 'g']})
-        df2, cv = CrossValidationWrapper.create_cv_from_data_and_params(dataframe, cv=0.2, cv_groups='gr', axis='y')
-        self.assertEqual(len(df2), 50)
-        self.assertEqual(cv.classes.shape[0], 50)
-        expected_test_size = cv.cv.split(cv.classes, cv.classes).next()[1].shape[0]
+        cv = CrossValidationWrapper.create_cv_from_data_and_params(dataframe, cv=0.2, cv_groups='gr', axis='y')
+        self.assertEqual(len(cv._kept_indices), 50)
+        self.assertEqual(len(np.unique(cv._kept_indices)), 50)
+        self.assertEqual(cv._classes.shape[0], 50)
+        expected_test_size = cv.split().next()[1].shape[0]
         self.assertEqual(expected_test_size, 10)
         self.assertEqual(expected_test_size, cv.test_size)
 

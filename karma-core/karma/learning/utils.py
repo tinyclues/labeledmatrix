@@ -359,20 +359,21 @@ class CrossValidationWrapper(object):
     feat_coefs : list of arrays : List of the feature coefficients on each fold.
     test_fraction : float : Proportion of data in each test set.
     test_size : int : Number of observations in each test set.
-    classes : array : Stratified targets.
+    _classes : array : Stratified targets.
     n_splits : int : Number of splits.
     seed : int : Random seed used.
     """
     method_output = None
     meta = None
 
-    def __init__(self, cv, y, groups=None, n_splits=1, seed=None):
+    def __init__(self, cv, y, groups=None, n_splits=1, seed=None, kept_indices=None):
         if not (isinstance(cv, float) and 0 < cv < 1):
             raise ValueError('CvIterator only support cv to be a float in (0, 1)')
         self.test_fraction = cv
         self.test_size = int(ceil(cv * len(y)))  # sklearn/model_selection/_split.py l.1379
 
-        self.classes = _prepare_and_check_classes(y, groups)
+        self._classes = _prepare_and_check_classes(y, groups)
+        self._kept_indices = kept_indices
 
         self.n_splits = n_splits
         self.seed = seed if seed is not None else len(y)
@@ -387,6 +388,13 @@ class CrossValidationWrapper(object):
     @property
     def cv(self):
         return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
+
+    def split(self):
+        for (train_idx, test_idx) in self.cv.split(self._classes, self._classes):
+            if self._kept_indices is not None:
+                yield self._kept_indices[train_idx], self._kept_indices[test_idx]
+            else:
+                yield train_idx, test_idx
 
     @property
     def fold_indices_iter(self):
@@ -405,7 +413,7 @@ class CrossValidationWrapper(object):
         metric_groups = kwargs.pop('metric_groups', None)
         kc_formatter = kwargs.pop('kc_formatter', None)
 
-        for (train_idx, test_idx) in self.cv.split(self.classes, self.classes):
+        for (train_idx, test_idx) in self.split():
             train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
                             for k, v in kwargs.items()}
             self.method_output = method(X_stacked[train_idx], y[train_idx], **train_kwargs)
@@ -461,14 +469,14 @@ class CrossValidationWrapper(object):
 
     @staticmethod
     def create_cv_from_data_and_params(dataframe, **parameters):
-        cv_params_dict = dict()
-        cv_params_dict['cv'] = parameters['cv']
-
-        if isinstance(cv_params_dict['cv'], CrossValidationWrapper):
-            return dataframe, cv_params_dict['cv']
-        else:
-            cv_params_dict['n_splits'] = parameters.get('cv_n_splits', 1)
-            cv_params_dict['seed'] = parameters.get('seed')
+        cv = parameters['cv']
+        if not isinstance(cv, CrossValidationWrapper):
+            cv_params_dict = {
+                'cv': parameters['cv'],
+                'n_splits': parameters.get('cv_n_splits', 1),
+                'seed': parameters.get('seed')
+            }
+            y = dataframe[parameters['axis']][:]
 
             stratification_col_name = parameters.get('cv_groups')
 
@@ -482,11 +490,11 @@ class CrossValidationWrapper(object):
                     for g in unique[counts == 1]:
                         drop_mask += groups == g
                     kept_indices = np.arange(len(groups))[~drop_mask]
-                    dataframe = dataframe[kept_indices]
-                    groups = groups[kept_indices]
+                    groups, y = groups[kept_indices], y[kept_indices]
+                    cv_params_dict['kept_indices'] = kept_indices
 
-            y = dataframe[parameters['axis']][:]
-            return dataframe, CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
+            cv = CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
+        return cv
 
 
 def check_axis_values(y):

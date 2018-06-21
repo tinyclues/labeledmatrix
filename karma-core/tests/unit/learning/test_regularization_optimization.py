@@ -1,13 +1,14 @@
 import unittest
+
 import numpy as np
-from karma.core.dataframe import DataFrame
-from karma.core.utils.utils import use_seed
 from cyperf.matrix.karma_sparse import KarmaSparse
 from scipy.sparse import rand
-from karma.learning.utils import CrossValidationWrapper
-from karma.learning.regularization_optimization import (CVSampler, PRED_COL_NAME, PENALTY_COL_NAME, GridSearch,
-                                                        LogisticPenaltySelector, PRINT_PENALTY_COL_NAME)
+
+from karma.core.dataframe import DataFrame
+from karma.core.utils.utils import use_seed
 from karma.learning.bayesian_constants import BAYES_PRIOR_COEF_VAR_NAME, BAYES_POST_COEF_MEAN_NAME
+from karma.learning.regularization_optimization import CVSampler, PRED_COL_NAME, PENALTY_COL_NAME, GridSearch
+from karma.learning.utils import CrossValidationWrapper
 
 
 class CVSamplerTestCase(unittest.TestCase):
