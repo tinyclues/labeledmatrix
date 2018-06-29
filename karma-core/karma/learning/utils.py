@@ -6,7 +6,7 @@ from math import ceil
 
 from sklearn.model_selection import StratifiedShuffleSplit
 
-from cyperf.tools import take_indices, logit_inplace
+from cyperf.tools import take_indices, logit_inplace, argsort
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
 
 from karma.core.utils import is_iterable, quantile_boundaries
@@ -20,6 +20,7 @@ from karma.thread_setter import blas_threads, open_mp_threads
 
 NB_THREADS_MAX = 16
 KNOWN_LOGISTIC_METHODS = ['logistic_coefficients', 'logistic_coefficients_and_posteriori']
+
 
 class VirtualDirectProduct(object):
     """
@@ -63,7 +64,7 @@ class VirtualDirectProduct(object):
         if self.is_transposed:
             raise NotImplementedError('VirtualDirectProduct.__getitem__ when is_transposed')
         else:
-            return VirtualDirectProduct(self.left[indices], self.right[indices], False)
+            return VirtualDirectProduct(self.left[indices], self.right[indices])
 
     def sum(self, axis=None):
         if axis is None:
@@ -146,8 +147,8 @@ class BasicVirtualHStack(object):
             for i in integer_entries:
                 X[i] = np.zeros((common_shape0 or 1, X[i]))
 
-            X = [xx if isinstance(xx, VirtualDirectProduct) 
-                    else cast_2dim_float32_transpose(xx, min_dtype=np.float32) for xx in X]
+            X = [xx if isinstance(xx, VirtualDirectProduct)
+                 else cast_2dim_float32_transpose(xx, min_dtype=np.float32) for xx in X]
             self.dims = np.cumsum([0] + [x.shape[1] for x in X])
         else:
             X = X if isinstance(X, VirtualDirectProduct) else cast_float32(X)
@@ -380,6 +381,8 @@ class CrossValidationWrapper(object):
 
         self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
         self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
+        self.test_indices_by_fold = [np.zeros(self.test_size, dtype=int)] * self.n_splits
+        self.test_y_hat_by_fold = [np.zeros(self.test_size, dtype=np.float64)] * self.n_splits
         self.intercepts, self.feat_coefs = [None] * self.n_splits, [None] * self.n_splits
 
         from karma.core.dataframe import DataFrame
@@ -392,15 +395,13 @@ class CrossValidationWrapper(object):
     def split(self):
         for (train_idx, test_idx) in self.cv.split(self._classes, self._classes):
             if self._kept_indices is not None:
-                yield self._kept_indices[train_idx], self._kept_indices[test_idx]
-            else:
-                yield train_idx, test_idx
+                train_idx, test_idx = self._kept_indices[train_idx], self._kept_indices[test_idx]
+            train_idx, test_idx = np.sort(train_idx), np.sort(test_idx)
+            yield train_idx, test_idx
 
     @property
     def fold_indices_iter(self):
-        for i in xrange(self.n_splits):
-            fold_slice = slice(i * self.test_size, (i + 1) * self.test_size)
-            yield self.test_indices[fold_slice], self.test_y_hat[fold_slice]
+        return izip(self.test_indices_by_fold, self.test_y_hat_by_fold)
 
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
         X_stacked = VirtualHStack(blocks_x,
@@ -420,7 +421,6 @@ class CrossValidationWrapper(object):
             intercept, betas = self.method_output[1:3]
             self.intercepts[j] = intercept
             self.feat_coefs[j] = betas
-            j += 1
 
             if kc_formatter is None:
                 y_hat = np.asarray(X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
@@ -433,6 +433,8 @@ class CrossValidationWrapper(object):
 
             self.test_y_hat[i:i + self.test_size] = y_hat
             self.test_indices[i:i + self.test_size] = test_idx
+            self.test_y_hat_by_fold[j] = y_hat
+            self.test_indices_by_fold[j] = test_idx
 
             if compute_summary and method.func_name in KNOWN_LOGISTIC_METHODS:
                 fold_summary = create_summary_of_regression(prediction=y_hat, y=y[test_idx],
@@ -441,9 +443,14 @@ class CrossValidationWrapper(object):
                 self.summary = squash(self.summary, fold_summary)
 
             i += self.test_size
+            j += 1
             if warmup_key is not None:
                 kwargs[warmup_key] = np.hstack(betas + [intercept])
         X_stacked._close_pool()  # Warning should called manually at the exit from class
+
+        argsort_idx = argsort(self.test_indices)
+        self.test_indices = self.test_indices[argsort_idx]
+        self.test_y_hat = self.test_y_hat[argsort_idx]
 
         if compute_gaincurves:
             self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)

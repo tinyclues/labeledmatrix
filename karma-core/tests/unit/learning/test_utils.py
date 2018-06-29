@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+from cyperf.indexing.indexed_list import is_increasing
 from numpy.testing import assert_equal, assert_array_equal, assert_almost_equal
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -48,6 +49,7 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=1, seed=123)
         _ = logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
 
+        self.assertTrue(is_increasing(cv.test_indices))
         train_test = np.full(len(df), 'train')
         train_test[cv.test_indices] = 'test'
         df['tt'] = train_test

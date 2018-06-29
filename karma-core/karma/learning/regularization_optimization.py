@@ -127,7 +127,8 @@ class CVSampler(object):
         df_copy += self.kc
         return df_copy
 
-    def evaluate_and_summarize_cv(self, penalty_value, features=None, pred_col_name=PRED_COL_NAME, metric_groups=None): # add a check in case the lib does not generate a cv
+    def evaluate_and_summarize_cv(self, penalty_value, features=None, pred_col_name=PRED_COL_NAME, metric_groups=None):
+        # add a check in case the lib does not generate a cv
 
         if features is None:
             features = self.dataframe.vectorial_column_names + self.dataframe.sparse_column_names
@@ -146,7 +147,7 @@ class CVSampler(object):
         test_betas_and_intercept = map(np.hstack, zip(map(np.hstack, self.meta['cv'].feat_coefs),
                                                       self.meta['cv'].intercepts))
         for i, (fold_test_indices, fold_test_y_hat) in enumerate(self.cv_wrapper.fold_indices_iter):
-            predictions_df = self.dataframe.copy()[fold_test_indices][:]
+            predictions_df = self.dataframe[fold_test_indices]
             predictions_df[pred_col_name] = fold_test_y_hat
 
             test_fold_metric_results = self._metric_aggregation(predictions_df, penalty_value, features, metric_groups)
