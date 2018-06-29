@@ -11,6 +11,7 @@ from scipy.sparse.linalg import svds
 from scipy.sparse.csgraph import connected_components
 from sklearn.cluster import SpectralClustering
 from sklearn.linear_model.logistic import LogisticRegression
+from glove import Glove
 
 from karma.core.column import Column, create_column_from_data
 from karma.core.dataframe import DataFrame
@@ -3133,3 +3134,32 @@ class LabeledMatrix(object):
         {'a_h_z': 'x_deco'}
         """
         return self.transpose().rename_row(prefix, suffix, mapping).transpose()
+
+    def glove(self, rank, epochs=30, alpha=0.75, max_count=None, learning_rate=0.05, 
+              no_threads=KarmaSetup.open_mp_nb_thread, seed=None):
+        """
+        Warning : works only on upper triangle matrix
+        For params, see https://github.com/maciejkula/glove-python
+                        https://nlp.stanford.edu/projects/glove/
+        Result is stable only if seed is fixed and no_threads=1
+        
+        Test on random matrix to show usage:
+
+        >>> with use_seed(122): a = np.random.rand(100, 5)
+        >>> lm = LabeledMatrix((range(a.shape[0]), range(a.shape[0])), a.dot(a.T))
+        >>> lm_glove = lm.glove(5, no_threads=1)
+        >>> lm_glove.shape == a.shape
+        True
+        """
+        assert self.is_square()
+
+        matrix = self.to_sparse().matrix
+        if max_count is None:
+            max_count = np.percentile(matrix.diagonal(), 80)
+
+        scipy_matrix = matrix.triu().to_scipy_sparse(copy=False).tocoo()
+
+        model = Glove(no_components=rank, alpha=alpha, max_count=max_count,
+                      max_loss=10.0, learning_rate=learning_rate, random_state=seed)
+        model.fit(scipy_matrix, epochs=epochs, no_threads=no_threads, verbose=KarmaSetup.verbose)
+        return LabeledMatrix((self.row, range(rank)), model.word_vectors, deco=(self.row_deco, {}))
