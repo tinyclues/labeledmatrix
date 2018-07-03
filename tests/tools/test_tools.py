@@ -1,12 +1,11 @@
-import unittest
-import doctest
-
-import numpy as np
 from itertools import product
-from numpy import allclose as eq
+import numpy as np
+import unittest
+
 from cyperf.tools import slice_length, compose_slices, take_indices
-from cyperf.tools.getter import apply_python_dict, python_feature_hasher
-from cyperf.tools.getter import cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode
+from cyperf.tools.getter import (apply_python_dict, python_feature_hasher,
+                                 cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
+                                 coalesce_is_not_none, coalesce_generic)
 from cyperf.tools.sort_tools import cython_argpartition, _inplace_permutation, cython_argsort
 
 
@@ -157,10 +156,6 @@ class GetterTestCase(unittest.TestCase):
         np.testing.assert_equal(cast_to_long_array(np.array([[3, np.nan, 5.4]])), [[3, -9223372036854775808, 5]])
 
     def test_coerse_ascii(self):
-        self.assertEqual(cast_to_ascii(['camelCase', '\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan]),
-                         ['camelCase', 'copge', 'copge', '1', 'nan'])
-
-    def test_coerse_ascii(self):
         arr = ['camelCase', '\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan, (), str]
         self.assertEqual(cast_to_ascii(arr), ['camelCase', 'copge', 'copge', '1', 'nan', '()', "<type 'str'>"])
 
@@ -182,3 +177,13 @@ class GetterTestCase(unittest.TestCase):
                     .encode('utf-8', errors='ignore') if isinstance(x, basestring) else unicode(x)
 
         self.assertEqual(cast_to_unicode(arr), map(py_uni, arr))
+
+    def test_coalesce_is_not_none(self):
+        self.assertEqual(coalesce_is_not_none([None, 0, None, 3], default=-1), 0)
+        self.assertEqual(coalesce_is_not_none((None, None, None), default=-1), -1)
+        self.assertEqual(coalesce_is_not_none((), default=-1), -1)
+
+    def test_coalesce_generic(self):
+        self.assertEqual(coalesce_generic([0, -123, 2], predicate=lambda x: x > 0, default=-42), 2)
+        self.assertEqual(coalesce_generic((0, -123, 0), predicate=lambda x: x > 0, default=-42), -42)
+        self.assertEqual(coalesce_generic([], predicate=lambda x: x > 0, default=-42), -42)
