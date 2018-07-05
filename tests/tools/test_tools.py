@@ -179,11 +179,11 @@ class GetterTestCase(unittest.TestCase):
         self.assertEqual(cast_to_unicode(arr), map(py_uni, arr))
 
     def test_coalesce_is_not_none(self):
-        self.assertEqual(coalesce_is_not_none([None, 0, None, 3], default=-1), 0)
-        self.assertEqual(coalesce_is_not_none((None, None, None), default=-1), -1)
-        self.assertEqual(coalesce_is_not_none((), default=-1), -1)
+        self.assertEqual(coalesce_is_not_none(None, 0, None, 3, default=-1), 0)
+        self.assertEqual(coalesce_is_not_none(None, None, None, default=-1), -1)
+        self.assertEqual(coalesce_is_not_none(default=-1), -1)
 
     def test_coalesce_generic(self):
-        self.assertEqual(coalesce_generic([0, -123, 2], predicate=lambda x: x > 0, default=-42), 2)
-        self.assertEqual(coalesce_generic((0, -123, 0), predicate=lambda x: x > 0, default=-42), -42)
-        self.assertEqual(coalesce_generic([], predicate=lambda x: x > 0, default=-42), -42)
+        self.assertEqual(coalesce_generic(0, -123, 2, predicate=lambda x: x > 0, default=-42), 2)
+        self.assertEqual(coalesce_generic(0, -123, 0, predicate=lambda x: x > 0, default=-42), -42)
+        self.assertEqual(coalesce_generic(predicate=lambda x: x > 0, default=-42), -42)

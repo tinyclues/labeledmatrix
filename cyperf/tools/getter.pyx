@@ -367,16 +367,16 @@ def build_safe_decorator(default, exceptions=(Exception, )):
     return decorator
 
 
-def coalesce_is_not_none(args, object default):
+def coalesce_is_not_none(*args, object default):
     """
     Pure python fonction but x2 faster when defined from cython space.
     It is also x2 faster than coalesce_generic with predicate=lambda x: x is not None.
 
     Examples
     --------
-    >>> coalesce_is_not_none([None, 2, 4], default=0)
+    >>> coalesce_is_not_none(None, 2, 4, default=0)
     2
-    >>> coalesce_is_not_none((None, None, None), default=0)
+    >>> coalesce_is_not_none(None, None, None, default=0)
     0
     """
     for arg in args:
@@ -386,15 +386,15 @@ def coalesce_is_not_none(args, object default):
         return default
 
 
-def coalesce_generic(args, object predicate, object default):
+def coalesce_generic(*args, object predicate, object default):
     """
     Pure python fonction but x2 faster when defined from cython space.
 
     Examples
     --------
-    >>> coalesce_generic([0, -12, 42], predicate=lambda x: x > 0, default=-1)
+    >>> coalesce_generic(0, -12, 42, predicate=lambda x: x > 0, default=-1)
     42
-    >>> coalesce_generic('abcde', predicate=lambda x: x > 'e', default='')
+    >>> coalesce_generic('a', 'b', 'c', predicate=lambda x: x > 'e', default='')
     ''
     """
     for arg in args:
