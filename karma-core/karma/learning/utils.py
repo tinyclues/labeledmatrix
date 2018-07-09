@@ -9,7 +9,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from cyperf.tools import take_indices, logit_inplace, argsort
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
 
-from karma.core.utils import is_iterable, quantile_boundaries
+from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
                                          direct_product, direct_product_dot,
@@ -19,6 +19,7 @@ from karma.learning.regression import create_meta_of_regression, create_summary_
 from karma.thread_setter import blas_threads, open_mp_threads
 
 NB_THREADS_MAX = 16
+NB_CV_GROUPS_MAX = 10**5
 KNOWN_LOGISTIC_METHODS = ['logistic_coefficients', 'logistic_coefficients_and_posteriori']
 
 
@@ -502,6 +503,19 @@ class CrossValidationWrapper(object):
 
             cv = CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
         return cv
+
+    @staticmethod
+    def get_cv_groups_from_columns(dataframe, cv_groups_col=None, seed=783942):
+        if cv_groups_col is None:
+            return None
+        else:
+            cv_groups_col = coerce_to_tuple_and_check_all_strings(cv_groups_col, 'cv_groups')
+            if len(cv_groups_col) == 1:
+                cv_groups_col = cv_groups_col[0]
+            else:
+                cv_groups_col = 'feature_randomizer({}, vector_size={}, seed={})'.format(', '.join(cv_groups_col),
+                                                                                         NB_CV_GROUPS_MAX, seed)
+            return dataframe[cv_groups_col][:]
 
 
 def check_axis_values(y):
