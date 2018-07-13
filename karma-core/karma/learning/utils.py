@@ -393,12 +393,18 @@ class CrossValidationWrapper(object):
     def cv(self):
         return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
 
-    def split(self):
+    def split(self, X=None, y=None, groups=None):
+        # X=None, y=None, groups=None signature matches ShuffleSplit.split signature that allow to use
+        # CrossValidationWrapper as ShuffleSplit on predefined dataset
+        # (usage example: lasso for bayesian_logistic_regression)
         for (train_idx, test_idx) in self.cv.split(self._classes, self._classes):
             if self._kept_indices is not None:
                 train_idx, test_idx = self._kept_indices[train_idx], self._kept_indices[test_idx]
             train_idx, test_idx = np.sort(train_idx), np.sort(test_idx)
             yield train_idx, test_idx
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits
 
     @property
     def fold_indices_iter(self):
@@ -482,16 +488,18 @@ class CrossValidationWrapper(object):
             cv_params_dict = {
                 'cv': parameters['cv'],
                 'n_splits': parameters.get('cv_n_splits', 1),
-                'seed': parameters.get('seed')
+                'seed': parameters.get('seed', len(dataframe))
             }
-            y = dataframe[parameters['axis']][:]
-
-            stratification_col_name = parameters.get('cv_groups')
-
-            if stratification_col_name is None:
-                groups = None
+            if 'y' in parameters:
+                y = parameters['y']
             else:
-                groups = np.asarray(dataframe[stratification_col_name][:])
+                y = np.asarray(dataframe[parameters['axis']][:])
+
+            groups = CrossValidationWrapper.get_cv_groups_from_columns(dataframe,
+                                                                       parameters.get('cv_groups'),
+                                                                       cv_params_dict['seed'])
+            if groups is not None:
+                groups = np.asarray(groups)
                 unique, counts = np.unique(groups, return_counts=True)
                 if np.any(counts == 1):
                     drop_mask = np.zeros(len(dataframe), dtype=bool)
