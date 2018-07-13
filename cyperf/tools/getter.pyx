@@ -9,7 +9,7 @@ from cpython.ref cimport Py_INCREF, PyObject
 from cpython.dict cimport PyDict_GetItem
 from cpython.number cimport PyNumber_Check, PyNumber_Float, PyNumber_Long
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_AsEncodedString, PyUnicode_FromEncodedObject
-from cpython.string cimport PyString_Check
+from cpython.string cimport PyString_Check, PyString_CheckExact
 
 import numpy as np
 from types import DTYPE, LTYPE
@@ -402,3 +402,44 @@ def coalesce_generic(*args, object predicate, object default):
             return arg
     else:
         return default
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def cy_safe_intern(ITER a):
+    """
+    x3 faster equivalent to map(safe_intern, a) where
+    safe_intern = lambda x: intern(str(x)) if isinstance(x, str) else x
+
+    >>> numpy_string = np.array(['TTTT'])[0]
+    >>> s1 = 'foo!'
+    >>> s2 = 'foo!'
+    >>> a = [s1, s2, numpy_string, numpy_string, 4]
+    >>> a[0] is a[1]
+    False
+    >>> b = cy_safe_intern(a)
+    >>> b
+    ['foo!', 'foo!', 'TTTT', 'TTTT', 4]
+    >>> b[0] is b[1]
+    True
+    >>> b[2] is b[3]
+    True
+    """
+    assert PySequence_Check(a)
+
+    cdef long i, nb = len(a)
+    cdef list result = PyList_New(nb)
+    cdef object x, out
+
+    for i in range(nb):
+        x = a[i]
+        if PyString_CheckExact(x):
+            out = intern(x)
+        elif PyString_Check(x):  # numpy string
+            out = intern(str(x))
+        else:
+            out = x  # keep it as it was
+
+        PyList_SET_ITEM(result, i, out)
+        Py_INCREF(out)
+    return result
