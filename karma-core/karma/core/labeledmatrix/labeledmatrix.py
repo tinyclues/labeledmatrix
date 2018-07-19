@@ -22,11 +22,10 @@ from karma.core.method import enforce_lib_closure
 
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
-from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
-from cyperf.tools import logit, logit_inplace, take_indices
+from cyperf.matrix.karma_sparse import ks_diag
+from cyperf.tools import logit_inplace, take_indices
 from cyperf.tools.getter import apply_python_dict
 
-from karma.core.utils.collaborative_tools import keep_sparse
 from karma.learning.affinity_propagation import affinity_propagation
 from karma.learning.co_clustering import co_clustering
 from karma.learning.hierarchical import clustering_dispatcher
@@ -372,6 +371,16 @@ class LabeledMatrix(object):
             return self
         else:
             return LabeledMatrix(self.label, KarmaSparse(self.matrix), deco=self.deco)
+
+    def to_optimal_format(self):
+        """
+        Casts to sparse if density < min_density, casts to dense if density > min_density
+        Returns a view if the condition is already met or in case of equality
+        """
+        if keep_sparse(self.matrix):
+            return self.to_sparse()
+        else:
+            return self.to_dense()
 
     def align(self, other, axes=[(0, 0, False), (1, 1, False)], self_only=False):
         """
@@ -929,7 +938,7 @@ class LabeledMatrix(object):
             matrix_zeros = np.zeros(self.matrix.shape, dtype=self.matrix.dtype)
         return LabeledMatrix(self.label, matrix_zeros, deco=self.deco)
 
-    def truncate(self, cutoff=None, nb=None, cum_h=None, cum_v=None, nb_h=None, nb_v=None):
+    def truncate(self, cutoff=None, nb=None, cum_h=None, cum_v=None, nb_h=None, nb_v=None, to_optimal_format=False):
         """
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'z', 'y']), np.array([[4, 6, 5], [7, 9, 8]]))
         >>> lm.truncate(cutoff=6).matrix
@@ -965,7 +974,10 @@ class LabeledMatrix(object):
         if nb_v is not None and nb_v < matrix.shape[0]:
             matrix = truncate_by_count(matrix, nb_v, axis=0)
 
-        return LabeledMatrix(self.label, matrix, deco=self.deco)
+        lm = LabeledMatrix(self.label, matrix, deco=self.deco)
+        if to_optimal_format:
+            lm = lm.to_optimal_format()
+        return lm
 
     def truncate_by_budget(self, density, volume):
         """

@@ -1649,3 +1649,16 @@ def default_row(matrix, default):
     else:
         raise LabeledMatrixException("Unknown default {}".format(default))
     return v_default
+
+
+MIN_DENSITY = 0.05
+MAX_SIZE = 10 ** 9
+
+
+def keep_sparse(matrix):
+    if is_karmasparse(matrix):
+        return (np.product(matrix.shape) > MAX_SIZE) or \
+               (float(matrix.nnz) / np.product(matrix.shape) <= MIN_DENSITY)
+    else:
+        return (np.product(matrix.shape) > MAX_SIZE) or \
+               (float(np.count_nonzero(matrix)) / np.product(matrix.shape) <= MIN_DENSITY)
