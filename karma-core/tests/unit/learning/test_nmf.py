@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sp
 from cyperf.matrix.karma_sparse import KarmaSparse
 from karma.learning.matrix_utils import kl_div
-from karma.learning.nmf import nmf, nmf_fold, NMF
+from karma.learning.nmf import nmf, nmf_fold, NMF, GNMF
 from karma.core.utils.utils import use_seed
 
 
@@ -151,3 +151,37 @@ class LibNMFTestCase(unittest.TestCase):
 
         lll = nmf_fold(m, KarmaSparse(r), 400)
         self.assertTrue(np.allclose(lll, ll))
+
+    def test_iterate(self):
+        with use_seed(100):
+            w, h = np.random.rand(1000, 5), np.random.rand(5, 20)
+        m = w.dot(h)
+        m_sparse = KarmaSparse(m).truncate_by_count(3, axis=1)
+        for matrix in [m, m_sparse]:
+            for metric in ['KL', 'euclid']:
+                with use_seed(25010):
+                    nmf_solver = NMF(matrix, 5, metric=metric)
+                    nmf_solver.smart_init(svd_init=True)
+                    dist_init = nmf_solver.dist()
+                    nmf_solver.iterate(10)
+                    self.assertLess(nmf_solver.dist(), dist_init / 1.2)
+
+    def test_graph_nmf(self):
+        with use_seed(100):
+            w, h = np.random.rand(1000, 5), np.random.rand(5, 20)
+        m = w.dot(h)
+        m_sparse = KarmaSparse(m).truncate_by_count(3, axis=1)
+
+        one_edge = np.eye(1000)
+        one_edge[0, 1] = one_edge[1, 0] = 1
+        one_edge = KarmaSparse(one_edge)
+
+        for matrix in [m, m_sparse]:
+            for metric in ['KL', 'euclid']:
+                with use_seed(25010):
+                    nmf_solver = GNMF(matrix, 5, metric=metric, adjacency=10000 * one_edge)
+                    nmf_solver.smart_init(svd_init=True)
+                    dist_init = nmf_solver.dist()
+                    nmf_solver.iterate(10)
+                    self.assertLess(nmf_solver.dist(), dist_init / 1.2)
+                    np.testing.assert_array_almost_equal(nmf_solver.w[0], nmf_solver.w[1], decimal=3)

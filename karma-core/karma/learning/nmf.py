@@ -1,19 +1,19 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-
-from karma import KarmaSetup
-from connect.logging import initialize_logger
+import time
 
 import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
-from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
-from karma.learning.randomize_svd import nmf_svd_init
-import time
+from scipy.sparse.linalg import cg
 
-from karma.learning.matrix_utils import safe_dot, safe_min
-from karma.learning.matrix_utils import kl_div, normalize
+from connect.logging import initialize_logger
+from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag, cython_power
+
 from karma.core.utils import use_seed
+from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min
+from karma.learning.randomize_svd import nmf_svd_init
+from karma.runtime import KarmaSetup
 
 ADD_TIME = 20
 EPSILON = 10 ** (-10)
@@ -107,12 +107,12 @@ class NMF(object):
         min_dim = min(self.n, self.m)
         if rank > min_dim:
             if KarmaSetup.verbose:
-                print ('NMF WARNING : Given rank {0} is too large' +
-                       ' and will be truncated to {}'.format(rank, min_dim))
+                print 'NMF WARNING : Given rank {0} is too large and will be truncated to {}'.format(rank, min_dim)
             rank = min_dim
 
         if is_karmasparse(matrix):
             self.is_sparse = True
+            self.matrix = matrix.copy()
             self.matrix_csr = matrix.tocsr()
             self.matrix_csc = matrix.tocsc()
         elif isinstance(matrix, np.ndarray):
@@ -145,6 +145,12 @@ class NMF(object):
                 return kl_div(self.matrix_csr, safe_dot(self.w, self.h, self.matrix_csr))
             else:
                 return kl_div(self.matrix, safe_dot(self.w, self.h))
+        elif self.metric == 'euclid':
+            diff_matrix = (self.matrix - safe_dot(self.w, self.h))
+            if is_karmasparse(diff_matrix):
+                return diff_matrix.sum_power(2)
+            else:
+                return np.sum(cython_power(diff_matrix.ravel(), 2))
         else:
             raise NotImplementedError('Unknown metric')
 
@@ -164,7 +170,7 @@ class NMF(object):
         if self.metric == 'KL':
             for i in xrange(maxiter):
                 self.brunet_update()
-        if self.metric == 'euclid':
+        elif self.metric == 'euclid':
             for i in xrange(maxiter):
                 self.euclid_update()
 
@@ -203,11 +209,57 @@ class NMF(object):
         """
         realise one step of update for euclidean distance
         """
-        self.h *= safe_dot(self.matrix.transpose(), self.w) / \
-            safe_dot(self.h, safe_dot(self.w.transpose(), self.w))
+        self.euclid_right()
+        self.euclid_left()
+
+    def euclid_right(self):
+        self.h *= safe_dot(self.w.transpose(), self.matrix) / \
+                  safe_dot(safe_dot(self.w.transpose(), self.w), self.h)
         self.h.clip(self.epsilon, out=self.h)
-        self.w *= safe_dot(self.matrix, self.h) / \
-            safe_dot(self.w, safe_dot(self.h.transpose(), self.h))
+
+    def euclid_left(self):
+        self.w *= safe_dot(self.matrix, self.h.transpose()) / \
+                  safe_dot(self.w, safe_dot(self.h, self.h.transpose()))
+        self.w.clip(self.epsilon, out=self.w)
+
+
+class GNMF(NMF):
+    """
+    From http://www.cad.zju.edu.cn/home/dengcai/Publication/Journal/TPAMI-GNMF.pdf
+    In article's notation X = UV^T decomposition corresponds to M = X^T = VU^T = WH in our notation,
+    so in each equation we replace V by W and U by H^T
+    """
+    def __init__(self, matrix, rank, adjacency, metric='KL', weight_type='adjacency'):
+        super(GNMF, self).__init__(matrix, rank, metric)
+        assert adjacency.shape == (self.n, self.n)
+        if weight_type == 'adjacency':
+            self.weights = adjacency
+        elif weight_type == 'heat':
+            raise NotImplementedError()
+        elif weight_type == 'matrix':
+            self.weights = safe_dot(self.matrix, self.matrix.transpose(), mat_mask=adjacency)
+        else:
+            raise NotImplementedError('Unknown weight_type: {}'.format(weight_type))
+        self.degree_matrix = ks_diag(self.weights.sum(axis=1))
+        self.maximal_degree = self.degree_matrix.max()
+        self.graph_laplacian = self.degree_matrix - self.weights
+
+    def brunet_left(self):
+        arr = self.w * safe_dot(self.product_wh(left=True), self.h.transpose())
+
+        for k, v in enumerate(self.h.sum(axis=1)):
+            matrix = self.graph_laplacian + ks_diag(v * np.ones(self.n))
+
+            # largest abs of eigenvalue of matrix is less equal to 2 * self.maximal_degree + v,
+            # so we can't guarantee that it will be close enough to 0 to use decomposition into series to inverse
+            # so solving linear system seems to be the fastest way here
+            self.w[:, k] = cg(matrix.to_scipy_sparse(copy=False), arr[:, k], x0=self.w[:, k])[0]
+
+        self.w.clip(self.epsilon, out=self.w)
+
+    def euclid_left(self):
+        self.w *= (safe_dot(self.matrix, self.h.transpose()) + safe_dot(self.weights, self.w)) / \
+                  (safe_dot(self.w, safe_dot(self.h, self.h.transpose())) + safe_dot(self.degree_matrix, self.w))
         self.w.clip(self.epsilon, out=self.w)
 
 
@@ -241,7 +293,7 @@ class NMF_P(NMF):
             kl = kl_div(self.matrix_csr, safe_dot(self.w, self.h, self.matrix_csr))
         else:
             kl = kl_div(self.matrix, safe_dot(self.w, self.h))
-        return kl + 0.5 * self._penaly().dot(self.beta) - self.cost * np.log(self.beta.sum())
+        return kl + 0.5 * self._penalty().dot(self.beta) - self.cost * np.log(self.beta.sum())
 
     def brunet_right(self):
         self.h *= (safe_dot(self.w.transpose(), self.product_wh(left=False)) /
@@ -253,14 +305,14 @@ class NMF_P(NMF):
                    (self.h.sum(axis=1).transpose() + safe_dot(self.w, np.diag(self.beta))))
         self.w.clip(self.epsilon, out=self.w)
 
-    def _penaly(self):
+    def _penalty(self):
         res = (self.w * self.w).sum(axis=0)
         res += (self.h * self.h).sum(axis=1)
         res += 2. * self.b
         return res
 
     def brunet_beta(self):
-        self.beta = self.cost / self._penaly()
+        self.beta = self.cost / self._penalty()
 
     def brunet_update(self):
         self.brunet_left()
