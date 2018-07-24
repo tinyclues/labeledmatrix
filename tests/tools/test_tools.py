@@ -5,7 +5,7 @@ import unittest
 from cyperf.tools import slice_length, compose_slices, take_indices
 from cyperf.tools.getter import (apply_python_dict, python_feature_hasher,
                                  cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
-                                 coalesce_is_not_none, coalesce_generic)
+                                 coalesce_is_not_none, coalesce_generic, Unifier)
 from cyperf.tools.sort_tools import cython_argpartition, _inplace_permutation, cython_argsort
 
 
@@ -187,3 +187,19 @@ class GetterTestCase(unittest.TestCase):
         self.assertEqual(coalesce_generic(0, -123, 2, predicate=lambda x: x > 0, default=-42), 2)
         self.assertEqual(coalesce_generic(0, -123, 0, predicate=lambda x: x > 0, default=-42), -42)
         self.assertEqual(coalesce_generic(predicate=lambda x: x > 0, default=-42), -42)
+
+
+class UnifierTestCase(unittest.TestCase):
+
+    def test_unifier_map(self):
+        u = Unifier()
+        self.assertIsInstance(u, dict)
+        s1, s2 = 'foo!', 'foo!'
+        seq = [s1, s2, 4, [4, 2], (2, 4), (2, 4)]
+
+        unified_seq = u.map(seq)
+        self.assertEquals(unified_seq, map(u.unify, seq))
+        self.assertEquals(seq, unified_seq)
+        self.assertEquals(u, {s1: s1, 4: 4, (2, 4): (2, 4)})
+        self.assertIs(unified_seq[0], unified_seq[1])
+        self.assertIs(unified_seq[-1], unified_seq[-2])

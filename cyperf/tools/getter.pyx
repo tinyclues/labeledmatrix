@@ -443,3 +443,93 @@ def cy_safe_intern(ITER a):
         PyList_SET_ITEM(result, i, out)
         Py_INCREF(out)
     return result
+
+
+cdef class Unifier(dict):
+    """
+        Return a reference to a deduplicated object.
+        That mimics python intern mechanism but works also for non-string objects.
+
+        The Unifier is used to deduplicate objects. It takes an object as an
+        argument. It tries to find it in its internal store. If the object if found,
+        it is returned (i.e. a reference to this object). Otherwise the unifier adds
+        the object in its internal store. As the internal store behaves as a
+        mapping, it hashes objects. If an object cannot be hashed, it is returned as-is.
+
+    """
+
+    def unify(self, obj):
+        """
+            it's here for doc-test purpose.
+
+            Examples:
+
+            Let's define a variable *a* and add it into the unifier: ::
+
+                >>> a = 'abc'
+                >>> unifier = Unifier()
+                >>> ref_a = unifier.unify(a)
+                >>> ref_a is a
+                True
+
+            *ref_a* references *a*. Now we assign to another variable *b*, the same
+            value `'abc'` as *a* and pass it to the unifier: ::
+
+                >>> b = 'abc'
+                >>> ref_b = unifier.unify(b)
+
+            The unifier also references *a* because both variables contain the same
+            value: ::
+
+                >>> ref_b is a
+                True
+
+            Now we try this with a value that does not support hashing: ::
+
+                >>> l = [1,2,3]
+                >>> ref_l = unifier.unify(l)
+                >>> ref_l is l
+                True
+                >>> ref_l2 = unifier.unify([1,2,3])
+                >>> ref_l2 is not l
+                True
+
+        """
+        try:
+            return self[obj]
+        except KeyError:
+            self[obj] = obj
+        except TypeError:
+            pass
+        return obj
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    def map(self, ITER seq):
+        """
+        Idea : to use limited memory dict here
+        optimized version of map(self.unify, seq)
+        """
+        assert PySequence_Check(seq)
+
+        cdef long i, nb = len(seq)
+        cdef list result = PyList_New(nb)
+        cdef object x, out
+        cdef dict unifier = <dict>self
+
+        for i in xrange(nb):
+            x = seq[i]
+            obj = PyDict_GetItem(unifier, x)
+            if obj is not NULL:
+                out = <object>obj
+            else:
+                try:
+                    unifier[x] = x
+                except TypeError:
+                    pass
+                out = x
+
+            PyList_SET_ITEM(result, i, out)
+            Py_INCREF(out)
+
+        return result
