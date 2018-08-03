@@ -6,7 +6,7 @@ import numpy as np
 from cytoolz import curry
 
 from scipy.stats.mstats import mquantiles
-from scipy.linalg import block_diag, solve_triangular, get_blas_funcs
+from scipy.linalg import solve_triangular, get_blas_funcs
 from scipy.sparse import isspmatrix as is_scipysparse, csr_matrix as scipy_csr_matrix
 from cyperf.tools import logit
 from cyperf.matrix.rank_dispatch import matrix_rank_dispatch
@@ -1391,6 +1391,8 @@ def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=
         return data
     elif is_scipysparse(data):
         return KarmaSparse(data, copy=False)
+    elif isinstance(data, (list, tuple)) and len(data) > 0 and all(is_karmasparse(x) for x in data):
+        return ks_vstack(data)
     else:
         res = np.asarray(data)
         if force_dim2 and res.ndim <= 1:
