@@ -3738,3 +3738,11 @@ cdef class KarmaSparse:
         else:
             # we need to prevent blas from internal multi-threading use `with blas_threads(1):`
             return self.kronii_second_moment_dense(np.ascontiguousarray(matrix))
+
+    def is_one_hot(self, axis):
+        if np.any(np.not_equal(self.data, 1)):
+            return False
+        if self.aligned_axis(axis):
+            return np.array_equal(self.indptr, np.arange(self.shape[1 - axis] + 1))
+        else:
+            return np.array_equal(np.sort(self.indices), np.arange(self.shape[1 - axis]))

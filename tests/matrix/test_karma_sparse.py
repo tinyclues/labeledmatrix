@@ -1090,3 +1090,29 @@ class TestKarmaSparse(unittest.TestCase):
                 expected[dense == 0] = 0
                 actual = sparse.apply_pointwise_function(method, args, kwargs)
                 np.testing.assert_array_equal(actual, expected)
+
+    def test_is_one_hot(self):
+        # one hot
+        matrix = np.zeros((15, 7))
+        idx = np.random.randint(0, 7, 15)
+        matrix[np.arange(15), idx] = 1
+        one_hot_sparse = KarmaSparse(matrix, format='csr')
+        for m, axis in [(one_hot_sparse, 1), (one_hot_sparse.tocsc(), 1),
+                        (one_hot_sparse.T, 0), (one_hot_sparse.T.tocsr(), 0)]:
+            self.assertTrue(m.is_one_hot(axis))
+            self.assertFalse(m.is_one_hot(1 - axis))
+
+        matrix[0, idx[0]] = 2
+        not_one_sparse = KarmaSparse(matrix, format='csr')
+        for m, axis in [(not_one_sparse, 1), (not_one_sparse.tocsc(), 1),
+                        (not_one_sparse.T, 0), (not_one_sparse.T.tocsr(), 0)]:
+            self.assertFalse(m.is_one_hot(axis))
+            self.assertFalse(m.is_one_hot(1 - axis))
+
+        matrix[0, idx[0]] = 1
+        matrix[0, idx[0]-1] = 1
+        not_one_hot_sparse = KarmaSparse(matrix, format='csr')
+        for m, axis in [(not_one_hot_sparse, 1), (not_one_hot_sparse.tocsc(), 1),
+                        (not_one_hot_sparse.T, 0), (not_one_hot_sparse.T.tocsr(), 0)]:
+            self.assertFalse(m.is_one_hot(axis))
+            self.assertFalse(m.is_one_hot(1 - axis))
