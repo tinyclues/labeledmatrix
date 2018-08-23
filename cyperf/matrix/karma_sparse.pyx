@@ -3746,3 +3746,65 @@ cdef class KarmaSparse:
             return np.array_equal(self.indptr, np.arange(self.shape[1 - axis] + 1))
         else:
             return np.array_equal(np.sort(self.indices), np.arange(self.shape[1 - axis]))
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_quantile_boundaries(self, long nb):
+        cdef ITYPE_t dim = self.indptr.shape[0] - 1, i
+        cdef long[::1] sizes = np.diff(self.indptr)
+        cdef long start_idx, size, effective_nb, j, q_idx, max_size = np.max(sizes)
+        cdef float step
+        cdef DTYPE_t[:, ::1] boundaries
+
+        nb = min(nb, max_size + 1)
+        boundaries = np.zeros((dim, nb - 1), dtype=DTYPE)
+
+        with nogil, parallel():
+            data_slice = <DTYPE_t *>malloc(max_size * sizeof(DTYPE_t))
+            argsort_indices = <ITYPE_t *>malloc(max_size * sizeof(ITYPE_t))
+            if data_slice == NULL or argsort_indices == NULL:
+                with gil:
+                    raise MemoryError()
+
+            for i in prange(dim):
+                start_idx = self.indptr[i]
+                size = sizes[i]
+
+                # to get argsort we need to make a copy of data slice self.indptr[i]:self.indptr[i+1]
+                memcpy(&data_slice[0], &self.data[start_idx], size * sizeof(DTYPE_t))
+                for j in xrange(size):
+                    argsort_indices[j] = <ITYPE_t>j
+
+                partial_sort(&data_slice[0], &argsort_indices[0], size, size, False)
+
+                effective_nb = min(nb, size + 1)
+                step = <float>size / effective_nb
+                for j in xrange(1, effective_nb):
+                    q_idx = <long>(j * step + 0.5) - 1
+                    boundaries[i, j - 1] = self.data[start_idx + argsort_indices[q_idx]]
+                if effective_nb < nb:
+                    for j in xrange(effective_nb - 1, nb - 1):
+                        boundaries[i][j] = self.data[start_idx + argsort_indices[size - 1]]
+
+            free(data_slice)
+            free(argsort_indices)
+
+        return np.asarray(boundaries)
+
+    def quantile_boundaries(self, nb, axis):
+        """
+        For (n_row, n_col) matrix return an array of quantile boundaries along axis (with zero values ignored)
+        :param nb: number of quantiles to generate
+        :param axis: axis we calculate quantiles along
+        :return: numpy array of shape (nb - 1, n_col) for axis=0 and (n_row, nb - 1) for axis=1
+
+        NB nb can be shrinked to a smaller value if the maximal number of nonzero elements in row/column is small
+        """
+        if axis not in [0, 1]:
+            raise NotImplementedError('axis must be chosen from [0, 1]')
+        if not self.aligned_axis(axis):
+            matrix = self.swap_slicing()
+        else:
+            matrix = self
+
+        return matrix.aligned_quantile_boundaries(nb).transpose((1 - axis, axis))

@@ -1116,3 +1116,39 @@ class TestKarmaSparse(unittest.TestCase):
                         (not_one_hot_sparse.T, 0), (not_one_hot_sparse.T.tocsr(), 0)]:
             self.assertFalse(m.is_one_hot(axis))
             self.assertFalse(m.is_one_hot(1 - axis))
+
+    def test_quantile_boundaries(self):
+        data = np.tile([0.78, 0.78, 0.2, 0.87, 0.87, 0.87, 0.5, 0.6, 0.9, 0.9], 5)
+        indptr = np.arange(6) * 10
+        indices = np.hstack([np.random.choice(100, 10, replace=False) for _ in xrange(5)])
+        matrix1 = KarmaSparse((data, indices, indptr), shape=(100, 5), format='csc')
+
+        for m in [matrix1, matrix1.tocsr()]:
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0), [[0.6] * 5, [0.78] * 5, [0.87] * 5])
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1), [[0.6, 0.78, 0.87]] * 5)
+
+        data = np.hstack((data, [0.3, 0.5, 0.6]))
+        indptr = np.hstack((indptr, [53]))
+        indices = np.hstack((indices, np.random.choice(100, 3, replace=False)))
+        matrix2 = KarmaSparse((data, indices, indptr), shape=(100, 6), format='csc')
+
+        for m in [matrix2, matrix2.tocsr()]:
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0)[:, -1], [0.3, 0.5, 0.5])
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1)[-1], [0.3, 0.5, 0.5])
+
+        data = np.hstack((data, [1, 2]))
+        indptr = np.hstack((indptr, [55]))
+        indices = np.hstack((indices, np.random.choice(100, 2, replace=False)))
+        matrix3 = KarmaSparse((data, indices, indptr), shape=(100, 7), format='csc')
+
+        for m in [matrix3, matrix3.tocsr()]:
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0)[:, -1], [1, 1, 2])
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1)[-1], [1, 1, 2])
+
+        matrix4 = KarmaSparse(np.repeat([0.78, 0.5], 5).reshape(2, 5))
+        for m in [matrix4.tocsr(), matrix4.tocsc()]:
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0), [[0.5] * 5, [0.5] * 5])
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1), [[0.5, 0.5]] * 5)
+
+        with self.assertRaises(NotImplementedError):
+            matrix1.quantile_boundaries(4, axis=None)

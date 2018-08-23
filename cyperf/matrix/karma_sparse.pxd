@@ -488,3 +488,5 @@ cdef class KarmaSparse:
     cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, binary_func fn)
 
     cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn)
+
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_quantile_boundaries(self, long nb)
