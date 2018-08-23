@@ -84,3 +84,16 @@ class MatrixUtilsTestCase(unittest.TestCase):
                 continue
             assert_almost_equal(direct_product_dot_transpose(a, b, w, 1), expected1)
             assert_almost_equal(direct_product_dot_transpose(a, b, w, 2), expected2)
+
+    def test_quantile_boundaries(self):
+        matrix = np.repeat([0.78, 0.78, 0.2, 0.87, 0.87, 0.87, 0.5, 0.6, 0.9, 0.9], 5).reshape(10, 5)
+        sparse_matrix = KarmaSparse(matrix)
+        for m in [matrix, sparse_matrix.tocsr(), sparse_matrix.tocsc()]:
+            np.testing.assert_equal(quantile_boundaries(m, 4, axis=0), [[0.6] * 5, [0.78] * 5, [0.87] * 5])
+            np.testing.assert_equal(quantile_boundaries(m.T, 4, axis=1), [[0.6, 0.78, 0.87]] * 5)
+
+        matrix = np.repeat([0.78, 0.5], 5).reshape(2, 5)
+        sparse_matrix = KarmaSparse(matrix)
+        for m in [matrix, sparse_matrix.tocsr(), sparse_matrix.tocsc()]:
+            np.testing.assert_equal(quantile_boundaries(m, 4, axis=0), [[0.5] * 5, [0.5] * 5])
+            np.testing.assert_equal(quantile_boundaries(m.T, 4, axis=1), [[0.5, 0.5]] * 5)

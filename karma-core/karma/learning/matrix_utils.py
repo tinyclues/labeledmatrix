@@ -1664,3 +1664,26 @@ def keep_sparse(matrix):
     else:
         return (np.product(matrix.shape) > MAX_SIZE) or \
                (float(np.count_nonzero(matrix)) / np.product(matrix.shape) <= MIN_DENSITY)
+
+
+def quantile_boundaries(matrix, nb, axis):
+    """
+    For (n_row, n_col) matrix return an array of quantile boundaries along axis (zeros will be ignored in sparse case)
+    :param matrix: KarmaSparse or numpy array
+    :param nb: number of quantiles to generate
+    :param axis: axis we calculate quantiles along, default 0
+    :return: numpy array of shape (nb - 1, n_col) for axis=0 and (n_row, nb - 1) for axis=1
+    """
+    if axis not in [0, 1]:
+        raise NotImplementedError('axis must be chosen from [0, 1]')
+    if is_karmasparse(matrix):
+        return matrix.quantile_boundaries(nb, axis)
+    else:
+        if axis == 1:
+            return quantile_boundaries(matrix.T, nb, axis=0).T
+        n_rows, n_cols = matrix.shape
+        nb = min(nb, n_rows + 1)
+        idx = (n_rows * np.arange(1, nb, dtype=float) / nb + 0.5).astype(np.int) - 1
+
+        q_indices = np.argsort(matrix, axis=0)[idx]
+        return matrix[q_indices, np.arange(n_cols)]
