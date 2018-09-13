@@ -355,7 +355,7 @@ def compactify_on_right(ks):
     if nb_unique_indices < ks.shape[1]:
         if ks.format == "csr":
             # apply mapping
-            ii = htable.Int64HashTable(nb_unique_indices * 2)
+            ii = htable.Int64HashTable(min(nb_unique_indices * 2, MaxSizeHtable))
             ii.map_locations(required_indices.astype(np.int, copy=False))
             ks_compact = KarmaSparse((ks.data, ii.lookup(ks.indices.astype(np.int)), ks.indptr),
                                      format='csr', shape=(ks.shape[0], nb_unique_indices), copy=False,
