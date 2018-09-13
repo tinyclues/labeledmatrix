@@ -2,6 +2,7 @@
 # Copyright tinyclues, All rights reserved
 #
 from itertools import izip
+from numbers import Integral
 
 from cytoolz.dicttoolz import keymap
 from collections import OrderedDict
@@ -2845,8 +2846,7 @@ class LabeledMatrix(object):
         if axis != 0:
             return self.transpose().pairwise_overlap(top, axis=co(axis), renorm=renorm, potential=potential)
 
-        if 0 <= top < 1:
-            top = int(top * len(self.row))
+        top = self.relative_count(top, axis=0)
 
         top_lm = self.truncate(nb_v=top)
         top_lm_mask = top_lm.nonzero_mask()
@@ -3175,3 +3175,45 @@ class LabeledMatrix(object):
                       max_loss=10.0, learning_rate=learning_rate, random_state=seed)
         model.fit(scipy_matrix, epochs=epochs, no_threads=no_threads, verbose=KarmaSetup.verbose)
         return LabeledMatrix((self.row, range(rank)), model.word_vectors, deco=(self.row_deco, {}))
+
+    def relative_count(self, top, axis):
+        """
+        :param top: int with number of lines/columns or float with proportion of lines/columns
+        :param axis: in [0, 1]
+        :return: top if it is already and int >= 1,
+                 otherwise number of lines/columns (depending on axis) needed to match proportion given by top
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]))
+        >>> lm.relative_count(100, axis=0)
+        100
+        >>> lm.relative_count(0.5, axis=1)
+        1
+        """
+        if 0 <= top < 1:
+            top = int(top * self.shape[axis])
+        elif not isinstance(top, Integral):
+            raise ValueError('top argument must be a float in [0, 1) or an integer, got {} instead'.format(type(top)))
+        return top
+
+    def external_overlap(self, other, top, renorm=True):
+        """
+        :param other: LabeledMatrix with alternative score
+        :param top: size of extract
+        :param renorm: bool: whether we should renormalize the result
+        :return: external overlap matrix between self and other
+        >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
+        >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix, deco=({}, {'a': 'A'}))
+        >>> lm.external_overlap(lm, 2).to_dense().matrix
+        array([[1. , 0.5, 0.5],
+               [0.5, 1. , 0.5],
+               [0.5, 0.5, 1. ]])
+        >>> lm.external_overlap(lm, 2).deco
+        ({'a': 'A'}, {'a': 'A'})
+        """
+        # FIXME code can be mutualized with pairwise_overlap
+        top = self.relative_count(top, axis=0)
+
+        overlap_lm = self.truncate(nb_v=top).nonzero_mask().transpose() \
+            .dot(other.truncate(nb_v=top).nonzero_mask())
+        if renorm:
+            overlap_lm /= top
+        return overlap_lm
