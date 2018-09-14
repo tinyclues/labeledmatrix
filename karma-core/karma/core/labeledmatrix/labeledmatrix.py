@@ -923,7 +923,7 @@ class LabeledMatrix(object):
                              complement(self.matrix, mask.matrix),
                              deco=self.deco)
 
-    def zeros(self):
+    def zeros(self, force_sparse=False):
         """
         >>> lm = LabeledMatrix([['b', 'c']] * 2, np.array([[1,2], [3,4]]))
         >>> aeq(lm.zeros().matrix, np.zeros((2,2)))
@@ -933,7 +933,7 @@ class LabeledMatrix(object):
         >>> aeq(lm.to_sparse().zeros().matrix.toarray(), np.zeros((2,2)))
         True
         """
-        if self.is_sparse:
+        if self.is_sparse or force_sparse:
             matrix_zeros = KarmaSparse(self.matrix.shape)
         else:
             matrix_zeros = np.zeros(self.matrix.shape, dtype=self.matrix.dtype)
