@@ -15,6 +15,7 @@ from karma.learning.utils import (CrossValidationWrapper, validate_regression_mo
                                   BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX, _prepare_and_check_classes)
 from karma.lib.logistic_regression import logistic_regression
 from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
+from karma.exceptions import DataFrameMissingColumnException
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
@@ -197,6 +198,26 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
         np.testing.assert_array_equal(_prepare_and_check_classes(y[:50], None)[:4], [0, 0, 0, 0])
         np.testing.assert_array_equal(_prepare_and_check_classes(y * 0, groups)[:4], ['0_2', '0_4', '0_3', '0_5'])
+
+    def test_get_cv_groups_from_columns(self):
+        df = self.df.copy()
+        seed = 123
+
+        self.assertTrue(CrossValidationWrapper.get_cv_groups_from_columns(df, cv_groups_col=None) is None)
+
+        np.testing.assert_array_equal(CrossValidationWrapper.get_cv_groups_from_columns(df,
+                                                                                        cv_groups_col='i'), df['i'][:])
+
+        self.assertTrue(CrossValidationWrapper.get_cv_groups_from_columns(df, cv_groups_col='z') is None)
+
+        self.assertTrue(CrossValidationWrapper.get_cv_groups_from_columns(df, cv_groups_col=['z', 'a']) is None)
+
+        np.testing.assert_array_equal(CrossValidationWrapper.get_cv_groups_from_columns(df,
+                                                                                        cv_groups_col=['i', 'x', 'z'],
+                                                                                        seed=seed),
+                                      CrossValidationWrapper.get_cv_groups_from_columns(df, cv_groups_col=['i', 'x'],
+                                                                                        seed=seed))
+
 
 class VirtualHStackTestCase(unittest.TestCase):
     def test_init(self):

@@ -17,6 +17,8 @@ from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float
                                          direct_product_second_moment, cast_2dim_float32_transpose)
 from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
 from karma.thread_setter import blas_threads, open_mp_threads
+from karma.runtime import KarmaSetup
+from karma.core.utils.utils import LOGGER
 
 NB_THREADS_MAX = 16
 NB_CV_GROUPS_MAX = 10**5
@@ -514,16 +516,35 @@ class CrossValidationWrapper(object):
 
     @staticmethod
     def get_cv_groups_from_columns(dataframe, cv_groups_col=None, seed=783942):
+        """
+        Given iterable of columns, returns unlazy data array using feature_randomizer
+        Given one column, returns it unlazied
+        Filters out columns not available in dataframe from input
+        :param dataframe
+        :param cv_groups_col: string or list/tuple
+        :param seed: integer
+        :return: data array
+        """
+
         if cv_groups_col is None:
             return None
         else:
             cv_groups_col = coerce_to_tuple_and_check_all_strings(cv_groups_col, 'cv_groups')
-            if len(cv_groups_col) == 1:
-                cv_groups_col = cv_groups_col[0]
+            cv_groups_col_filtered = filter(lambda col: col in dataframe, cv_groups_col)
+
+            if len(cv_groups_col_filtered) < len(cv_groups_col):
+                LOGGER.warn('Filtered out missing columns in get_cv_groups, keeping: {}'.format(cv_groups_col_filtered))
+                if KarmaSetup.verbose:
+                    print('Filtered out missing columns, keeping: {}'.format(cv_groups_col_filtered))
+
+            if len(cv_groups_col_filtered) == 0:
+                return None
+            elif len(cv_groups_col_filtered) == 1:
+                cv_groups_col_filtered = cv_groups_col_filtered[0]
             else:
-                cv_groups_col = 'feature_randomizer({}, vector_size={}, seed={})'.format(', '.join(cv_groups_col),
-                                                                                         NB_CV_GROUPS_MAX, seed)
-            return dataframe[cv_groups_col][:]
+                cv_groups_col_filtered = 'feature_randomizer({}, vector_size={},' \
+                                       ' seed={})'.format(', '.join(cv_groups_col_filtered), NB_CV_GROUPS_MAX, seed)
+            return dataframe[cv_groups_col_filtered][:]
 
 
 def check_axis_values(y):
