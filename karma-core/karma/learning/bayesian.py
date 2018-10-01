@@ -9,7 +9,7 @@ from karma.learning.regression import linear_regression_coefficients
 
 def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
                                        C_priori=1e5, intercept_C_priori=1e10,
-                                       sample_weight=None, full_hessian=True,
+                                       sample_weight=None, hessian_mode='full',
                                        noise_variance=1., timer=None):
     if timer is None:
         timer = create_timer(None)
@@ -47,17 +47,23 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
 
     with timer('BayLinReg_Reg_Variance'):
         # get the variance
-        if full_hessian:
+        if hessian_mode == 'skip':
+            C_post = np.full(X.shape[1] + 1, np.nan, dtype=np.float)
+        elif hessian_mode == 'full':
             inv_cov = np.diag(1. / C_priori)
             inv_cov += XX.transpose().dot(XX) * noise_precision
-            cov_post_diag = diagonal_of_inverse_symposdef(inv_cov)
+            C_post = diagonal_of_inverse_symposdef(inv_cov)
+        elif hessian_mode == 'diag':
+            C_post = 1. / (1. / C_priori + np.einsum('ij,ij->j', XX, XX) * noise_precision)
         else:
-            cov_post_diag = 1. / (1. / C_priori + np.einsum('ij,ij->j', XX, XX) * noise_precision)
-        intercept_C_post = cov_post_diag[-1]
-        w_C_post = X.split_by_dims(cov_post_diag[:-1])
+            raise ValueError('hessian_mode needs to be one of {{skip, full, diag}}, got {}'.format(hessian_mode))
+
+
+        intercept_C_post, feature_C_post = C_post[-1], C_post[:-1]
+        feature_C_posts = X.split_by_dims(feature_C_post.astype(np.float))
 
     y_hat_post = y_hat_post_prime + y_hat_prior
 
     return (y_hat_post,
             intercept_post, w_post,
-            intercept_C_post, w_C_post, conv_dict)
+            intercept_C_post, feature_C_posts, conv_dict)

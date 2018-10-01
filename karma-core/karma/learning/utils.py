@@ -7,6 +7,8 @@ from math import ceil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace, argsort
+
+from karma import KarmaSetup
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
 
 from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
@@ -624,3 +626,30 @@ def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col
     else:
         res_df = metrics
     return res_df
+
+
+def create_basic_virtual_hstack(dataframe, inputs):
+    def find_dp(inp):
+        # a bit dirty hack
+        backend = dataframe[inp]._backend
+        if KarmaSetup.vdp_active and hasattr(backend, 'dependencies') and hasattr(backend, 'instruction') and \
+                backend.instruction.name == "direct_product" and len(backend.dependencies) == 2:
+            return tuple([x[0] for x in backend.dependencies])  # this returns names
+        else:
+            return inp
+
+    #  local cache to take all columns only once
+    local_column_cache, features = {}, []
+
+    for col in map(find_dp, inputs):
+        if isinstance(col, tuple):
+            lname, rname = col
+            left = local_column_cache.get(lname, dataframe[lname][:])
+            local_column_cache[lname] = left
+            right = local_column_cache.get(rname, dataframe[rname][:])
+            local_column_cache[rname] = right
+            features.append((left, right))
+        else:
+            features.append(local_column_cache.get(col, dataframe[col][:]))
+            local_column_cache[col] = features[-1]
+    return BasicVirtualHStack(features)
