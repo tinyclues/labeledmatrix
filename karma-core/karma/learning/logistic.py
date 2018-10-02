@@ -51,37 +51,121 @@ def _log_logistic_inplace_sample_weight(x, sw):
                        out=x, casting='same_kind')
 
 
-def logistic_loss_and_grad(w, X, y, alpha, sample_weight=None,
-                           w0=None, alpha_intercept=0., intercept0=0.):
+def _logistic_loss_and_grad(w, intercept, X, y, alpha, w_priori, alpha_intercept, intercept_priori, sample_weight):
+    """
+    Classic LogLoss penalty with L2 penalty
+
+    :param w: betas to evaluate the function at, shape (n_features,)
+    :param intercept: intercept to evaluate the function at, scalar
+    :param X: VirtualHStack of shape (n_samples, n_features)
+    :param y: binary np.ndarray of length n_samples (taking values in {-1, 1})
+    :param alpha: L2 penalty for the betas, shape (n_features,)
+    :param w_priori: prior for the betas, shape (n_features,)
+    :param alpha_intercept: L2 penalty for the intercept, scalar
+    :param intercept_priori: prior for the intercept, scalar
+    :param sample_weight: weight vector for the sample, shape (n_sample,); assumes equal weight if None
+
+    :return: loss, grad
+        loss -> scalar
+        grad -> same shape as w (n_features,)
+        grad_intercept -> scalar
+    """
     n_samples, n_features = X.shape
-    grad = np.empty_like(w)
-
-    fit_intercept = (w.size == n_features + 1)
-    c, w = (w[-1], w[:-1]) if fit_intercept else (0, w)
-
-    if w0 is None:
-        w0 = np.zeros_like(w)
 
     yz = X.dot(w)
-    yz += c
+    yz += intercept
     yz *= y
     z0 = _expit_m1_times_y(yz, y)
 
-    dw = alpha * (w - w0)
-    out = .5 * dw.dot(w - w0)
+    dw = alpha * (w - w_priori)
+    loss = .5 * dw.dot(w - w_priori)
 
     if sample_weight is None:
-        out -= _log_logistic_inplace(yz).sum()
+        loss -= _log_logistic_inplace(yz).sum()
     else:
-        out -= _log_logistic_inplace_sample_weight(yz, sample_weight).sum()
+        loss -= _log_logistic_inplace_sample_weight(yz, sample_weight).sum()
         z0 *= sample_weight
 
-    grad[:n_features] = X.transpose_dot(z0)
-    grad[:n_features] += dw
+    grad = X.transpose_dot(z0)
+    grad += dw
 
-    if fit_intercept:
-        grad[-1] = z0.sum() + alpha_intercept * (c - intercept0)
-    return out, grad
+    grad_intercept = z0.sum() + alpha_intercept * (intercept - intercept_priori)
+    return loss, grad, grad_intercept
+
+
+def logistic_loss_and_grad(w, X, y, alpha, w_priori, alpha_intercept, intercept_priori, sample_weight=None):
+    """
+    Classic LogLoss penalty with L2 penalty
+
+    :param w: betas and intercept to evaluate the function at, shape (n_features + 1,)
+    :param X: VirtualHStack of shape (n_samples, n_features)
+    :param y: binary np.ndarray of length n_samples (taking values in {-1, 1})
+    :param alpha: L2 penalty for the betas, shape (n_features,)
+    :param w_priori: prior for the betas, shape (n_features,)
+    :param alpha_intercept: L2 penalty for the intercept, scalar
+    :param intercept_priori: prior for the intercept, scalar
+    :param sample_weight: weight vector for the sample, shape (n_sample,); assumes equal weight if None
+
+    :return: loss, grad
+        loss -> scalar
+        grad -> same shape as w (n_features + 1,)
+    """
+    loss, grad, grad_intercept = _logistic_loss_and_grad(w[:-1], w[-1], X, y,
+                                                         alpha, w_priori,
+                                                         alpha_intercept, intercept_priori,
+                                                         sample_weight)
+    return loss, np.hstack((grad, grad_intercept))
+
+
+def logistic_loss_and_grad_elastic_net(w_extended, X, y,
+                                       alpha, w_priori, alpha_intercept, intercept_priori,
+                                       sample_weight=None, l1_coeff=0.2):
+    """
+    This adds an extra L1 penalty to the logistic_loss, as `l1_coef * |\alpha * (beta - beta_0)|_1`
+        no L1 penalty is added on the intercept
+
+    It works by splitting the betas into their positive and negative parts
+        https://www.microsoft.com/en-us/research/wp-content/uploads/2007/01/andrew07scalable.pdf
+        https://www.cs.ubc.ca/~murphyk/Papers/aistats09.pdf
+        https://arxiv.org/pdf/1206.1156.pdf
+
+    :param w_extended: betas and intercept to evaluate the function at, shape (2 * n_features + 1,):
+        [positive_part] + [negative_part] + [intercept]
+    :param X: VirtualHStack of shape (n_samples, n_features)
+    :param y: binary np.ndarray of length n_samples (taking values in {-1, 1})
+    :param alpha: L2 penalty for the betas, shape (n_features,)
+    :param w_priori: prior for the betas (both for L2 and L1 penalties), shape (n_features,)
+    :param alpha_intercept: L2 penalty for the intercept, scalar
+    :param intercept_priori: prior for the intercept (for L2 penalty only), scalar
+    :param sample_weight: weight vector for the sample, shape (n_sample,); assumes equal weight if None
+    :param l1_coeff: extra L1 penalty
+
+    :return: loss, grad
+        loss -> scalar
+        grad -> same shape as w_extended (2 * n_features + 1,)
+    """
+    n_samples, n_features = X.shape
+
+    positive_slice, negative_slice = slice(0, n_features), slice(n_features, 2 * n_features)
+
+    loss, signed_grad, grad_intercept = _logistic_loss_and_grad(
+        w_priori + w_extended[positive_slice] - w_extended[negative_slice],
+        w_extended[-1],
+        X, y,
+        alpha, w_priori,
+        alpha_intercept, intercept_priori,
+        sample_weight)
+
+    loss += l1_coeff * alpha.dot(w_extended[positive_slice] + w_extended[negative_slice])
+
+    grad = np.empty_like(w_extended)
+    grad[positive_slice] = signed_grad
+    grad[positive_slice] += l1_coeff * alpha
+    grad[negative_slice] = - signed_grad
+    grad[negative_slice] += l1_coeff * alpha
+
+    grad[-1] = grad_intercept
+    return loss, grad
 
 
 @regression_on_blocks
@@ -127,6 +211,7 @@ def logistic_coefficients_and_posteriori(X, y,
                                          max_iter,
                                          w_priori=None, intercept_priori=0.,
                                          C_priori=1e10, intercept_C_priori=1e10,
+                                         l1_coeff=0.,
                                          sample_weight=None,
                                          w_warm=None,
                                          nb_threads=1,
@@ -165,52 +250,80 @@ def logistic_coefficients_and_posteriori(X, y,
         if not isinstance(X, VirtualHStack):
             X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
+        n_samples, n_features = X.shape
         C_priori = X.adjust_array_to_total_dimension(C_priori, 'C_priori')
 
         if w_priori is None:
-            w_priori = np.zeros(X.shape[1], dtype=np.float)
+            w_priori = np.zeros(n_features, dtype=np.float)
         else:
             w_priori = X.adjust_array_to_total_dimension(w_priori, 'w_priori')
 
         if w_warm is None:
             w_warm = np.hstack([w_priori, intercept_priori])
-            with use_seed(seed=X.shape[1]):
+            with use_seed(seed=n_features):
                 # random perturbation of starting point
-                w_warm[:-1] += np.minimum(C_priori, 1) * truncnorm(-1, 1).rvs(w_priori.shape[0])
+                w_warm[:-1] += np.minimum(C_priori, 1) * truncnorm(-1, 1).rvs(n_features)
 
-        alpha_priori = 1. / C_priori
+        alpha = 1. / C_priori
         alpha_intercept = 1. / intercept_C_priori
         y = 2. * y.astype(bool) - 1
     try:
         with timer('LogReg_Reg_Mean'):
-            lbfgs_params = KarmaSetup.lbfgs_params
             start_lbfgs = time()
-            w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm, fprime=None,
-                                                     args=(X, y, alpha_priori, sample_weight,
-                                                           w_priori, alpha_intercept, intercept_priori),
-                                                     iprint=0, pgtol=lbfgs_params.get('pgtol', 1e-7),
-                                                     maxiter=max_iter, m=lbfgs_params.get('m', 100),
-                                                     factr=lbfgs_params.get('factr', 1e7),
-                                                     maxfun=lbfgs_params.get('maxfun', 15000),
-                                                     maxls=lbfgs_params.get('maxls', 20))
+
+            lbfgs_params = KarmaSetup.lbfgs_params
+            l_bfgs_b_kwargs = dict(fprime=None,
+                                   iprint=0,
+                                   pgtol=lbfgs_params.get('pgtol', 1e-7),
+                                   m=lbfgs_params.get('m', 100),
+                                   factr=lbfgs_params.get('factr', 1e7),
+                                   maxfun=lbfgs_params.get('maxfun', 15000),
+                                   maxls=lbfgs_params.get('maxls', 20),
+                                   maxiter=max_iter)
+            if l1_coeff == 0:
+                w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm,
+                                                         args=(X, y,
+                                                               alpha, w_priori,
+                                                               alpha_intercept, intercept_priori,
+                                                               sample_weight),
+                                                         **l_bfgs_b_kwargs)
+                intercept, beta = w0[-1], w0[:-1]
+            elif l1_coeff > 0:
+                positive_slice, negative_slice = slice(0, n_features), slice(n_features, 2 * n_features)
+                _w_warm_extended = np.zeros(2 * n_features + 1, dtype=np.float)
+                _w_warm_extended[positive_slice] = np.maximum(w_warm[:-1] - w_priori, 0)
+                _w_warm_extended[negative_slice] = np.maximum(w_priori - w_warm[:-1], 0)
+                _w_warm_extended[-1] = w_warm[-1]
+                bounds = [(0, None)] * (2 * n_features) + [(None, None)]
+                _w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad_elastic_net, _w_warm_extended,
+                                                          args=(X, y,
+                                                                alpha, w_priori,
+                                                                alpha_intercept, intercept_priori,
+                                                                sample_weight, l1_coeff),
+                                                          bounds=bounds,
+                                                          **l_bfgs_b_kwargs)
+                intercept = _w0[-1]
+                beta = w_priori + _w0[positive_slice] - _w0[negative_slice]
+            else:
+                raise AssertionError
             end_lbfgs = time()
             lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
-        conv_dict = _conv_dict_format(conv_dict, obj_value, X.shape[0], nb_threads, nb_inner_threads, lbfgs_timing,
+        conv_dict = _conv_dict_format(conv_dict, obj_value, n_samples, nb_threads, nb_inner_threads, lbfgs_timing,
                                       verbose)
 
-        intercept, beta = w0[-1], w0[:-1]
         linear_pred = X.dot(beta) + intercept
         betas = X.split_by_dims(beta)
 
         with timer('LogReg_Reg_Variance'):
             if hessian_mode == 'skip':
-                C_post = np.full(X.shape[1] + 1, np.nan, dtype=np.float)
+                C_post = np.full(n_features + 1, np.nan, dtype=np.float)
             elif hessian_mode == 'full':
-                C_post = diagonal_of_inverse_symposdef(hessian(w0, X, y, alpha_priori,
+                C_post = diagonal_of_inverse_symposdef(hessian(np.hstack((beta, intercept)), X, y, alpha,
                                                                sample_weight, alpha_intercept))
             elif hessian_mode == 'diag':
-                C_post = 1. / diag_hessian(w0, X, y, alpha_priori, sample_weight, alpha_intercept)
+                C_post = 1. / diag_hessian(np.hstack((beta, intercept)), X, y, alpha, sample_weight,
+                                           alpha_intercept)
             else:
                 raise ValueError('hessian_mode needs to be one of {{skip, full, diag}}, got {}'.format(hessian_mode))
 
