@@ -3,6 +3,8 @@ import unittest
 import numpy as np
 import scipy.sparse as sp
 from cyperf.matrix.karma_sparse import KarmaSparse
+from numpy.testing import assert_allclose
+
 from karma.learning.matrix_utils import kl_div
 from karma.learning.nmf import nmf, nmf_fold, NMF, GNMF
 from karma.core.utils.utils import use_seed
@@ -55,9 +57,9 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertLessEqual(kl_div(matrix, np.dot(w_s, h_s.T)), np.max(matrix) / 10.)
         self.assertLessEqual(np.max(np.abs(matrix - np.dot(w_s, h_s.T))), np.max(matrix) / 10.)
 
-        # we got exactly the same results
-        self.assertLessEqual(np.max(np.abs(w_d - w_s) + np.abs(h_d - h_s)), 10 ** -10)
-        self.assertLessEqual(np.mean(np.abs(matrix - np.dot(w_s, h_s.T)) / matrix.clip(10**-6)), 0.1)
+        # we got almost the same results (up to float32 / float64 differences)
+        assert_allclose(w_d, w_s, 1e-4)
+        assert_allclose(h_d, h_s, 1e-4)
 
     def test_seed(self):
         with use_seed(100):
@@ -126,9 +128,9 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertLessEqual(np.abs(w_csc - w_shuffled).sum(), 10 ** -8)
         self.assertLessEqual(np.abs(h_csc - h_shuffled).sum(), 10 ** -8)
         self.assertLessEqual(np.abs(w_csc - w_csr).sum(), 10 ** -8)
-        self.assertLessEqual(np.abs(w_dense - w_csr).sum(), 10 ** -8)
+        self.assertLessEqual(np.abs(w_dense - w_csr).sum(), 10 ** -4)
         self.assertLessEqual(np.abs(h_csc - h_csr).sum(), 10 ** -8)
-        self.assertLessEqual(np.abs(h_dense - h_csr).sum(), 10 ** -8)
+        self.assertLessEqual(np.abs(h_dense - h_csr).sum(), 10 ** -4)
         # it has moved from initial data
         self.assertGreaterEqual(np.abs(h_dense - h0).sum(), 10 ** -4)
 

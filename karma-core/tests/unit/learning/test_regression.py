@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from cyperf.matrix.karma_sparse import KarmaSparse
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 
 from karma.core.utils.utils import use_seed
 from karma.learning.lasso import best_lasso_model_cv_from_moments
@@ -33,15 +33,13 @@ class LassoTestCase(unittest.TestCase):
 
     def test_best_lasso_model_cv_from_moments(self):
         with use_seed(123):
-            xx = np.random.rand(10 ** 4, 100)
+            xx = np.random.rand(10 ** 4, 100).astype(DTYPE)
             w = np.random.randint(0, 3, size=xx.shape[1])
-            yy = xx.dot(w) + np.random.randn(xx.shape[0]) * 0.1 + 4.
-        predictions, intercept, betas = best_lasso_model_cv_from_moments(xx, yy)
+            yy = xx.dot(w) + np.random.randn(xx.shape[0]).astype(DTYPE) * 0.1 + 4.
 
-        self.assertLess(np.max(np.abs((w - betas))), 0.01)
-        self.assertLess(np.max(np.abs(intercept - 4)), 0.1)
-        self.assertLess(np.std(yy - intercept - xx.dot(betas)), 0.5 * np.std(yy))
+        for x in (xx, KarmaSparse(xx)):
+            predictions, intercept, betas = best_lasso_model_cv_from_moments(x, yy)
 
-        predictions_sp, intercept_sp, betas_sp = best_lasso_model_cv_from_moments(KarmaSparse(xx), yy)
-        np.testing.assert_array_almost_equal(betas_sp, betas, decimal=6)
-        np.testing.assert_array_almost_equal(intercept_sp, intercept, decimal=6)
+            self.assertLess(np.max(np.abs((w - betas))), 0.01)
+            self.assertLess(np.max(np.abs(intercept - 4)), 0.1)
+            self.assertLess(np.std(yy - intercept - x.dot(betas)), 0.5 * np.std(yy))

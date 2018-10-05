@@ -161,7 +161,10 @@ def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
     1.0
     """
     X = dataframe[x][:]
-    X = X.to_scipy_sparse(copy=False) if is_karmasparse(X) else np.asarray(X, dtype=np.float)
+    if is_karmasparse(X):
+        X = X.to_scipy_sparse(copy=False).astype(np.float, copy=False)
+    else:
+        X = np.asarray(X, dtype=np.float)
     Y = np.asarray(dataframe[y][:], dtype=np.float)
     if np.all(Y == Y[0]):
         return np.array([], dtype=np.int), np.array([], dtype=np.float), Y[0]

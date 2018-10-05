@@ -2,20 +2,19 @@ import unittest
 
 import numpy as np
 from cyperf.indexing.indexed_list import is_increasing
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 from numpy.testing import assert_equal, assert_array_equal, assert_almost_equal
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from karma import create_column_from_data
-from cyperf.matrix.karma_sparse import KarmaSparse
 from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
 from karma.learning.logistic import logistic_coefficients
 from karma.learning.matrix_utils import as_vector_batch
 from karma.learning.utils import (CrossValidationWrapper, validate_regression_model, VirtualDirectProduct,
                                   BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX, _prepare_and_check_classes)
-from karma.lib.logistic_regression import logistic_regression
 from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
-from karma.exceptions import DataFrameMissingColumnException
+from karma.lib.logistic_regression import logistic_regression
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
@@ -335,18 +334,17 @@ class VirtualHStackTestCase(unittest.TestCase):
 
 
 class VirtualDirectProductTestCase(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         with use_seed(124567):
             cls.vdp = VirtualDirectProduct(KarmaSparse(np.random.randint(0, 3, size=(10, 2)),
                                                        shape=(10, 2)),
-                                           np.random.rand(10, 3))
+                                           np.random.rand(10, 3).astype(DTYPE))
             cls.vdpt = cls.vdp.T
             cls.dp = cls.vdp.materialize()
             cls.dpt = cls.vdp.materialize().T
 
-    def virtual_direct_product_method_tests(self):
+    def test_virtual_direct_product_method(self):
         self.assertIsInstance(self.dp, KarmaSparse)
         self.assertFalse(self.vdp.is_transposed)
 
@@ -363,14 +361,14 @@ class VirtualDirectProductTestCase(unittest.TestCase):
         assert_almost_equal(self.vdp.sum(axis=1), self.dp.sum(axis=1), 6)
 
         w = np.random.rand(self.vdp.shape[1])
-        assert_array_equal(self.vdp.dot(w), self.dp.dot(w))
+        assert_almost_equal(self.vdp.dot(w), self.dp.dot(w), 6)
 
         w = np.random.rand(self.vdp.shape[0])
-        assert_array_equal(self.vdp.transpose_dot(w), self.dp.dense_vector_dot_left(w))
+        assert_almost_equal(self.vdp.transpose_dot(w), self.dp.dense_vector_dot_left(w), 6)
 
-        assert_array_equal(self.vdp.second_moment(), self.dp.T.dot(self.dp))
+        assert_almost_equal(self.vdp.second_moment(), self.dp.T.dot(self.dp), 6)
 
-    def virtual_direct_product_transpose_method_tests(self):
+    def test_virtual_direct_product_transpose_method(self):
         self.assertTrue(self.vdpt.is_transposed)
 
         self.assertEqual(self.vdpt.shape, self.dpt.shape)
@@ -378,12 +376,13 @@ class VirtualDirectProductTestCase(unittest.TestCase):
         self.assertEqual(self.vdpt.nnz, self.dpt.nnz)
         self.assertEqual(self.vdpt.ndim, self.dpt.ndim)
 
-        assert_almost_equal(self.vdpt.sum(), self.dpt.sum(), 7)
+        assert_almost_equal(self.vdp.sum(), self.vdpt.sum(), 5)
+        assert_almost_equal(self.vdpt.sum(), self.dpt.sum(), 5)
         assert_almost_equal(self.vdpt.sum(axis=0), self.dpt.sum(axis=0), 6)
         assert_almost_equal(self.vdpt.sum(axis=1), self.dpt.sum(axis=1), 6)
 
         w = np.random.rand(self.vdpt.shape[1])
-        assert_array_equal(self.vdpt.dot(w), self.dpt.dot(w))
+        assert_almost_equal(self.vdpt.dot(w), self.dpt.dot(w), 6)
 
         w = np.random.rand(self.vdpt.shape[0])
-        assert_array_equal(self.vdpt.transpose_dot(w), self.dpt.dense_vector_dot_left(w))
+        assert_almost_equal(self.vdpt.transpose_dot(w), self.dpt.dense_vector_dot_left(w), 6)

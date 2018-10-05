@@ -6,7 +6,7 @@ from itertools import izip
 import numpy as np
 from cytoolz import merge as dict_merge
 
-from cyperf.matrix.karma_sparse import KarmaSparse, ks_hstack, ks_diag, dense_pivot
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
 from karma.core.utils.collaborative_tools import simple_counter
 from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
@@ -77,7 +77,7 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
 
 
 def aeq(matrix1, matrix2):
-    return np.allclose((KarmaSparse(matrix1) - KarmaSparse(matrix2)).norm(), 0)
+    return np.allclose(matrix1, matrix2, rtol=1e-7)
 
 
 def lm_occurence(val0, val1, dense_output=False):
@@ -137,9 +137,9 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     >>> isinstance(res1, LabeledMatrix)
     True
     >>> res1.matrix.toarray()
-    array([[1.        , 0.80850765, 0.        ],
-           [0.86854149, 0.        , 1.        ],
-           [0.        , 0.        , 0.77021511]])
+    array([[1.       , 0.8085077, 0.       ],
+           [0.8685415, 0.       , 1.       ],
+           [0.       , 0.       , 0.7702151]], dtype=float32)
     >>> res1.label
     ([1, 4, 3], ['abc@fr', 'jkl@uk', 'bcd@de'])
     >>> res2 = lm_decayed_pivot_from_dataframe(data, key='name', axis='cat',
@@ -159,7 +159,7 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     from karma.core.labeledmatrix import LabeledMatrix
     deco = axis_deco if axis_deco else {}
     date_arr = np.array(dataframe[date_column][:], dtype='datetime64[D]')
-    decayed_series = 2 ** (-(date_arr.max() - date_arr).astype(np.float64) / half_life)
+    decayed_series = 2 ** (-(date_arr.max() - date_arr).astype(DTYPE) / half_life)
     key_values, key_ind = reversed_index(dataframe[key][:])
     axis_values, axis_ind = reversed_index(dataframe[axis][:])
 
@@ -292,7 +292,7 @@ def lm_sum(list_of_lm):
     array([[  5.,  27.,   0.,   1.],
            [  0.,   4.,   0.,   0.],
            [  0.,   7.,   8.,   9.],
-           [  4., -20.,   0.,  -1.]])
+           [  4., -20.,   0.,  -1.]], dtype=float32)
     """
     from karma.core.labeledmatrix import LabeledMatrix
     if not list_of_lm:

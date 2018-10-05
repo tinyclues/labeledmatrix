@@ -8,7 +8,7 @@ from scipy.sparse import isspmatrix as is_scipy_sparse
 from scipy.sparse.linalg import cg
 
 from connect.logging import initialize_logger
-from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag, cython_power
+from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
 from karma.core.utils import use_seed
 from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min
@@ -150,7 +150,7 @@ class NMF(object):
             if is_karmasparse(diff_matrix):
                 return diff_matrix.sum_power(2)
             else:
-                return np.sum(cython_power(diff_matrix.ravel(), 2))
+                return np.sum(diff_matrix.ravel() ** 2)
         else:
             raise NotImplementedError('Unknown metric')
 

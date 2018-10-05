@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+from cyperf.matrix.karma_sparse import DTYPE
 
 from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
 
@@ -143,7 +144,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         np.testing.assert_array_equal(lm.truncate(nb_v=1).matrix, np.array([[0, 0, 0], [7, 8, 9]]))
         np.testing.assert_array_equal(lm.transpose().truncate(nb_v=1).matrix, np.array([[0, 0], [0, 0], [6, 9]]))
 
-        lm = LabeledMatrix((['b', 'c'], ['x', 'z', 'y']), np.random.rand(2, 3))
+        lm = LabeledMatrix((['b', 'c'], ['x', 'z', 'y']), np.random.rand(2, 3).astype(DTYPE))
         np.testing.assert_array_equal(lm.truncate(nb_v=1).matrix, lm.to_sparse().truncate(nb_v=1).matrix)
         np.testing.assert_array_equal(lm.truncate(nb_h=2).matrix, lm.to_sparse().truncate(nb_h=2).matrix)
         np.testing.assert_array_equal(lm.truncate(nb_h=0).matrix, lm.zeros().matrix)
@@ -183,32 +184,30 @@ class LabeledMatrixTestCase(unittest.TestCase):
         lm = LabeledMatrix((range(matrix.shape[0]), ['a', 'b', 'c']), matrix)
         lm_sparse = lm.to_sparse()
 
-        np.testing.assert_array_equal(np.asarray(lm_sparse.argmax_dispatch(maximum_pressure=1).matrix),
-                                      [[0., 0., 0.7],
-                                       [0., 0.4, 0.],
-                                       [0.8, 0., 0.],
-                                       [0., 0., 0.9]])
+        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1).matrix,
+                                      np.array([[0., 0., 0.7],
+                                                [0., 0.4, 0.],
+                                                [0.8, 0., 0.],
+                                                [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(np.asarray(lm_sparse.argmax_dispatch(maximum_pressure=1, max_volumes=1)
-                                                          .matrix),
-                                      [[0., 0.5, 0.],
-                                       [0., 0., 0.],
-                                       [0.8, 0., 0.],
-                                       [0., 0., 0.9]])
+        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1, max_volumes=1).matrix,
+                                      np.array([[0., 0.5, 0.],
+                                                [0., 0., 0.],
+                                                [0.8, 0., 0.],
+                                                [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(np.asarray(lm_sparse.argmax_dispatch(maximum_pressure=1,
-                                                                           max_volumes={'a': 1, 'b': 2, 'c': 1})
-                                                          .matrix),
-                                      [[0., 0.5, 0.],
-                                       [0., 0.4, 0.],
-                                       [0.8, 0., 0.],
-                                       [0., 0., 0.9]])
+        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1,
+                                                                max_volumes={'a': 1, 'b': 2, 'c': 1}).matrix,
+                                      np.array([[0., 0.5, 0.],
+                                                [0., 0.4, 0.],
+                                                [0.8, 0., 0.],
+                                                [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(np.asarray(lm_sparse.argmax_dispatch(maximum_pressure=4).matrix),
-                                      [[0.2, 0.5, 0.7],
-                                       [0.1, 0.4, 0.3],
-                                       [0.8, 0.3, 0.75],
-                                       [0.2, 0.7, 0.9]])
+        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=4).matrix,
+                                      np.array([[0.2, 0.5, 0.7],
+                                                [0.1, 0.4, 0.3],
+                                                [0.8, 0.3, 0.75],
+                                                [0.2, 0.7, 0.9]], dtype=DTYPE))
 
         self.assertEqual(np.count_nonzero(lm_sparse.argmax_dispatch(maximum_pressure=4, max_volumes=0).matrix), 0)
         self.assertEqual(np.count_nonzero(lm_sparse.argmax_dispatch(maximum_pressure=4, max_ranks=0).matrix), 0)
@@ -270,16 +269,16 @@ class LabeledMatrixTestCase(unittest.TestCase):
                         [0., 0.28, 0.],
                         [0.24, 0., 0.31]], dtype=np.float32)
         lm = LabeledMatrix([np.arange(10).astype(str).tolist(), ['t1', 't2', 't3']], mat)
-        dispatch_mask = np.array([[2,  0,  0],
-                                  [0,  2,  0],
-                                  [0,  0,  2],
-                                  [0,  0,  0],
-                                  [2,  0,  0],
-                                  [0,  0,  1],
-                                  [1,  0,  0],
-                                  [0,  0,  0],
-                                  [0,  1,  0],
-                                  [1,  0,  0]], dtype=np.int32)
+        dispatch_mask = np.array([[2, 0, 0],
+                                  [0, 2, 0],
+                                  [0, 0, 2],
+                                  [0, 0, 0],
+                                  [2, 0, 0],
+                                  [0, 0, 1],
+                                  [1, 0, 0],
+                                  [0, 0, 0],
+                                  [0, 1, 0],
+                                  [1, 0, 0]], dtype=np.int32)
         dispatch_mask_lm = LabeledMatrix([np.arange(10).astype(str).tolist(), ['t1', 't2', 't3']], dispatch_mask)
 
         pop_allocation = lm.population_allocation(dispatch_mask_lm)

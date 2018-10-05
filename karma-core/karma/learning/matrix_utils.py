@@ -47,18 +47,18 @@ def truncate_by_budget(matrix, density, volume, axis=1):
         array([[1. , 0.4, 0. , 0. ],
                [0. , 1. , 0.5, 0. ],
                [0. , 0. , 1. , 0.6],
-               [0. , 0.8, 0. , 1. ]])
+               [0. , 0.8, 0. , 1. ]], dtype=float32)
         >>> truncate_by_budget(similarity, density, 3).toarray()  # top(nb_h = 3)
         array([[1. , 0.4, 0.2, 0. ],
                [0.3, 1. , 0.5, 0. ],
                [0. , 0.5, 1. , 0.6],
-               [0. , 0.8, 0.6, 1. ]])
+               [0. , 0.8, 0.6, 1. ]], dtype=float32)
         >>> density = np.array([2., 1.01, 0.2, 1.0])
         >>> truncate_by_budget(similarity, density, 2.).toarray()
         array([[1. , 0. , 0. , 0. ],
                [0.3, 1. , 0.5, 0. ],
                [0. , 0.5, 1. , 0.6],
-               [0. , 0.8, 0. , 1. ]])
+               [0. , 0.8, 0. , 1. ]], dtype=float32)
         >>> similarity = np.array([[0., 0., 0., 0.],
         ...                        [0., 1., 0., 0],
         ...                        [0., 2., 0., 0.],
@@ -68,7 +68,7 @@ def truncate_by_budget(matrix, density, volume, axis=1):
         array([[0., 0., 0., 0.],
                [0., 1., 0., 0.],
                [0., 2., 0., 0.],
-               [0., 3., 0., 1.]])
+               [0., 3., 0., 1.]], dtype=float32)
     """
     density = density if len(density.shape) == 1 else density.diagonal()
     if not is_karmasparse(matrix):
@@ -94,7 +94,7 @@ def truncate_by_count(matrix, max_rank, axis):
         array([[0.  , 0.51, 0.  , 0.  , 0.  ],
                [0.  , 0.  , 0.  , 0.  , 0.  ],
                [0.  , 0.  , 0.  , 0.52, 0.  ],
-               [0.  , 0.  , 0.5 , 0.  , 0.  ]])
+               [0.  , 0.  , 0.5 , 0.  , 0.  ]], dtype=float32)
         >>> np.allclose(res, truncate_by_count(mat, max_rank=1, axis=1))
         True
         >>> np.allclose(truncate_by_count(KarmaSparse(mat), max_rank=2, axis=None).toarray(),
@@ -218,12 +218,12 @@ def truncate_by_cumulative(matrix, per, axis):
     array([[0.4, 0.5, 0. , 0. , 0. ],
            [0. , 0. , 0. , 0. , 0. ],
            [0. , 0. , 0.4, 0.5, 0. ],
-           [0. , 0. , 0.5, 0.4, 0. ]])
+           [0. , 0. , 0.5, 0.4, 0. ]], dtype=float32)
     >>> truncate_by_cumulative(KarmaSparse(mat), per=0.5, axis=1).toarray()
     array([[0. , 0.5, 0. , 0. , 0. ],
            [0. , 0. , 0. , 0. , 0. ],
            [0. , 0. , 0. , 0.5, 0. ],
-           [0. , 0. , 0.5, 0. , 0. ]])
+           [0. , 0. , 0.5, 0. , 0. ]], dtype=float32)
     """
     per = max(min(1, per), 0)
     if is_scipysparse(matrix):
@@ -248,12 +248,12 @@ def buddies_matrix(matrix, cutoff=0.001, nb_keep=200, top=None, cumtop=None):
     array([[1. , 0.2, 0. , 0.2],
            [0.2, 1. , 0. , 0.8],
            [0. , 0. , 0. , 0. ],
-           [0.2, 0.8, 0. , 1. ]])
+           [0.2, 0.8, 0. , 1. ]], dtype=float32)
     >>> buddies_matrix(KarmaSparse(mat, format="csc"), nb_keep=2).toarray()
     array([[1. , 0.2, 0. , 0. ],
            [0. , 1. , 0. , 0.8],
            [0. , 0. , 0. , 0. ],
-           [0. , 0.8, 0. , 1. ]])
+           [0. , 0.8, 0. , 1. ]], dtype=float32)
     """
     # truncate for RAM security reasons
     if top is not None and cumtop is not None:
@@ -280,17 +280,17 @@ def pairwise_buddy(matrix, other, cutoff=0.001, nb_keep=200):
     array([[1. , 0.2],
            [0.2, 1. ],
            [0. , 0. ],
-           [0.2, 0.8]])
+           [0.2, 0.8]], dtype=float32)
     >>> pairwise_buddy(KarmaSparse(mat), mat[:2]).toarray()
     array([[1. , 0.2],
            [0.2, 1. ],
            [0. , 0. ],
-           [0.2, 0.8]])
+           [0.2, 0.8]], dtype=float32)
     >>> pairwise_buddy(KarmaSparse(mat, format="csc"), KarmaSparse(mat[1:]), nb_keep=2).toarray()
     array([[0.2, 0. , 0.2],
            [1. , 0. , 0.8],
            [0. , 0. , 0. ],
-           [0.8, 0. , 1. ]])
+           [0.8, 0. , 1. ]], dtype=float32)
     """
     if not is_karmasparse(matrix):
         matrix = KarmaSparse(matrix, format="csr")
@@ -311,7 +311,7 @@ def pseudo_element_inverse(matrix, scalar=1.):
     ...        pseudo_element_inverse(a))
     True
     >>> np.all(pseudo_element_inverse(KarmaSparse(a)).toarray() ==
-    ...        pseudo_element_inverse(a))
+    ...        pseudo_element_inverse(a.astype(np.float32)))
     True
     """
     if is_scipysparse(matrix):
@@ -424,10 +424,10 @@ def argsort_vector(vec, reverse=False):
     >>> import scipy.sparse as sp
     >>> vec = sp.csc_matrix(np.array([0, 3, 0, 6, -3]))
     >>> argsort_vector(vec)
-    (array([4, 1, 3], dtype=int32), array([-3.,  3.,  6.]))
+    (array([4, 1, 3], dtype=int32), array([-3.,  3.,  6.], dtype=float32))
     >>> sp_vec = sp.csc_matrix(np.array([0, 3, 0, 6, -3]))
     >>> argsort_vector(sp_vec)
-    (array([4, 1, 3], dtype=int32), array([-3.,  3.,  6.]))
+    (array([4, 1, 3], dtype=int32), array([-3.,  3.,  6.], dtype=float32))
     """
     if vec.shape[0] != 1 and len(vec.shape) != 1:
         raise SparseUtilsException("vec should be of shape (1,n)")
@@ -1151,7 +1151,7 @@ def sparse_quantiles(matrix, nb, axis):
     >>> mat =  KarmaSparse(sp.csr_matrix(np.arange(20).reshape(2,10)))
     >>> sparse_quantiles(mat, 2, 1).toarray()
     array([[0., 1., 1., 1., 1., 2., 2., 2., 2., 2.],
-           [1., 1., 1., 1., 1., 2., 2., 2., 2., 2.]])
+           [1., 1., 1., 1., 1., 2., 2., 2., 2., 2.]], dtype=float32)
     """
     bins = np.arange(nb, dtype=np.float) / nb
 
@@ -1309,7 +1309,7 @@ def rank_dispatch(matrix, maximum_pressure, max_rank, max_volume):
     >>> rank_dispatch(matrix, 1, max_rank=np.array([3,3]), max_volume=np.array([3,3])).toarray()
     array([[2., 0.],
            [1., 0.],
-           [0., 0.]])
+           [0., 0.]], dtype=float32)
     """
     if is_karmasparse(matrix) or is_scipysparse(matrix):  # TODO
         raise NotImplementedError()
@@ -1327,7 +1327,7 @@ def argmax_dispatch(matrix, maximum_pressure, max_rank, max_volume):
     >>> sparse_argmax_dispatch(KarmaSparse(matrix), maximum_pressure=1, max_rank=ranks, max_volume=volumes).toarray()
     array([[0.8, 0. ],
            [0. , 0.5],
-           [0. , 0. ]])
+           [0. , 0. ]], dtype=float32)
     """
     nb_user, nb_topic = matrix.shape
     assert nb_topic == max_volume.shape[0]
@@ -1451,11 +1451,11 @@ def matrix_group_by(matrix, group_by_key_column, aggregator='mean'):
     >>> reversed_indices = [0, 0, 1]
     >>> matrix_group_by(matrix, reversed_indices, aggregator='sum')
     array([[ 3., 14.,  7.],
-           [ 6.,  7.,  8.]])
+           [ 6.,  7.,  8.]], dtype=float32)
     >>> mat = np.array([-6.9, 5.4, -9.4, 0.4, -4.6, 6.2, -2.0, 5.6, 0.1]).reshape(3,3)
     >>> matrix_group_by(mat, reversed_indices, aggregator='sum')
-    array([[-6.5,  0.8, -3.2],
-           [-2. ,  5.6,  0.1]])
+    array([[-6.5      ,  0.8000001, -3.1999996],
+           [-2.       ,  5.6      ,  0.1      ]], dtype=float32)
     """
     from karma.core.column import Column, AliasColumn
     if isinstance(group_by_key_column, (Column, AliasColumn)):

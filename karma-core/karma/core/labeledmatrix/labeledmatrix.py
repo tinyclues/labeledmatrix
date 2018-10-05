@@ -189,7 +189,7 @@ class LabeledMatrix(object):
         >>> LabeledMatrix((row, column), matrix.astype(np.float32)).dtype
         dtype('float32')
         >>> LabeledMatrix((row, column), matrix).to_sparse().dtype
-        dtype('float64')
+        dtype('float32')
         """
         return self.matrix.dtype
 
@@ -881,7 +881,7 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c']), np.array([[4, 6], [7, 9]]))
         >>> lm.to_sparse().without_diagonal().matrix.toarray()
         array([[0., 6.],
-               [7., 0.]])
+               [7., 0.]], dtype=float32)
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c', 'd']), np.array([[4, 6, 8], [7, 9, 3]]))
         >>> lm.without_diagonal().matrix
         array([[0, 6, 8],
@@ -1027,13 +1027,13 @@ class LabeledMatrix(object):
                [1. , 1. ]])
         >>> d.to_sparse()._divide(lm.to_sparse()).matrix.toarray()
         array([[0.5, 0. ],
-               [1. , 1. ]])
+               [1. , 1. ]], dtype=float32)
         >>> d._divide(lm.to_sparse()).matrix.toarray()
         array([[0.5, 0. ],
-               [1. , 1. ]])
+               [1. , 1. ]], dtype=float32)
         >>> d.to_sparse()._divide(lm).matrix.toarray()
         array([[0.5, 0. ],
-               [1. , 1. ]])
+               [1. , 1. ]], dtype=float32)
         """
         matrix = safe_multiply(self.matrix, pseudo_element_inverse(lm.matrix))
         return LabeledMatrix(self.label, matrix,
@@ -1060,11 +1060,11 @@ class LabeledMatrix(object):
                [0.4, 0. ]])
         >>> lm1.to_sparse().inverse(2.0).matrix.toarray()
         array([[2. , 1. ],
-               [0.4, 0. ]])
+               [0.4, 0. ]], dtype=float32)
         >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1,2], [5,4]]))
         >>> lm.to_sparse().inverse(2.0).matrix.toarray()
         array([[2. , 1. ],
-               [0.4, 0.5]])
+               [0.4, 0.5]], dtype=float32)
         >>> lm.inverse(2.).matrix
         array([[2. , 1. ],
                [0.4, 0.5]])
@@ -1265,11 +1265,11 @@ class LabeledMatrix(object):
         >>> lm.compatibility_renormalization(lmcat1, lmcat2, 1, 0).matrix.toarray()
         array([[0., 1., 0.],
                [0., 0., 5.],
-               [0., 0., 8.]])
+               [0., 0., 8.]], dtype=float32)
         >>> lm.compatibility_renormalization(lmcat1, lmcat2, 0, 1).matrix.toarray()
         array([[0., 0., 2.],
                [3., 4., 0.],
-               [6., 7., 0.]])
+               [6., 7., 0.]], dtype=float32)
         """
         lmcat1 = lmcat1.align(self, axes=[(1, 1, None)])[0]
         lmcat2 = lmcat2.align(self, axes=[(1, 0, None)])[0]
@@ -1364,7 +1364,7 @@ class LabeledMatrix(object):
         True
         >>> (lm.to_sparse() / 2.0).matrix.toarray()
         array([[0.5, 1. ],
-               [1.5, 2. ]])
+               [1.5, 2. ]], dtype=float32)
         >>> aeq((lm.to_sparse() / lm.to_sparse()).matrix, np.ones((2,2)))
         True
         >>> (lm / lm).matrix
@@ -1434,13 +1434,13 @@ class LabeledMatrix(object):
         ...                    np.array([[0.3, 0.6, 0], [0.75, 0.5, 0]]))
         >>> lm.max().sort().matrix.toarray()
         array([[0.75, 0.  ],
-               [0.  , 0.6 ]])
+               [0.  , 0.6 ]], dtype=float32)
         >>> lm.max().sort().label
         (['b', 'c'], ['b', 'c'])
         >>> lm.max(axis=0).sort().matrix.toarray()
         array([[0.75, 0.  , 0.  ],
                [0.  , 0.6 , 0.  ],
-               [0.  , 0.  , 0.  ]])
+               [0.  , 0.  , 0.  ]], dtype=float32)
         >>> lm.max(axis=0).sort().label
         (['x', 'y', 'z'], ['x', 'y', 'z'])
         >>> aeq(lm.max(axis=0).matrix, lm.to_sparse().max(axis=0).matrix.toarray())
@@ -1513,12 +1513,12 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((['a', 'b'], ['x', 'y']), np.array([[5, 5], [25, 75]])).sort()
         >>> lm.mean().matrix.toarray()
         array([[ 5.,  0.],
-               [ 0., 50.]])
+               [ 0., 50.]], dtype=float32)
         >>> lm.mean().label
         (['a', 'b'], ['a', 'b'])
         >>> lm.mean(axis=0).sort().matrix.toarray()
         array([[15.,  0.],
-               [ 0., 40.]])
+               [ 0., 40.]], dtype=float32)
         >>> lm.mean(axis=0).sort().label
         (['x', 'y'], ['x', 'y'])
         >>> aeq(lm.mean(axis=0).matrix, lm.to_sparse().mean(axis=0).matrix.toarray())
@@ -1540,7 +1540,7 @@ class LabeledMatrix(object):
                [0.25, 0.  ]])
         >>> lm.to_sparse().abs().matrix.toarray()
         array([[0.5 , 0.5 ],
-               [0.25, 0.  ]])
+               [0.25, 0.  ]], dtype=float32)
         """
         return LabeledMatrix(self.label, self.matrix.__abs__(), deco=self.deco)
 
@@ -1570,7 +1570,7 @@ class LabeledMatrix(object):
         array([[0. , 0.5, 0. , 0. ],
                [0. , 0. , 0. , 0. ],
                [0. , 0. , 0. , 0.5],
-               [0. , 0. , 0. , 0. ]])
+               [0. , 0. , 0. , 0. ]], dtype=float32)
         >>> lm.apply_lambda(bilambda).matrix
         array([[0. , 0.5, 0. , 0. ],
                [0. , 0. , 0. , 0. ],
@@ -1597,8 +1597,8 @@ class LabeledMatrix(object):
         array([[0.29639401, 0.8037937 ],
                [1.35840916, 1.54287067]])
         >>> lm.to_sparse().apply_numpy_function(np.log).matrix.toarray()
-        array([[0.29639401, 0.8037937 ],
-               [1.35840916, 1.54287067]])
+        array([[0.29639405, 0.80379367],
+               [1.3584092 , 1.5428706 ]], dtype=float32)
         >>> np.all(lm.apply_numpy_function(np.log).apply_numpy_function(np.exp).matrix == lm.matrix)
         True
         """
@@ -1649,7 +1649,7 @@ class LabeledMatrix(object):
                [0.1 , 0.  ]])
         >>> lm.to_sparse().clip(0.1, 0.25).matrix.toarray()
         array([[0.25, 0.1 ],
-               [0.1 , 0.  ]])
+               [0.1 , 0.  ]], dtype=float32)
         """
         return self.apply_numpy_function(np.clip, [lower, upper])
 
@@ -1662,7 +1662,7 @@ class LabeledMatrix(object):
                [0.73105858, 0.26894142, 0.98201379]])
         >>> lm.to_sparse().logistic(6).matrix.toarray()
         array([[0.04742587, 0.5       , 0.95257413],
-               [0.73105858, 0.26894142, 0.98201379]])
+               [0.7310586 , 0.26894143, 0.98201376]], dtype=float32)
         """
         return self.apply_numpy_function(logit, [shift, coef])
 
@@ -2057,14 +2057,14 @@ class LabeledMatrix(object):
         array([[1. , 0.2, 0. , 0. ],
                [0. , 1. , 0. , 0.8],
                [0. , 0. , 0. , 0. ],
-               [0. , 0.8, 0. , 1. ]])
+               [0. , 0.8, 0. , 1. ]], dtype=float32)
         >>> lm.similarity().label
         ([0, 1, 2, 3], [0, 1, 2, 3])
         >>> res = lm.similarity(other=lm.restrict_row([1, 2]), nb_keep=2)
         >>> res.matrix.toarray()
         array([[0.2],
                [1. ],
-               [0.8]])
+               [0.8]], dtype=float32)
         >>> res.label
         ([0, 1, 3], [1])
         """
@@ -2315,16 +2315,16 @@ class LabeledMatrix(object):
         >>> lm = LabeledMatrix((range(5), range(4)), np.arange(20).reshape(5,4))
         >>> u, w = lm.svd(2, randomized=False)
         >>> u.matrix
-        array([[ 1.23232132,  0.45176491],
-               [ 0.79741909,  1.58301848],
-               [ 0.36251687,  2.71427205],
-               [-0.07238536,  3.84552562],
-               [-0.50728759,  4.97677919]])
+        array([[ 1.2323054 ,  0.4517649 ],
+               [ 0.79740864,  1.5830183 ],
+               [ 0.3625115 ,  2.7142718 ],
+               [-0.07238551,  3.8455253 ],
+               [-0.5072828 ,  4.9767785 ]], dtype=float32)
         >>> u.label
         ([0, 1, 2, 3, 4], [0, 1])
         >>> w.label
         ([0, 1, 2, 3], [0, 1])
-        >>> u.dot(w.transpose()) == lm
+        >>> np.allclose(u.dot(w.transpose()).matrix, lm.matrix, atol=1e-4)
         True
         >>> u, w = lm.svd(2, randomized=True)
         >>> u.matrix
@@ -2333,6 +2333,8 @@ class LabeledMatrix(object):
                [-2.71427205, -0.36251687],
                [-3.84552562,  0.07238536],
                [-4.97677919,  0.50728759]])
+        >>> u.dot(w.transpose()) == lm
+        True
         """
         method = randomized_svd if randomized else svds
         if randomized:
@@ -2530,7 +2532,7 @@ class LabeledMatrix(object):
         >>> groups = LabeledMatrix((range(5), range(5)),  np.arange(25).reshape(5, 5) % 2).to_sparse()
         >>> np.array(lm.deduplicate_by(groups, nb=1).matrix)
         array([[0. , 0.5, 0. , 0.1, 0. ],
-               [0.1, 0. , 0.5, 0. , 0. ]])
+               [0.1, 0. , 0.5, 0. , 0. ]], dtype=float32)
         """
         exclude = exclude.align(self, axes=[(1, 0, None)])[0].nonzero_mask()
         rest, result = self.copy(), self.zeros()
@@ -3169,7 +3171,7 @@ class LabeledMatrix(object):
         if max_count is None:
             max_count = np.percentile(matrix.diagonal(), 80)
 
-        scipy_matrix = matrix.triu().to_scipy_sparse(copy=False).tocoo()
+        scipy_matrix = matrix.triu().to_scipy_sparse(copy=False).tocoo().astype(np.float)
 
         model = Glove(no_components=rank, alpha=alpha, max_count=max_count,
                       max_loss=10.0, learning_rate=learning_rate, random_state=seed)
