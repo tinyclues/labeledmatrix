@@ -5,8 +5,7 @@
 
 import numpy as np
 from cython.parallel import prange
-from cyperf.tools.types import DTYPE, ITYPE, LTYPE
-from cyperf.matrix.karma_sparse import KarmaSparse  # I would like to make cimport here
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ITYPE, LTYPE
 
 cimport cython
 from libc.stdlib cimport RAND_MAX, rand, srand, free, calloc
@@ -330,12 +329,12 @@ cdef class SAFP:
             if i >= min_iter and check_conv:
                 if self.check_convergence(examplars_stable_criteria):
                     if verbose:
-                        print "SAFP : Early convergence after {} iterations".format(i)
+                        print("SAFP : Early convergence after {} iterations".format(i))
                     break
         self.finish()
         if verbose:
             for i in xrange(self.nrows):
                 if self.is_exemplar[i]:
                     nb += 1
-            print "SAFP : {} clusters have been obtained".format(nb)
+            print("SAFP : {} clusters have been obtained".format(nb))
         return np.asarray(self.cluster_map)

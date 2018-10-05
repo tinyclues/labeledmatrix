@@ -9,4 +9,4 @@ def linear_error(matrix, regressor, intercept, target):
     if is_karmasparse(matrix):
         return matrix.linear_error(cast(regressor), cast(intercept), cast(target))
     else:
-        return linear_error_dense(matrix, cast(regressor), cast(intercept), cast(target))
+        return linear_error_dense(cast(matrix), cast(regressor), cast(intercept), cast(target))

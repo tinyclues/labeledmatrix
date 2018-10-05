@@ -36,7 +36,7 @@ SOURCE_FILE = [
     'hashing/hash_tools.pyx']
 
 
-cargs = ['-O2', '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable',
+cargs = ['-O3', '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable',
          '-std=c++11', '-ffast-math', '-fopenmp', '-msse4.2']
 largs = ['-fopenmp', '-msse4.2']
 

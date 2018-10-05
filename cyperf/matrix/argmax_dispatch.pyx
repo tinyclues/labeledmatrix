@@ -5,13 +5,12 @@
 
 import numpy as np
 from cyperf.tools import argsort
-from cyperf.matrix.karma_sparse import KarmaSparse
-from cyperf.tools.types import ITYPE, DTYPE, LTYPE
+from cyperf.matrix.karma_sparse import KarmaSparse, ITYPE, DTYPE, LTYPE
 from cyperf.where.indices_where_long import Vector
 
 cimport numpy as np
-from cyperf.tools.types cimport INT1, INT2, ITYPE_t, DTYPE_t, LTYPE_t
-from cyperf.matrix.karma_sparse cimport KarmaSparse
+from cyperf.matrix.karma_sparse cimport KarmaSparse, ITYPE_t, DTYPE_t, LTYPE_t
+from cyperf.tools.types cimport INT1, INT2
 from cyperf.where.indices_where_long cimport Vector
 
 
@@ -23,10 +22,13 @@ def sparse_argmax_dispatch(KarmaSparse matrix, int maximum_pressure, INT1[:] max
     >>> matrix = np.array([[0.8, 0.3], [0.4, 0.5], [0., 0.1]])
     >>> volumes = np.array([1, 1])
     >>> ranks = np.array([2, 2])
-    >>> sparse_argmax_dispatch(KarmaSparse(matrix), maximum_pressure=1, max_rank=ranks, max_volume=volumes).toarray()
-    array([[0.8, 0. ],
-           [0. , 0.5],
-           [0. , 0. ]])
+    >>> res = sparse_argmax_dispatch(KarmaSparse(matrix), maximum_pressure=1, max_rank=ranks, max_volume=volumes)
+    >>> res.dtype == DTYPE
+    True
+    >>> print(res.toarray())
+    [[0.8 0. ]
+     [0.  0.5]
+     [0.  0. ]]
     """
 
     cdef ITYPE_t nb_user, nb_topic, nnz = matrix.nnz

@@ -1,14 +1,23 @@
+#cython: embedsignature=True
+#cython: nonecheck=True
+#cython: overflowcheck=True
+#cython: unraisable_tracebacks=True
+
 cimport cython
 cimport numpy as np
 from cython.parallel cimport parallel, prange
 from cython cimport floating
-from libc.math cimport pow as _cpow
-from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, string, A, B
-from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
-from routine cimport (logistic, get_reducer, binary_func, mult, axpy, scalar_product, computed_quantile, mmax)
 
-# ctypedef (ITYPE_t, ITYPE_t) Shape_t  # BUG in cython : this type not cimportable
+from libc.stdlib cimport malloc, free, calloc, realloc
+from libc.string cimport memcpy
+from libc.math cimport pow as _cpow
+from cyperf.tools.types cimport ITYPE_t, LTYPE_t, bool, string, A, B, cmap
+from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
+
+ctypedef np.float32_t DTYPE_t
+
 ctypedef tuple Shape_t
+# ctypedef (ITYPE_t, ITYPE_t) Shape_t  # BUG in cython : this type not cimportable
 
 cdef Shape_t pair_swap(Shape_t x)
 cpdef bool is_karmasparse(mat) except? 0
@@ -47,6 +56,46 @@ cdef inline double cpow(double x, double y) nogil:
         return x
     else:
         return _cpow(x, y)
+
+
+#from scipy.linalg.cython_blas cimport daxpy, saxpy
+# Warning : type of blas routines should be compatible with DTYPE_t
+# void daxpy(int *n, d *da, d *dx, int *incx, d *dy, int *incy)
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline void axpy(ITYPE_t n, DTYPE_t a, A * x, DTYPE_t * y) nogil:
+    cdef int i
+    for i in xrange(n):
+        y[i] += a * x[i]
+    # daxpy(<int*>&n, &a, <double*>x, &m, <double*>y, &m)
+    # saxpy(<int*>&n, &a, <float*>x, &m, <float*>y, &m)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline DTYPE_t _scalar_product(ITYPE_t n, DTYPE_t* x, DTYPE_t* y) nogil:
+    cdef ITYPE_t k
+    cdef DTYPE_t res = 0
+    for k in xrange(n):
+        res += x[k] * y[k]
+    return res
+
+
+from scipy.linalg.cython_blas cimport sdot
+# d ddot(int *n, d *dx, int *incx, d *dy, int *incy)
+
+cdef inline DTYPE_t _blas_scalar_product(int n, DTYPE_t* x, DTYPE_t* y) nogil:
+    cdef int m = 1
+    #return ddot(<int*>&n, <double*>x, &m, <double*>y, &m)
+    return sdot(<int*>&n, <float*>x, &m, <float*>y, &m)
+
+
+cdef inline DTYPE_t scalar_product(ITYPE_t n, DTYPE_t * x, DTYPE_t * y) nogil:
+    if n <= 40:  # turns out to be faster for small n
+        return _scalar_product(n, x, y)
+    else:
+        return _blas_scalar_product(n, x, y)
 
 
 @cython.wraparound(False)
@@ -209,9 +258,101 @@ cdef inline void inplace_arange(ITYPE_t * x, int size) nogil:
     for j in xrange(size): x[j] = j
 
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline DTYPE_t computed_quantile(DTYPE_t* data, DTYPE_t quantile, LTYPE_t size, LTYPE_t dim) nogil:
+    cdef:
+        LTYPE_t last_negative_indice, j, nb_zero = dim - size
+        DTYPE_t res, previous
+        LTYPE_t indice_quantile = <LTYPE_t>(dim * quantile)
+        DTYPE_t* sorted_data = <DTYPE_t *>malloc(size  * sizeof(DTYPE_t))
+        DTYPE_t* temp = <DTYPE_t *>malloc(size  * sizeof(DTYPE_t))
+
+    memcpy(sorted_data, data, size * sizeof(DTYPE_t))
+    partial_sort(sorted_data, temp, size, size, False)
+
+    # find where is the first zero
+    for j in xrange(size):
+        if sorted_data[j] > 0:
+            last_negative_indice = j - 1
+            break
+    else:
+        last_negative_indice = size - 1
+
+    if indice_quantile > last_negative_indice:
+        if indice_quantile > last_negative_indice + nb_zero:
+            res = sorted_data[indice_quantile - nb_zero]
+        else:
+            res = 0
+    else:
+        res = sorted_data[indice_quantile]
+
+    if dim % 2 != 1:
+        indice_quantile = indice_quantile - 1
+        if indice_quantile > last_negative_indice:
+            if indice_quantile > last_negative_indice + nb_zero:
+                previous = sorted_data[indice_quantile - nb_zero]
+            else:
+                previous = 0
+        else:
+            previous = sorted_data[indice_quantile]
+        res = (res + previous) / 2
+    free(sorted_data)
+    free(temp)
+    return res
+
+
+ctypedef DTYPE_t (*binary_func)(DTYPE_t, DTYPE_t) nogil
+
+
+@cython.cdivision(True)
+cdef inline DTYPE_t save_division(DTYPE_t x, DTYPE_t y) nogil:
+    if y == 0:
+        return 0
+    else:
+        return x / y
+
+cdef inline DTYPE_t mult(DTYPE_t a, DTYPE_t b) nogil:
+    return a * b
+
+cdef inline DTYPE_t mmin(DTYPE_t a, DTYPE_t b) nogil:
+    if a > b:
+        return b
+    else:
+        return a
+
+cdef inline DTYPE_t mmax(DTYPE_t a, DTYPE_t b) nogil:
+    if a > b:
+        return a
+    else:
+        return b
+
+cdef inline DTYPE_t cadd(DTYPE_t a, DTYPE_t b) nogil:
+    return a + b
+
+cdef inline DTYPE_t cminus(DTYPE_t a, DTYPE_t b) nogil:
+    return a - b
+
+cdef inline DTYPE_t first(DTYPE_t a, DTYPE_t b) nogil:
+    return a
+
+cdef inline DTYPE_t last(DTYPE_t a, DTYPE_t b) nogil:
+    return b
+
+cdef inline DTYPE_t complement(DTYPE_t a, DTYPE_t b) nogil:
+    if b == 0:
+        return a
+    else:
+        return 0
+
+
+cdef cmap[string, binary_func] REDUCERLIST
+cdef binary_func get_reducer(string x) nogil except *
+
+
 cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
-                                                            floating[::1] values, shape=*,
-                                                            string aggregator=*, DTYPE_t default=*)
+                                                     floating[::1] values, shape=*,
+                                                     string aggregator=*, DTYPE_t default=*)
 
 
 cdef class KarmaSparse:
@@ -418,9 +559,9 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[dtype=ITYPE_t, ndim=1] axis_argmin(self, axis, bool only_nonzero=*)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_dot(self, np.ndarray matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_dot(self, A[:,::1] matrix)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, np.ndarray matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, A[:,::1] matrix)
 
     cdef np.ndarray[float, ndim=2] aligned_dense_agg(self, np.ndarray matrix, binary_func fn=*)
 

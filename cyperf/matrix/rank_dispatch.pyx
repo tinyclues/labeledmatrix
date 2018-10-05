@@ -7,11 +7,10 @@
 
 
 from cython.parallel import prange
-from karma_sparse cimport KarmaSparse
-from karma_sparse import KarmaSparse
+from cyperf.matrix.karma_sparse cimport KarmaSparse, np, DTYPE_t, ITYPE_t, LTYPE_t
+from cyperf.tools.types cimport INT1, INT2, A
+from cyperf.matrix.karma_sparse import KarmaSparse, np, LTYPE, DTYPE, ITYPE
 from cyperf.tools.sort_tools cimport partial_sort_decreasing_quick
-from cyperf.tools.types cimport np, LTYPE_t, DTYPE_t, ITYPE_t, A, INT1, INT2
-from cyperf.tools.types import np, LTYPE, DTYPE, ITYPE
 from libcpp.vector cimport vector
 from libc.string cimport memcpy
 

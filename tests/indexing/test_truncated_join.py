@@ -69,10 +69,12 @@ class TestSortedDateIndex(unittest.TestCase):
     def test_decay(self):
         ii = SortedDateIndex(['2017-03-12', '2017-03-22', '2017-03-22', '2017-03-31', '2017-04-01', '2017-04-01'])
         row_decay, column_decay = ii.decay(['2017-03-21', '2017-04-11'], 10)
-        self.assertEqual(row_decay[0] * column_decay[0],
-                         2 ** (-(np.datetime64('2017-03-21') - np.datetime64('2017-03-12')).astype(float) / 10))
-        self.assertEqual(row_decay[1] * column_decay[3],
-                         2 ** (-(np.datetime64('2017-04-11') - np.datetime64('2017-03-31')).astype(float) / 10))
+        np.testing.assert_almost_equal(row_decay[0] * column_decay[0],
+                                       2 ** (-(np.datetime64('2017-03-21') -
+                                               np.datetime64('2017-03-12')).astype(float) / 10))
+        np.testing.assert_almost_equal(row_decay[1] * column_decay[3],
+                                       2 ** (-(np.datetime64('2017-04-11') -
+                                               np.datetime64('2017-03-31')).astype(float) / 10))
 
         row_decay, column_decay = ii.decay(['2017-03-22', '2017-04-11'], 10)
         # decay for 2017-03-12 from 2017-03-22

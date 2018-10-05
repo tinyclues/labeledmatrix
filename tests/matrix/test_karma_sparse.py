@@ -2,8 +2,8 @@ import unittest
 import itertools
 import random
 from numpy import allclose as eq
-from numpy.testing import assert_array_almost_equal as np_almost_equal
-from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
+from numpy.testing import assert_array_almost_equal as _np_almost_equal
+from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
 from cyperf.matrix.karma_sparse import sp, np, ks_diag
 from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
 from cyperf.matrix.karma_sparse import dense_pivot
@@ -18,6 +18,14 @@ from cPickle import dumps, loads
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
 warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
+
+
+def np_almost_equal(x, y, decimal=5):
+    return _np_almost_equal(x, y, decimal)
+
+
+def array_cast(x):
+    return np.asarray(x, dtype=DTYPE)
 
 
 class MatrixFabric(object):
@@ -183,8 +191,8 @@ class TestKarmaSparse(unittest.TestCase):
             a.col[:] = 0
             a.data[:] = np.random.rand(a.data.shape[0])
             ks = KarmaSparse((a.data, (a.row, a.col)), shape=a.shape)
-            np_almost_equal(ks[0, 0], a.data.sum())
-            np_almost_equal(ks.sum(), a.data.sum())
+            np_almost_equal(ks[0, 0], a.data.sum(), 5)
+            np_almost_equal(ks.sum(), a.data.sum(), 5)
             np_almost_equal(ks.nnz, a.data.shape[0] > 0)
 
     def test_init_aggregator_coo(self):
@@ -438,7 +446,8 @@ class TestKarmaSparse(unittest.TestCase):
                 result = mat.truncate_by_count(axis=axis, nb=nb)
                 self.assertEqual(result.format, mat.format)
                 if axis == 1:
-                    d_result = truncate_by_count_axis1_dense(np.abs(m), np.full(m.shape[0], nb, dtype=np.int))
+                    d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m)),
+                                                             np.full(m.shape[0], nb, dtype=np.int))
                 else:
                     d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m.T)),
                                                              np.full(m.shape[1], nb, dtype=np.int)).T
@@ -497,13 +506,13 @@ class TestKarmaSparse(unittest.TestCase):
                 ks1 = KarmaSparse(x, format="csr")
                 ks2 = KarmaSparse(y, format="csr")
                 res = ks1.dot(ks2)
-                np_almost_equal(res.toarray(), x.dot(y))
+                np_almost_equal(res.toarray(), x.dot(y), 5)
                 self.assertEqual(res.format, "csr")
 
-                np_almost_equal(ks1.dot(ks1.T).toarray(), x.dot(x.T))
+                np_almost_equal(ks1.dot(ks1.T).toarray(), x.dot(x.T), 4)
 
                 res = ks1.tocsc().dot(ks2.tocsc())
-                np_almost_equal(res.toarray(), x.dot(y))
+                np_almost_equal(res.toarray(), x.dot(y), 5)
                 self.assertEqual(res.format, "csc")
 
     def test_div_scalar_by_zero(self):
@@ -674,10 +683,10 @@ class TestKarmaSparse(unittest.TestCase):
             for _ in xrange(10):
                 i = random.randint(-a.shape[0], a.shape[0] - 1)
                 j = random.randint(-a.shape[1], a.shape[1] - 1)
-                self.assertEqual(ks[i, j], a[i, j])
-                self.assertEqual(ks.tocsr()[i, j], a[i, j])
-                self.assertEqual(ks.tocsc()[i, j], a[i, j])
-                self.assertEqual(ks.T[j, i], a[i, j])
+                np_almost_equal(ks[i, j], a[i, j])
+                np_almost_equal(ks.tocsr()[i, j], a[i, j])
+                np_almost_equal(ks.tocsc()[i, j], a[i, j])
+                np_almost_equal(ks.T[j, i], a[i, j])
             # row slice
             for _ in xrange(15):
                 i = random.randint(0, a.shape[0] - 1)
@@ -774,6 +783,18 @@ class TestKarmaSparse(unittest.TestCase):
             np_almost_equal(loads(dumps(spmat.tocsr(), protocol=2)).toarray(), mat)
             np_almost_equal(loads(dumps(spmat.tocsc(), protocol=2)).toarray(), mat)
 
+    def test_load_64pickle(self):
+        """
+            The matrix in karma_sparse_64.pickle was saved from an environment where they were all in 64bit
+            we just want to make sure we can still load them
+        """
+        ks32 = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
+        path = './tests/matrix/karma_sparse_64.pickle'
+        with open(path, "r") as _f:
+            ks64 = loads(_f.read())
+        self.assertEqual(ks32.dtype, ks64.dtype)
+        np_almost_equal(ks32, ks64)
+
     # def test_run_in_subprocess(self):
     #     a = KarmaSparse(sp.rand(100, 100, 0.9, format="csr", random_state=100))
 
@@ -825,7 +846,7 @@ class TestKarmaSparse(unittest.TestCase):
         x = np.arange(6).reshape(2, 3)
         ks = KarmaSparse(np.arange(6).reshape(2, 3))
         y = np.asarray(ks)
-        self.assertEqual(y.dtype, np.float64)
+        self.assertEqual(y.dtype, DTYPE)
         self.assertTrue(np.all(x == y))
 
         self.assertEqual(np.array(ks, dtype=np.int32).dtype, np.int32)
@@ -869,7 +890,7 @@ class TestKarmaSparse(unittest.TestCase):
 
         res1 = dense_pivot(x, y, val, shape=shape, aggregator='add', default=-2.4)
         expected1 = np.array([[19., -1.], [-2.4, 5.]])
-        np.testing.assert_equal(res1, expected1)
+        np_almost_equal(res1, expected1)
 
         res_32 = dense_pivot(x, y, val.astype(np.float32), shape=shape, aggregator='add', default=-2.4)
         expected_32 = np.array([[19., -1.], [-2.4, 5.]], dtype=np.float32)
@@ -878,19 +899,19 @@ class TestKarmaSparse(unittest.TestCase):
 
         res2 = dense_pivot(x, y, val, shape=shape, aggregator='max', default=3.3)
         expected2 = np.array([[12., -1.], [3.3, 5.]])
-        np.testing.assert_equal(res2, expected2)
+        np_almost_equal(res2, expected2)
 
         res3 = dense_pivot(x, y, val, shape=shape, aggregator='min', default=np.nan)
         expected3 = np.array([[7., -1.], [np.nan, 5.]])
-        np.testing.assert_equal(res3, expected3)
+        np_almost_equal(res3, expected3)
 
         res4 = dense_pivot(x, y, val, shape=shape, aggregator='first', default=-np.inf)
         expected4 = np.array([[12., -1.], [-np.inf, 5.]])
-        np.testing.assert_equal(res4, expected4)
+        np_almost_equal(res4, expected4)
 
         res5 = dense_pivot(x, y, val, shape=shape, aggregator='last', default=0.)
         expected5 = np.array([[7., -1.], [0., 5.]])
-        np.testing.assert_equal(res5, expected5)
+        np_almost_equal(res5, expected5)
 
     def test_dense_pivot2(self):
         for _ in xrange(50):
@@ -1038,8 +1059,8 @@ class TestKarmaSparse(unittest.TestCase):
             expected_result = sparse.kronii(dense).dot(factor)
             expected_result2 = (sparse.kronii(dense) ** 2).dot(factor)
             for b in [dense, dense.astype(np.float32), KarmaSparse(dense)]:
-                np_almost_equal(expected_result, sparse.kronii_dot(b, factor))
-                np_almost_equal(expected_result2, sparse.kronii_dot(b, factor, 2))
+                np_almost_equal(expected_result, sparse.kronii_dot(b, factor), 5)
+                np_almost_equal(expected_result2, sparse.kronii_dot(b, factor, 2), 5)
 
     def test_kronii_test_transpose(self):
         for a in self.mf.iterator(dense=True):
@@ -1076,10 +1097,10 @@ class TestKarmaSparse(unittest.TestCase):
             expected_result += intercept
             expected_result += target[:, np.newaxis]
             expected_result **= 2
-            expected_result = expected_result.sum(axis=0)
+            expected_result = array_cast(expected_result.sum(axis=0))
 
             for b in [sparse, dense, dense.astype(np.float32)]:
-                np_almost_equal(expected_result, linear_error(b, regressor, intercept, target))
+                np_almost_equal(expected_result, linear_error(b, regressor, intercept, target), 5)
 
     def test_apply_apply_pointwise_function(self):
         for dense in self.mf.iterator(dense=True):
@@ -1089,7 +1110,7 @@ class TestKarmaSparse(unittest.TestCase):
                 expected = method(dense, *args, **kwargs)
                 expected[dense == 0] = 0
                 actual = sparse.apply_pointwise_function(method, args, kwargs)
-                np.testing.assert_array_equal(actual, expected)
+                np_almost_equal(actual, expected)
 
     def test_is_one_hot(self):
         # one hot
@@ -1110,7 +1131,7 @@ class TestKarmaSparse(unittest.TestCase):
             self.assertFalse(m.is_one_hot(1 - axis))
 
         matrix[0, idx[0]] = 1
-        matrix[0, idx[0]-1] = 1
+        matrix[0, idx[0] - 1] = 1
         not_one_hot_sparse = KarmaSparse(matrix, format='csr')
         for m, axis in [(not_one_hot_sparse, 1), (not_one_hot_sparse.tocsc(), 1),
                         (not_one_hot_sparse.T, 0), (not_one_hot_sparse.T.tocsr(), 0)]:
@@ -1124,8 +1145,8 @@ class TestKarmaSparse(unittest.TestCase):
         matrix1 = KarmaSparse((data, indices, indptr), shape=(100, 5), format='csc')
 
         for m in [matrix1, matrix1.tocsr()]:
-            np.testing.assert_equal(m.quantile_boundaries(4, axis=0), [[0.6] * 5, [0.78] * 5, [0.87] * 5])
-            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1), [[0.6, 0.78, 0.87]] * 5)
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0), array_cast([[0.6] * 5, [0.78] * 5, [0.87] * 5]))
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1), array_cast([[0.6, 0.78, 0.87]] * 5))
 
         data = np.hstack((data, [0.3, 0.5, 0.6]))
         indptr = np.hstack((indptr, [53]))
@@ -1133,8 +1154,8 @@ class TestKarmaSparse(unittest.TestCase):
         matrix2 = KarmaSparse((data, indices, indptr), shape=(100, 6), format='csc')
 
         for m in [matrix2, matrix2.tocsr()]:
-            np.testing.assert_equal(m.quantile_boundaries(4, axis=0)[:, -1], [0.3, 0.5, 0.5])
-            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1)[-1], [0.3, 0.5, 0.5])
+            np.testing.assert_equal(m.quantile_boundaries(4, axis=0)[:, -1], array_cast([0.3, 0.5, 0.5]))
+            np.testing.assert_equal(m.T.quantile_boundaries(4, axis=1)[-1], array_cast([0.3, 0.5, 0.5]))
 
         data = np.hstack((data, [1, 2]))
         indptr = np.hstack((indptr, [55]))

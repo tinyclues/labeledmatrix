@@ -5,21 +5,46 @@
 
 cimport cython
 import scipy.sparse as sp
+from scipy.special import expit
+
 import numpy as np
 from cython.parallel import parallel, prange
-from cyperf.tools.types import ITYPE, DTYPE, LTYPE
-from cyperf.tools import logit
+from cyperf.tools.types import ITYPE, LTYPE
+
+DTYPE = np.float32
 
 from cython.parallel cimport threadid
 from openmp cimport omp_get_num_threads
 from libc.string cimport memset, memcpy
-from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.stdlib cimport RAND_MAX, rand, srand
 from libc.math cimport fabs
 
 cdef string CSR = 'csr'
 cdef string CSC = 'csc'
 cdef string DEFAULT_AGG = 'add'
+
+
+REDUCERLIST['max'] = mmax
+REDUCERLIST['min'] = mmin
+REDUCERLIST['add'] = cadd
+REDUCERLIST['multiply'] = mult
+REDUCERLIST['divide'] = save_division
+REDUCERLIST['subtract'] = cminus
+REDUCERLIST['first'] = first
+REDUCERLIST['last'] = last
+REDUCERLIST['complement'] = complement
+
+
+def logit(x, shift=0., width=1.):
+    return expit((x - shift) / width)
+
+
+cdef binary_func get_reducer(string x) nogil except *:
+    if REDUCERLIST.count(x) > 0:
+        return REDUCERLIST[x]
+    else:
+        with gil:
+            raise ValueError('Unknown reducer : {}'.format(x))
 
 
 @cython.wraparound(False)
@@ -495,7 +520,7 @@ cdef class KarmaSparse:
 
         self.indices = np.array(indices, dtype=ITYPE, order="C", copy=copy)
         self.indptr = np.array(indptr, dtype=LTYPE, order="C", copy=copy)
-        self.data = np.array(data, dtype=DTYPE, order="C", copy=copy)
+        self.data = np.array(data, dtype=DTYPE, order="C", copy=copy)  # map to available numeric dtypes
 
         self.check_internal_structure()
         self.make_canonical(aggregator=aggregator)
@@ -516,7 +541,7 @@ cdef class KarmaSparse:
         self.from_flat_array(a.data, a.indices, a.indptr, a.shape, a.format, copy, aggregator)
         return 1
 
-    cdef bool from_zeros(self, tuple shape, format=None) except 0:
+    cdef bool from_zeros(self, tuple shape, format=None) except 0:  # dtype as argument
         check_nonzero_shape(shape)
         if format is None:
             format = CSR
@@ -524,7 +549,7 @@ cdef class KarmaSparse:
             check_acceptable_format(format)
         length = shape[0] + 1 if <string>format == CSR else shape[1] + 1
 
-        data = np.zeros(0, dtype=DTYPE)
+        data = np.zeros(0, dtype=DTYPE)  # self.dtype
         indices = np.zeros(0, dtype=ITYPE)
         indptr = np.zeros(length, dtype=LTYPE)
         self.from_flat_array(data, indices, indptr, shape, format, copy=False)
@@ -694,13 +719,17 @@ cdef class KarmaSparse:
             raise ValueError("KarmaSparse should have canonical format")
         self.check_internal_structure(1)
 
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cpdef bool check_positive(self) except 0:
         cdef LTYPE_t total_nnz = self.data.shape[0]
         cdef LTYPE_t j
 
-        for j in xrange(total_nnz):
-            if self.data[j] < 0:
-                raise ValueError('KarmaSparse contains negative values while only positive are expected')
+        with nogil:
+            for j in xrange(total_nnz):
+                if self.data[j] < 0:
+                    with gil:
+                        raise ValueError('KarmaSparse contains negative values while only positive are expected')
 
         return 1
 
@@ -968,7 +997,10 @@ cdef class KarmaSparse:
             return np.asarray(res).transpose()
 
     def __array__(self, dtype=None):
-        return self.toarray().astype(dtype=dtype, copy=False)
+        res = self.toarray()
+        if dtype is not None:
+            res = res.astype(dtype=dtype, copy=False)
+        return res
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -1381,15 +1413,15 @@ cdef class KarmaSparse:
 
         Example::
             >>> ks = KarmaSparse(np.array([[-1, 2, 0, -1.1], [3, 4, -3, -1]]))
-            >>> ks.truncate_by_count(nb=1, axis=1).toarray()
-            array([[0., 2., 0., 0.],
-                   [0., 4., 0., 0.]])
-            >>> ks.truncate_by_count(nb=1, axis=0).toarray()
-            array([[ 0.,  0.,  0.,  0.],
-                   [ 3.,  4., -3., -1.]])
-            >>> ks.truncate_by_count(nb=2, axis=1).toarray()
-            array([[-1.,  2.,  0.,  0.],
-                   [ 3.,  4.,  0.,  0.]])
+            >>> print(ks.truncate_by_count(nb=1, axis=1).toarray())
+            [[0. 2. 0. 0.]
+             [0. 4. 0. 0.]]
+            >>> print(ks.truncate_by_count(nb=1, axis=0).toarray())
+            [[ 0.  0.  0.  0.]
+             [ 3.  4. -3. -1.]]
+            >>> print(ks.truncate_by_count(nb=2, axis=1).toarray())
+            [[-1.  2.  0.  0.]
+             [ 3.  4.  0.  0.]]
         """
         assert np.all(nb >= 0), 'nb values should be non-negative'
         if axis is None:
@@ -1422,16 +1454,16 @@ cdef class KarmaSparse:
         Example::
             >>> ks = KarmaSparse(np.array([[-1, 2, 0, -1], [3, 4, -3, -1]]))
             >>> values = np.array([1, -1, 2, 3])
-            >>> ks.truncate_by_budget(values, budget=0., axis=1).toarray()
-            array([[-1.,  2.,  0.,  0.],
-                   [ 3.,  4.,  0.,  0.]])
-            >>> ks.truncate_by_budget(values, budget=0.1, axis=1).toarray()
-            array([[-1.,  2.,  0., -1.],
-                   [ 3.,  4.,  0., -1.]])
+            >>> print(ks.truncate_by_budget(values, budget=0., axis=1).toarray())
+            [[-1.  2.  0.  0.]
+             [ 3.  4.  0.  0.]]
+            >>> print(ks.truncate_by_budget(values, budget=0.1, axis=1).toarray())
+            [[-1.  2.  0. -1.]
+             [ 3.  4.  0. -1.]]
             >>> values = np.array([1, 1, 1, 1])  # same as truncate_by_count
-            >>> ks.truncate_by_budget(values, budget=2, axis=1).toarray()
-            array([[-1.,  2.,  0.,  0.],
-                   [ 3.,  4.,  0.,  0.]])
+            >>> print(ks.truncate_by_budget(values, budget=2, axis=1).toarray())
+            [[-1.  2.  0.  0.]
+             [ 3.  4.  0.  0.]]
         """
         if self.aligned_axis(axis):
             return self.aligned_truncate_by_budget(values, budget)
@@ -1668,21 +1700,26 @@ cdef class KarmaSparse:
 
     def kronii(self, other):
         check_shape_comptibility(self.shape[0], other.shape[0])
+
+        # TODO : make it generic tools
+        if isinstance(other, np.ndarray) and other.dtype.str not in ['<f4', '<f8']:
+            other = other.astype(self.dtype, copy=False)
+
         if self.format == 'csr':
             if isinstance(other, np.ndarray):
-                if other.dtype == np.float32:
-                    return self.kronii_align_dense[float](other)
+                if other.dtype == np.float64:
+                    return self.kronii_align_dense[double](other)
                 else:
-                    return self.kronii_align_dense[double](other.astype(DTYPE, copy=False))
+                    return self.kronii_align_dense[float](other)
             else:
                 return self.kronii_align_sparse(KarmaSparse(other, format='csr', copy=False))
         else:
             if isinstance(other, np.ndarray):
                 self_transp = self.swap_slicing()
-                if other.dtype == np.float32:
-                    return self_transp.kronii_align_dense[float](other)
+                if other.dtype == np.float64:
+                    return self_transp.kronii_align_dense[double](other)
                 else:
-                    return self_transp.kronii_align_dense[double](other.astype(DTYPE, copy=False))
+                    return self_transp.kronii_align_dense[float](other)
             else:
                 return self.swap_slicing().kronii_align_sparse(KarmaSparse(other, format='csr', copy=False))
 
@@ -2429,22 +2466,6 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_dot(self, np.ndarray matrix):
-        check_shape_comptibility(self.ncols, matrix.shape[0])
-        cdef:
-            ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
-            ITYPE_t i
-            LTYPE_t j
-
-        for i in prange(self.nrows, nogil=True, schedule='static'):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
-                axpy(n_cols, self.data[j], &mat[self.indices[j], 0], &out[i, 0])
-        return out
-
-    @cython.wraparound(False)
-    @cython.boundscheck(False)
     def linear_error(self, DTYPE_t[:,::1] matrix, DTYPE_t[::1] column, DTYPE_t[::1] row):
         if self.format != CSR:
             return self.tocsr().linear_error(matrix, column, row)
@@ -2658,20 +2679,49 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, np.ndarray matrix):
-        check_shape_comptibility(self.nrows, matrix.shape[0])
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_dot(self, A[:,::1] matrix):
+        check_shape_comptibility(self.ncols, matrix.shape[0])
         cdef:
-            ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=DTYPE, order='C')
-            ITYPE_t i
+            ITYPE_t i, n_cols = matrix.shape[1]
             LTYPE_t j
+            DTYPE_t[:,::1] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
 
-        with nogil:
-            for i in xrange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
-                    axpy(n_cols, self.data[j], &mat[i, 0], &out[self.indices[j], 0])
-        return out
+        for i in prange(self.nrows, nogil=True, schedule='static'):
+            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                axpy(n_cols, self.data[j], &matrix[self.indices[j], 0], &out[i, 0])
+        return np.asarray(out)
+
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, A[:,::1] matrix):
+        check_shape_comptibility(self.nrows, matrix.shape[0])
+
+        cdef:
+            ITYPE_t i, n_cols = matrix.shape[1]
+            LTYPE_t j
+            int ti, n_th
+
+        for ti in prange(1, nogil=True):
+            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+
+        cdef int size = self.nrows / n_th, start, stop
+        cdef DTYPE_t[:,:,::1] out_tmp = np.zeros((n_th, self.ncols, n_cols), dtype=DTYPE, order='C')
+
+        if self.nnz:
+            with nogil, parallel(num_threads=n_th):
+                ti = threadid()
+                start = size * ti
+                stop = self.nrows if ti + 1 == n_th else size * (ti + 1)
+                for i in xrange(start, stop):
+                    for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                        axpy(n_cols, self.data[j], &matrix[i, 0], &out_tmp[ti, self.indices[j], 0])
+
+        if n_th == 1:
+            return np.asarray(out_tmp)[0]
+        else:
+            return np.asarray(out_tmp).sum(axis=0)
+
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -2731,23 +2781,23 @@ cdef class KarmaSparse:
         else:
             return self.aligned_dense_vector_dot(vector)
 
-    def dense_dot_right(self, np.ndarray matrix):
+    def dense_dot_right(self, np.ndarray[A, ndim=2] matrix):
+        cdef A[:,::1] conti_matrix = np.ascontiguousarray(matrix)
         if self.format == CSR:
-            return self.aligned_dense_dot(matrix)
+            return self.aligned_dense_dot(conti_matrix)
         else:
-            if matrix.shape[1] > 60:  # 60 is an experimentally found constant
-                return self.swap_slicing().aligned_dense_dot(matrix)
-            else:
-                return self.misaligned_dense_dot(matrix)
+            # XXX : we could change data structure here :
+            # return self.swap_slicing().aligned_dense_dot(matrix)
+            return self.misaligned_dense_dot(conti_matrix)
 
-    def dense_dot_left(self, np.ndarray matrix):
+    def dense_dot_left(self, np.ndarray[A, ndim=2] matrix):
+        cdef A[:,::1] mat_transpose = np.ascontiguousarray(matrix.transpose())
         if self.format == CSC:
-            return self.aligned_dense_dot(matrix.transpose()).transpose()
+            return self.aligned_dense_dot(mat_transpose).transpose()
         else:
-            if matrix.shape[0] > 60:  # 60 is an experimentally found constant
-                return self.swap_slicing().aligned_dense_dot(matrix.transpose()).transpose()
-            else:
-                return self.misaligned_dense_dot(matrix.transpose()).transpose()
+            # XXX : we could change data structure here :
+            # return self.swap_slicing().aligned_dense_dot(matrix.transpose()).transpose()
+            return self.misaligned_dense_dot(mat_transpose).transpose()
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -2896,8 +2946,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other,
-                                                               binary_func fn):
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, binary_func fn):
         check_shape_comptibility(self.shape, np.asarray(other).shape)
 
         if self.format != CSR:
@@ -3072,6 +3121,10 @@ cdef class KarmaSparse:
         return self.generic_binary_operation(other, get_reducer('min'))
 
     cdef KarmaSparse multiply(self, other):
+        # TODO : make it generic tools
+        if isinstance(other, np.ndarray) and other.dtype.str not in ['<f4', '<f8']:
+            other = other.astype(self.dtype, copy=False)
+
         cdef binary_func fn = get_reducer('multiply')
         if is_karmasparse(other):
             return self.generic_restricted_binary_operation(other, fn)
@@ -3079,12 +3132,15 @@ cdef class KarmaSparse:
             if other.dtype == np.float32:
                 return self.generic_dense_restricted_binary_operation[float](other, fn)
             else:
-                return self.generic_dense_restricted_binary_operation[double](other.astype(np.float, copy=False),
-                                                                              fn)
+                return self.generic_dense_restricted_binary_operation[double](other, fn)
         else:
             raise ValueError(other)
 
     cdef KarmaSparse divide(self, other):
+        # TODO : make it generic tools
+        if isinstance(other, np.ndarray) and other.dtype.str not in ['<f4', '<f8']:
+            other = other.astype(self.dtype, copy=False)
+
         cdef binary_func fn = get_reducer('divide')
 
         if is_karmasparse(other):
@@ -3093,8 +3149,7 @@ cdef class KarmaSparse:
             if other.dtype == np.float32:
                 return self.generic_dense_restricted_binary_operation[float](other, fn)
             else:
-                return self.generic_dense_restricted_binary_operation[double](other.astype(np.float, copy=False),
-                                                                              fn)
+                return self.generic_dense_restricted_binary_operation[double](other, fn)
         else:
             raise ValueError(other)
 
@@ -3113,7 +3168,7 @@ cdef class KarmaSparse:
                         other = np.repeat(other, self.shape[1], axis=1)
                     if other.shape == (1, self.shape[1]):
                         other = np.repeat(other, self.shape[0], axis=0)
-                return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(np.float, copy=False),
+                return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(DTYPE, copy=False),
                                                                            get_reducer('add'))
             else:
                 raise ValueError('operands could not be broadcast together with shapes {} {}'
@@ -3539,16 +3594,12 @@ cdef class KarmaSparse:
         if self.format == 'csc':
             return self.swap_slicing().kronii_dense_dot(matrix, factor, power)
 
-        cdef DTYPE_t[::1] result = np.zeros(self.nrows, dtype=np.float64)
+        cdef DTYPE_t[::1] result = np.zeros(self.nrows, dtype=DTYPE)
         cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
 
         if self.nnz > 0:
-            if np.asarray(matrix).dtype == np.float32:
-                kronii_dot[float](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                                  &self.data[0], <float*>&matrix[0, 0], &_factor[0], &result[0], power)
-            else:
-                kronii_dot[double](self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
-                                   &self.data[0], <double*>&matrix[0, 0], &_factor[0], &result[0], power)
+            kronii_dot(self.nrows, matrix.shape[1], &self.indptr[0], &self.indices[0],
+                       &self.data[0], <floating*>&matrix[0, 0], &_factor[0], &result[0], power)
         return np.asarray(result)
 
     def kronii_sparse_dot(self, KarmaSparse other, np.ndarray factor, double power=1.):
@@ -3590,24 +3641,13 @@ cdef class KarmaSparse:
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * matrix.shape[1]), dtype=DTYPE)
 
         if self.nnz > 0:
-            if np.asarray(matrix).dtype == np.float32:
-                with nogil, parallel(num_threads=n_th):
-                    ti = threadid()
-                    start = batch_size * ti
-                    stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
-                    kronii_dot_transpose[float](start, stop, matrix.shape[1],
-                                                &self.indptr[0], &self.indices[0], &self.data[0],
-                                                <float*>&matrix[0, 0],
-                                                &_factor[0], &out_tmp[ti, 0], power)
-            else:
-                with nogil, parallel(num_threads=n_th):
-                    ti = threadid()
-                    start = batch_size * ti
-                    stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
-                    kronii_dot_transpose[double](start, stop, matrix.shape[1],
-                                                &self.indptr[0], &self.indices[0], &self.data[0],
-                                                <double*>&matrix[0, 0],
-                                                &_factor[0], &out_tmp[ti, 0], power)
+            with nogil, parallel(num_threads=n_th):
+                ti = threadid()
+                start = batch_size * ti
+                stop = self.nrows if ti + 1 == n_th else batch_size * (ti + 1)
+                kronii_dot_transpose[floating](start, stop, matrix.shape[1],
+                                               &self.indptr[0], &self.indices[0], &self.data[0],
+                                               <floating*>&matrix[0, 0], &_factor[0], &out_tmp[ti, 0], power)
         return np.asarray(out_tmp).sum(axis=0)
 
 

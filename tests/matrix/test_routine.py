@@ -2,9 +2,14 @@ import unittest
 from bisect import bisect_left as bisect_left_old
 
 import numpy as np
-from cyperf.matrix.routine import (kronii, bisect_left, batch_contains_mask, batch_is_exceptional_mask,
+from cyperf.matrix.routine import (bisect_left, batch_contains_mask, batch_is_exceptional_mask,
                                    cy_safe_slug, cy_domain_from_email_lambda)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
+
+
+def kronii(left, right):
+    left, right = np.asarray(left, dtype=np.float32), np.asarray(right, dtype=np.float32)
+    return np.einsum('ij, ik -> ijk', left, right, optimize='optimal').reshape(left.shape[0], -1)
 
 
 class RoutineTestCase(unittest.TestCase):
@@ -41,14 +46,6 @@ class RoutineTestCase(unittest.TestCase):
             _ = cy_domain_from_email_lambda(33)
 
     def test_kronii(self):
-        x, y = np.array([[1, 10, 3]]), np.array([[5, 6], [0, 1]])
-
-        with self.assertRaises(ValueError) as e:
-            _ = kronii(x, y)
-        self.assertEqual('operands could not be broadcast together with shape'
-                         '{} and {}.'.format(x.shape, y.shape),
-                         e.exception.message)
-
         x, y = np.array([[1, 10, 3], [2, -2, 5]]), np.array([[5, 6], [0, 1]])
         xx = KarmaSparse(x)
         yy = KarmaSparse(y)

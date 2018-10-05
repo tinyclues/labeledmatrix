@@ -3,7 +3,7 @@ from cyperf.indexing.indexed_list import is_increasing
 from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sorted, last_indices_sorted,
                                    indices_truncation_lookup, first_indices_lookup, last_indices_lookup)
 import numpy as np
-from cyperf.matrix.karma_sparse import KarmaSparse
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 from pandas.core.algorithms import htable
 from pandas import to_datetime
 from multiprocessing.pool import ThreadPool
@@ -134,8 +134,8 @@ class LookUpDateIndex(object):
         d = safe_datetime64_cast(d)
         d_mask = np.logical_not(np.isnat(d))
 
-        column_decay = np.zeros(len(self.date_values), dtype=np.float)
-        row_decay = np.zeros(len(d), dtype=np.float)
+        column_decay = np.zeros(len(self.date_values), dtype=DTYPE)
+        row_decay = np.zeros(len(d), dtype=DTYPE)
 
         if np.any(d_mask):  # not all d values are dirty
 
@@ -143,7 +143,7 @@ class LookUpDateIndex(object):
             max_date = max(d.max(), self.max_date)
             delta = (max_date - min_date + 1).astype(int)
 
-            unique_decayed = 2. ** (-np.arange(delta, dtype=np.float) / half_life)
+            unique_decayed = 2. ** (-np.arange(delta, dtype=DTYPE) / half_life)
 
             ind_self = (self.date_values[self.mask] - min_date).view(np.int)
             column_decay[self.mask] = (1. / unique_decayed)[ind_self]
@@ -224,7 +224,7 @@ class BaseTruncatedIndex(object):
     def ks_get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all', half_life=None, nb=None):
         indices, indptr, repeated_indices, d = self._get_batch_window_indices(u, d, lower, upper, truncation)
 
-        data = np.ones(len(indices), dtype=np.float64)
+        data = np.ones(len(indices), dtype=DTYPE)
         ks = KarmaSparse((data, indices, indptr), format="csr",
                          shape=(len(d), self.user_index.indptr[-1]),
                          copy=False, has_sorted_indices=True, has_canonical_format=True)
