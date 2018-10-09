@@ -2365,8 +2365,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)  # turn of bounds-checking for entire function
-    cdef np.ndarray[dtype=ITYPE_t, ndim=1] misaligned_argminmax(self, bool reverse,
-                                                                bool only_nonzero=False):
+    cdef np.ndarray[dtype=ITYPE_t, ndim=1] misaligned_argminmax(self, bool reverse, bool only_nonzero=False):
         cdef:
             np.ndarray[ITYPE_t, ndim=1, mode="c"] out = - np.ones(self.ncols, dtype=ITYPE)
             np.ndarray[DTYPE_t, ndim=1, mode="c"] value = np.zeros(self.ncols, dtype=DTYPE)
@@ -2489,7 +2488,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse aligned_sparse_agg(self, KarmaSparse other, binary_func fn=mmax):
+    cdef KarmaSparse aligned_sparse_shadow(self, KarmaSparse other):
         check_shape_comptibility(self.ncols, other.nrows)
         cdef:
             ITYPE_t nrows = self.nrows
@@ -2544,7 +2543,7 @@ cdef class KarmaSparse:
                         ival = self.data[kk]
                         for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
-                            ires[j] = fn(ires[j], mult(other.data[jj], ival))
+                            ires[j] = mmax(ires[j], mult(other.data[jj], ival))
                             if mask[j] == -1:
                                 mask[j] = head
                                 head = j
@@ -2571,7 +2570,7 @@ cdef class KarmaSparse:
                         ival = self.data[kk]
                         for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
-                            ires[j] = fn(ires[j], mult(other.data[jj], ival))
+                            ires[j] = mmax(ires[j], mult(other.data[jj], ival))
                     nn = 0
                     if count[i] > 0:
                         for k in xrange(ncols):
@@ -2587,12 +2586,11 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[float, ndim=2] aligned_dense_agg(self, np.ndarray matrix, binary_func fn=mmax):
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix):
         check_shape_comptibility(self.ncols, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
-            np.ndarray[float, ndim=2, mode="c"] out = np.zeros((self.nrows, n_cols), dtype=np.float32, order='C')
+            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
             ITYPE_t i, k, ind
             LTYPE_t j
             DTYPE_t alpha
@@ -2602,78 +2600,72 @@ cdef class KarmaSparse:
                 alpha = self.data[j]
                 ind = self.indices[j]
                 for k in xrange(n_cols):
-                    out[i, k] = fn(out[i, k], alpha * mat[ind, k])
+                    out[i, k] = mmax(out[i, k], alpha * matrix[ind, k])
         return out
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[float, ndim=2] misaligned_dense_agg(self, np.ndarray matrix, binary_func fn=mmax):
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix):
         check_shape_comptibility(self.nrows, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] mat = np.asarray(matrix, dtype=DTYPE, order='C')
-            np.ndarray[float, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=np.float32, order='C')
+            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=DTYPE, order='C')
             ITYPE_t i, k
             LTYPE_t j, ind
             DTYPE_t alpha
 
+        # TODO : to make misaligned_dense_shadow parallel as for misaligned_dense_dot
+        # TODO : to unify code between shadow and dot routines
         with nogil:
             for i in xrange(self.nrows):
                 for j in xrange(self.indptr[i], self.indptr[i + 1]):
                     ind = self.indices[j]
                     alpha = self.data[j]
                     for k in xrange(n_cols):
-                        out[ind, k] = fn(out[ind, k], alpha * mat[i, k])
+                        out[ind, k] = mmax(out[ind, k], alpha * matrix[i, k])
         return out
 
-    def dense_shadow(self, np.ndarray matrix, reducer="max"):
-        supported_reducers = ['max', 'add']
-        if reducer not in supported_reducers:
-            raise ValueError('Unsupported reducer "{}", choose one from {}'.format(reducer,
-                                                                                   ', '.join(supported_reducers)))
-        cdef binary_func fn = get_reducer(<string?>reducer)
-
-        if reducer == "max":
-            self.check_positive()
-            if np.any(matrix < 0):
-                raise ValueError('Numpy matrix contains negative values while only positive are expected')
+    def dense_shadow(self, np.ndarray[A, ndim=2] matrix):
+        if np.any(matrix < 0):
+            raise ValueError('Numpy matrix contains negative values while only positive are expected')
 
         if self.format == CSR:
-            return self.aligned_dense_agg(matrix, fn)
+            return self.aligned_dense_shadow(matrix)
         else:
             if matrix.shape[1] > 60:  # 60 is an experimentally found constant
-                return self.swap_slicing().aligned_dense_agg(matrix, fn)
+                return self.swap_slicing().aligned_dense_shadow(matrix)
             else:
-                return self.misaligned_dense_agg(matrix, fn)
+                return self.misaligned_dense_shadow(matrix)
 
-    def sparse_shadow(self, KarmaSparse other, reducer="max"):
-        supported_reducers = ['max', 'add']
-        if reducer not in supported_reducers:
-            raise ValueError('Unsupported reducer "{}", choose one from {}'.format(reducer,
-                                                                                   ', '.join(supported_reducers)))
-        cdef binary_func fn = get_reducer(<string?>reducer)
-
-        if reducer == "max":
-            self.check_positive()
-            other.check_positive()
+    def sparse_shadow(self, KarmaSparse other):
+        other.check_positive()
 
         if self.format == CSR and other.format == CSR:
-            return self.aligned_sparse_agg(other, fn)
+            return self.aligned_sparse_shadow(other)
         elif self.format == CSR:
-            return self.aligned_sparse_agg(other.tocsr(), fn)
+            return self.aligned_sparse_shadow(other.tocsr())
         elif other.format == CSR:
-            return self.tocsr().aligned_sparse_agg(other, fn)
+            return self.tocsr().aligned_sparse_shadow(other)
         else:
             ### Q: is it correct in this case ?
             return other.transpose(copy=False)\
-                        .aligned_sparse_agg(self.transpose(copy=False), fn)\
+                        .aligned_sparse_shadow(self.transpose(copy=False))\
                         .transpose(copy=False)
 
     def shadow(self, other, reducer="max"):
+        supported_reducers = ['max', 'add']
+        if reducer not in supported_reducers:
+            raise ValueError('Unsupported reducer "{}", choose one from {}'
+                             .format(reducer, ', '.join(supported_reducers)))
+        if reducer == 'add':
+            return self.dot(other)
+
+        # so, reducer = 'max'
+        self.check_positive()
         if isinstance(other, np.ndarray):
-            return self.dense_shadow(other, reducer)
+            return self.dense_shadow(other)
         elif is_karmasparse(other):
-            return self.sparse_shadow(other, reducer)
+            return self.sparse_shadow(other)
         else:
             raise ValueError(other)
 

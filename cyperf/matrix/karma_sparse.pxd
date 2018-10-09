@@ -563,12 +563,13 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, A[:,::1] matrix)
 
-    cdef np.ndarray[float, ndim=2] aligned_dense_agg(self, np.ndarray matrix, binary_func fn=*)
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix)
 
-    cdef np.ndarray[float, ndim=2] misaligned_dense_agg(self, np.ndarray matrix, binary_func fn=*)
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix)
 
-    cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b,
-                                              binary_func op)
+    cdef KarmaSparse aligned_sparse_shadow(self, KarmaSparse other)
+
+    cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b, binary_func op)
 
     cdef KarmaSparse csr_mask_sparse_sparse_dot(self, KarmaSparse other_a, KarmaSparse other_b, binary_func op)
 
@@ -619,8 +620,6 @@ cdef class KarmaSparse:
     cdef KarmaSparse restrict_along_row(self, key)
 
     cdef KarmaSparse restrict_along_column(self, key)
-
-    cdef KarmaSparse aligned_sparse_agg(self, KarmaSparse other, binary_func fn=*)
 
     cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_vector_dot(self, A[::1] vector)
 

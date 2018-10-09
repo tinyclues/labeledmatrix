@@ -947,12 +947,12 @@ class TestKarmaSparse(unittest.TestCase):
         b_sp = KarmaSparse(b, format='csr')
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.dense_shadow(b)
+            _ = a_sp.shadow(b)
         self.assertEqual('KarmaSparse contains negative values while only positive are expected',
                          str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.sparse_shadow(b_sp)
+            _ = a_sp.shadow(b_sp)
         self.assertEqual('KarmaSparse contains negative values while only positive are expected',
                          str(e.exception))
 
@@ -960,27 +960,27 @@ class TestKarmaSparse(unittest.TestCase):
         a_sp = KarmaSparse(a, format='csr')
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.dense_shadow(b)
+            _ = a_sp.shadow(b)
         self.assertEqual('Numpy matrix contains negative values while only positive are expected',
                          str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.tocsc().dense_shadow(b)
+            _ = a_sp.tocsc().shadow(b)
         self.assertEqual('Numpy matrix contains negative values while only positive are expected',
                          str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.sparse_shadow(b_sp)
+            _ = a_sp.shadow(b_sp)
         self.assertEqual('KarmaSparse contains negative values while only positive are expected',
                          str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.dense_shadow(b, reducer='foo')
+            _ = a_sp.shadow(b, reducer='foo')
         self.assertEqual('Unsupported reducer "foo", choose one from max, add',
                          str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = a_sp.sparse_shadow(b_sp, reducer='min')
+            _ = a_sp.shadow(b_sp, reducer='min')
         self.assertEqual('Unsupported reducer "min", choose one from max, add',
                          str(e.exception))
 
@@ -994,17 +994,17 @@ class TestKarmaSparse(unittest.TestCase):
         a_sp = KarmaSparse(a, format='csr')
         b_sp = KarmaSparse(b, format='csr')
 
-        np_almost_equal(a_sp.dense_shadow(b), [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
-        np_almost_equal(a_sp.sparse_shadow(b_sp), [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
+        np_almost_equal(a_sp.shadow(b), [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
+        np_almost_equal(a_sp.shadow(b_sp), [[1, 1, 3], [5, 2, 3], [0, 2, 6]])
 
         # # FIXME the result should be [[0, 0, 0], [0, 0, 2], [0, 0, 0]]
-        # np_almost_equal(a_sp.dense_shadow(b, reducer='min'),
+        # np_almost_equal(a_sp.shadow(b, reducer='min'),
         #                                      [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
-        # np_almost_equal(a_sp.sparse_shadow(b_sp, reducer='min'),
+        # np_almost_equal(a_sp.shadow(b_sp, reducer='min'),
         #                                      [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
 
-        np_almost_equal(a_sp.dense_shadow(b, reducer='add'), a.dot(b))
-        np_almost_equal(a_sp.sparse_shadow(b_sp, reducer='add'), a.dot(b))
+        np_almost_equal(a_sp.shadow(b, reducer='add'), a.dot(b))
+        np_almost_equal(a_sp.shadow(b_sp, reducer='add'), a.dot(b))
 
     def test_agg_multiplication_random(self):
         for a in self.mf.iterator(dense=True):
@@ -1015,11 +1015,11 @@ class TestKarmaSparse(unittest.TestCase):
                 other_matrix[other_matrix < 0] = 0
                 other = KarmaSparse(other_matrix, format='csr')
                 for agg in ['max', 'add']:
-                    dense_res = ks.dense_shadow(other_matrix, reducer=agg)
-                    np_almost_equal(ks.sparse_shadow(other, reducer=agg), dense_res)
-                    np_almost_equal(ks.sparse_shadow(other.tocsc(), reducer=agg), dense_res)
-                    np_almost_equal(ks.tocsc().sparse_shadow(other, reducer=agg), dense_res)
-                    np_almost_equal(ks.tocsc().sparse_shadow(other.tocsc(), reducer=agg), dense_res)
+                    dense_res = ks.shadow(other_matrix, reducer=agg)
+                    np_almost_equal(ks.shadow(other, reducer=agg), dense_res)
+                    np_almost_equal(ks.shadow(other.tocsc(), reducer=agg), dense_res)
+                    np_almost_equal(ks.tocsc().shadow(other, reducer=agg), dense_res)
+                    np_almost_equal(ks.tocsc().shadow(other.tocsc(), reducer=agg), dense_res)
 
     def test_pointwise_multiplication(self):
         for a in self.mf.iterator(dense=True):
