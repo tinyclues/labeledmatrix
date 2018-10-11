@@ -104,8 +104,8 @@ def safe_datetime64_cast(date_values):
     try:
         return np.asarray(date_values, dtype="datetime64[D]")
     except ValueError:
-        return to_datetime(date_values, errors='coerce', infer_datetime_format=True, box=False)\
-                    .astype("datetime64[D]")
+        return to_datetime(date_values, errors='coerce',
+                           infer_datetime_format=True, box=False).astype("datetime64[D]")
 
 
 def sorted_unique(array):
@@ -130,28 +130,33 @@ class LookUpDateIndex(object):
         self.max_date = np.max(self.date_values)
         self.mask = np.logical_not(np.isnat(self.date_values))
 
-    def decay(self, d, half_life):
+    def apply_decay_inplace(self, ks, d, half_life):
+        if ks.shape != (len(d), len(self.date_values)):
+            raise ValueError('Bad matrix shape : {} != {}'.format(ks.shape, (len(d), len(self.date_values))))
+
         d = safe_datetime64_cast(d)
-        d_mask = np.logical_not(np.isnat(d))
 
-        column_decay = np.zeros(len(self.date_values), dtype=DTYPE)
-        row_decay = np.zeros(len(d), dtype=DTYPE)
+        if np.all(np.isnat(d)):
+            return ks * 0
 
-        if np.any(d_mask):  # not all d values are dirty
+        x, y = ks.nonzero()
+        # do this inplace as much as possible
+        delta = self.date_values[y] - d[x]  # this handles NaT correctly
+        dirty_mask = np.isnat(delta)
+        del x, y
+        delta = delta.astype(ks.dtype, copy=False)
+        delta /= np.timedelta64(half_life).astype(np.float)
+        delta.clip(-16, 16, out=delta)
+        delta *= np.log(2.)
+        np.exp(delta, out=delta)  # it's faster than 2 ** x
 
-            min_date = min(d.min(), self.min_date)
-            max_date = max(d.max(), self.max_date)
-            delta = (max_date - min_date + 1).astype(int)
-
-            unique_decayed = 2. ** (-np.arange(delta, dtype=DTYPE) / half_life)
-
-            ind_self = (self.date_values[self.mask] - min_date).view(np.int)
-            column_decay[self.mask] = (1. / unique_decayed)[ind_self]
-
-            ind_d = (d[d_mask] - min_date).view(np.int)
-            row_decay[d_mask] = unique_decayed[ind_d]
-
-        return row_decay, column_decay
+        # hack to write values inplace
+        delta[dirty_mask] = 0
+        ks.data[:] = delta
+        del delta
+        if np.any(dirty_mask):
+            ks.eliminate_zeros()
+        return ks
 
 
 class SortedDateIndex(LookUpDateIndex):
@@ -229,9 +234,7 @@ class BaseTruncatedIndex(object):
                          shape=(len(d), self.user_index.indptr[-1]),
                          copy=False, has_sorted_indices=True, has_canonical_format=True)
         if half_life is not None:
-            row_decay, column_decay = self.date_index.decay(d, half_life=half_life)
-            ks = ks.scale_along_axis_inplace(row_decay, axis=1)\
-                   .scale_along_axis_inplace(column_decay, axis=0)
+            ks = self.date_index.apply_decay_inplace(ks, d, half_life=half_life)
 
         if nb is not None:
             # this can be done inside cython routine earlier to be more memory efficient ...

@@ -7,7 +7,7 @@ import numpy as np
 
 from cyperf.indexing.truncated_join import (sorted_unique, SortedDateIndex, SortedTruncatedIndex,
                                             LookUpDateIndex, LookUpTruncatedIndex, create_truncated_index,
-                                            two_integer_array_deduplication, _merge_ks_struct)
+                                            two_integer_array_deduplication, _merge_ks_struct, KarmaSparse)
 from cyperf.indexing import ColumnIndex
 
 
@@ -66,21 +66,28 @@ class TestSortedDateIndex(unittest.TestCase):
         self.assertEqual(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-7, upper=4)),
                          [(1, 4), (1, 6)])
 
-    def test_decay(self):
-        ii = SortedDateIndex(['2017-03-12', '2017-03-22', '2017-03-22', '2017-03-31', '2017-04-01', '2017-04-01'])
-        row_decay, column_decay = ii.decay(['2017-03-21', '2017-04-11'], 10)
-        np.testing.assert_almost_equal(row_decay[0] * column_decay[0],
-                                       2 ** (-(np.datetime64('2017-03-21') -
-                                               np.datetime64('2017-03-12')).astype(float) / 10))
-        np.testing.assert_almost_equal(row_decay[1] * column_decay[3],
-                                       2 ** (-(np.datetime64('2017-04-11') -
-                                               np.datetime64('2017-03-31')).astype(float) / 10))
+    def test_apply_decay_inplace(self):
+        self_d = ['2017-03-12', '2017-03-22', '2017-03-22', '2017-03-31', '2017-04-01', '2017-04-01']
+        ii = SortedDateIndex(self_d)
+        ks = KarmaSparse(np.arange(18).reshape(3, 6) % 2)
 
-        row_decay, column_decay = ii.decay(['2017-03-22', '2017-04-11'], 10)
-        # decay for 2017-03-12 from 2017-03-22
-        self.assertEqual(row_decay[0] * column_decay[0], 0.5)
-        # decay for 2017-04-01 from 2017-04-11
-        self.assertEqual(row_decay[1] * column_decay[-1], 0.5)
+        ks_copy = ks.copy()
+
+        d = ['2017-03-21', '2017-04-11', '']
+        ks_out = ii.apply_decay_inplace(ks_copy, d, 10)
+
+        np.testing.assert_equal(ks.data, 1)
+        np.testing.assert_equal(id(ks_copy), id(ks_out))
+
+        def ll_decay(x, y):
+            return 2 ** ((np.datetime64(y) - np.datetime64(x)).astype(float) / 10)
+
+        np.testing.assert_equal(ks_out[2, :].toarray(), 0)
+
+        for i in xrange(3):
+            for j in xrange(6):
+                if ks[i, j] != 0:
+                    np.testing.assert_almost_equal(ks_out[i, j], ll_decay(d[i], self_d[j]))
 
 
 class TruncatedIndexSortedTestCase(unittest.TestCase):
