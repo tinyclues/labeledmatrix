@@ -145,7 +145,7 @@ class LookUpDateIndex(object):
         dirty_mask = np.isnat(delta)
         del x, y
         delta = delta.astype(ks.dtype, copy=False)
-        delta /= np.timedelta64(half_life).astype(np.float)
+        delta /= half_life
         delta.clip(-16, 16, out=delta)
         delta *= np.log(2.)
         np.exp(delta, out=delta)  # it's faster than 2 ** x
