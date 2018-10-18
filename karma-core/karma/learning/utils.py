@@ -1,6 +1,7 @@
 from itertools import izip, imap
 from multiprocessing.pool import ThreadPool
 
+import torch
 import numpy as np
 from math import ceil
 
@@ -18,13 +19,25 @@ from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float
                                          direct_product_dot_transpose,
                                          direct_product_second_moment, cast_2dim_float32_transpose)
 from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
-from karma.thread_setter import blas_threads, open_mp_threads
-from karma.runtime import KarmaSetup
+from karma.thread_setter import blas_level_threads
 from karma.core.utils.utils import LOGGER
+
 
 NB_THREADS_MAX = 16
 NB_CV_GROUPS_MAX = 10**5
 KNOWN_LOGISTIC_METHODS = ['logistic_coefficients', 'logistic_coefficients_and_posteriori']
+
+
+def safe_dot_torch(a, b):
+    """
+    we use torch.matmul instead of numpy.dot because torch uses thread-safe mkl
+    meanwhile openblas used by numpy.dot is not:
+    https://github.com/numpy/numpy/issues/11046
+    """
+    if isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
+        return torch.matmul(torch.from_numpy(a), torch.from_numpy(b)).numpy()
+    else:
+        return a.dot(b)
 
 
 class VirtualDirectProduct(object):
@@ -276,35 +289,33 @@ class VirtualHStack(BasicVirtualHStack):
             return int(2. * x.nnz / max(x.shape[0], 1))
 
     def dot(self, w, row_indices=None):
-        with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
+        with blas_level_threads(self.nb_inner_threads):
             if self.is_block:
                 def _dot(i):
                     x = self.X[i]
                     if row_indices is not None:
                         x = x[row_indices]
-                    return x.dot(w[self.dims[i]:self.dims[i + 1]].astype(x.dtype, copy=False))
-
+                    return safe_dot_torch(x, w[self.dims[i]:self.dims[i + 1]].astype(x.dtype, copy=False))
                 if self.pool is not None:
                     return reduce(np.add, self.pool.imap_unordered(_dot, self.order))
                 else:
                     return reduce(np.add, imap(_dot, self.order))
             else:
-                return self.X.dot(w.astype(self.X.dtype, copy=False))
+                return safe_dot_torch(self.X, w.astype(self.X.dtype, copy=False))
 
     def transpose_dot(self, w):
-        with blas_threads(self.nb_inner_threads), open_mp_threads(self.nb_inner_threads):
+        with blas_level_threads(self.nb_inner_threads):
             if self.is_block:
                 def _dot(i):
                     x = self.X[i]
-                    return x.T.dot(w.astype(x.dtype, copy=False))
+                    return safe_dot_torch(x.T, w.astype(x.dtype, copy=False))
 
                 if self.pool is not None:
-                    with blas_threads(1):
-                        return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
+                    return np.hstack(take_indices(self.pool.map(_dot, self.order), self.reverse_order))
                 else:
                     return np.hstack(map(_dot, range(len(self.X))))
             else:
-                return self.X.T.dot(w.astype(self.X.dtype, copy=False))
+                return safe_dot_torch(self.X.T, w.astype(self.X.dtype, copy=False))
 
 
 def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
