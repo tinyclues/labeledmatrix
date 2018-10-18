@@ -310,7 +310,7 @@ def logistic_coefficients_and_posteriori(X, y,
             lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
         conv_dict = _conv_dict_format(conv_dict, obj_value, n_samples, nb_threads, nb_inner_threads, lbfgs_timing,
-                                      verbose)
+                                      verbose, double_design_width=l1_coeff>0)
 
         linear_pred = X.dot(beta) + intercept
         betas = X.split_by_dims(beta)
@@ -481,7 +481,8 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
 
 @build_safe_decorator({})
-def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, verbose=True):
+def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, verbose=True,
+                      double_design_width=False):
     """Pretty printing of lbfgs convergence information.
     """
     conv_dict_copy = deepcopy(conv_dict)
@@ -504,7 +505,11 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
                                   2: 'No Convergence: stopping criterion not reached'}
 
     conv_dict_copy[CONVERGENCE_INFO_STATUS] = warn_flag_translation_dict[conv_dict['warnflag']]
-    conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] = len(gradient)
+    if double_design_width:
+        # intercept is not l1 penalized and thus not doubled
+        conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] = (len(gradient) - 1) / 2 + 1
+    else:
+        conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] = len(gradient)
 
     conv_dict_copy['nit'] = conv_dict['nit']
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
@@ -520,7 +525,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
         conv_dict_copy['inner_thr'] = nb_inner_threads
 
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
-    conv_dict_copy['cols_to_rows_ratio'] = conv_dict_copy['width'] / float(n_obs_design)
+    conv_dict_copy['cols_to_rows_ratio'] = conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] / float(n_obs_design)
 
     ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max',
                     CONVERGENCE_INFO_DESIGN_WIDTH, 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
