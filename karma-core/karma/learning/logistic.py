@@ -1,9 +1,11 @@
 from collections import OrderedDict
 from copy import deepcopy
+from functools import wraps
 from time import time
 
 import numexpr as ne
 import numpy as np
+from numpy.linalg import norm
 from cyperf.matrix.karma_sparse import is_karmasparse
 from cyperf.tools.getter import build_safe_decorator
 from scipy.optimize import fmin_l_bfgs_b
@@ -91,6 +93,41 @@ def _logistic_loss_and_grad(w, intercept, X, y, alpha, w_priori, alpha_intercept
 
     grad_intercept = z0.sum() + alpha_intercept * (intercept - intercept_priori)
     return loss, grad, grad_intercept
+
+
+def wrap_with_logger_and_callback(func, log=False):
+    if log:
+        convergence_logs, _logs = [], {'loss': 0, 'grad': []}
+
+        @wraps(func)
+        def decorated_function(*args, **kwargs):
+            loss, grad = func(*args, **kwargs)
+            _logs['loss'] = loss
+            _logs['grad'] = grad
+            return loss, grad
+
+        def callback(betas):
+            infos = {
+                'loss': _logs['loss'],
+                'grad_l2_momentum': norm(_logs['grad'], 2) / len(_logs['grad']),
+                'grad_max': norm(_logs['grad'], np.inf),
+                'step_sum': None,
+                'step_l1': None,
+                'step_max': None,
+            }
+            if 'prev_betas' in _logs:
+                step = betas - _logs['prev_betas']
+                infos.update({
+                    'step_sum': np.sum(step),
+                    'step_l1': norm(step, 1),
+                    'step_max': norm(step, np.inf)
+                })
+            _logs['prev_betas'] = betas
+            convergence_logs.append(infos)
+
+        return decorated_function, callback, convergence_logs
+    else:
+        return func, None, None
 
 
 def logistic_loss_and_grad(w, X, y, alpha, w_priori, alpha_intercept, intercept_priori, sample_weight=None):
@@ -189,7 +226,7 @@ def logistic_coefficients(X, y, max_iter, solver='liblinear', C=1e10,
     if solver != 'lbfgs':
         return logistic_coefficients_fall_back(X, y, max_iter, solver, C=C, sample_weight=sample_weight)
     else:
-        logist_pred, intercept, beta, _, _, conv_dict = logistic_coefficients_and_posteriori(
+        logist_pred, intercept, beta, _, _, conv_dict, _ = logistic_coefficients_and_posteriori(
             X, y,
             max_iter=max_iter,
             w_priori=None,
@@ -218,6 +255,7 @@ def logistic_coefficients_and_posteriori(X, y,
                                          nb_inner_threads=None,
                                          hessian_mode='full',
                                          timer=None,
+                                         log=False,
                                          verbose=True):
     """
     >>> from karma.core.dataframe import DataFrame
@@ -280,27 +318,33 @@ def logistic_coefficients_and_posteriori(X, y,
                                    maxfun=lbfgs_params.get('maxfun', 15000),
                                    maxls=lbfgs_params.get('maxls', 20),
                                    maxiter=max_iter)
+
             if l1_coeff == 0:
-                w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad, w_warm,
+                _loss, _callback, convergence_logs = wrap_with_logger_and_callback(logistic_loss_and_grad, log)
+                w0, obj_value, conv_dict = fmin_l_bfgs_b(_loss, w_warm,
                                                          args=(X, y,
                                                                alpha, w_priori,
                                                                alpha_intercept, intercept_priori,
                                                                sample_weight),
+                                                         callback=_callback,
                                                          **l_bfgs_b_kwargs)
                 intercept, beta = w0[-1], w0[:-1]
             elif l1_coeff > 0:
+                _loss, _callback, convergence_logs = wrap_with_logger_and_callback(logistic_loss_and_grad_elastic_net,
+                                                                                   log)
                 positive_slice, negative_slice = slice(0, n_features), slice(n_features, 2 * n_features)
                 _w_warm_extended = np.zeros(2 * n_features + 1, dtype=np.float)
                 _w_warm_extended[positive_slice] = np.maximum(w_warm[:-1] - w_priori, 0)
                 _w_warm_extended[negative_slice] = np.maximum(w_priori - w_warm[:-1], 0)
                 _w_warm_extended[-1] = w_warm[-1]
                 bounds = [(0, None)] * (2 * n_features) + [(None, None)]
-                _w0, obj_value, conv_dict = fmin_l_bfgs_b(logistic_loss_and_grad_elastic_net, _w_warm_extended,
+                _w0, obj_value, conv_dict = fmin_l_bfgs_b(_loss, _w_warm_extended,
                                                           args=(X, y,
                                                                 alpha, w_priori,
                                                                 alpha_intercept, intercept_priori,
                                                                 sample_weight, l1_coeff),
                                                           bounds=bounds,
+                                                          callback=_callback,
                                                           **l_bfgs_b_kwargs)
                 intercept = _w0[-1]
                 beta = w_priori + _w0[positive_slice] - _w0[negative_slice]
@@ -310,7 +354,7 @@ def logistic_coefficients_and_posteriori(X, y,
             lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
         conv_dict = _conv_dict_format(conv_dict, obj_value, n_samples, nb_threads, nb_inner_threads, lbfgs_timing,
-                                      verbose, double_design_width=l1_coeff>0)
+                                      verbose, convergence_logs, double_design_width=l1_coeff > 0)
 
         linear_pred = X.dot(beta) + intercept
         betas = X.split_by_dims(beta)
@@ -334,7 +378,7 @@ def logistic_coefficients_and_posteriori(X, y,
 
     return (expit(linear_pred),
             intercept, betas,
-            intercept_C_post, feature_C_posts, conv_dict)
+            intercept_C_post, feature_C_posts, conv_dict, convergence_logs)
 
 
 def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
@@ -482,7 +526,7 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
 @build_safe_decorator({})
 def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, verbose=True,
-                      double_design_width=False):
+                      logs=None, double_design_width=False):
     """Pretty printing of lbfgs convergence information.
     """
     conv_dict_copy = deepcopy(conv_dict)
@@ -493,8 +537,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
         norm_grad = None
         max_grad = None
     else:
-        norm_grad = np.linalg.norm(gradient)
-        max_grad = np.max(np.abs(gradient))
+        norm_grad = norm(gradient, 2)
+        max_grad = norm(gradient, np.inf)
     conv_dict_copy['grad_l2_momentum'] = norm_grad / len(gradient)
     conv_dict_copy['grad_max'] = max_grad
 

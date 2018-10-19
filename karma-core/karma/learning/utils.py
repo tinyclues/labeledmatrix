@@ -450,7 +450,7 @@ class CrossValidationWrapper(object):
                     logit_inplace(y_hat)
             else:
                 assert isinstance(kc_formatter, RegressionKarmaCodeFormatter)
-                kc = kc_formatter.format(self.method_output)
+                kc = kc_formatter.format(*self.method_output)
                 y_hat = kc.bulk_call(X_stacked[test_idx].X)[0]
 
             self.test_y_hat[i:i + self.test_size] = y_hat
