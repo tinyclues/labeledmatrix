@@ -2826,11 +2826,11 @@ class LabeledMatrix(object):
             >>> np.array(lm.pairwise_overlap(2).matrix)
             array([[1. , 0.5, 0.5],
                    [0.5, 1. , 0.5],
-                   [0.5, 0.5, 1. ]])
+                   [0.5, 0.5, 1. ]], dtype=float32)
             >>> np.array(lm.pairwise_overlap(3).matrix)
-            array([[1.        , 0.66666667, 0.66666667],
-                   [0.66666667, 1.        , 1.        ],
-                   [0.66666667, 1.        , 1.        ]])
+            array([[1.       , 0.6666667, 0.6666667],
+                   [0.6666667, 1.       , 1.       ],
+                   [0.6666667, 1.       , 1.       ]], dtype=float32)
             >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int)
             array([[3, 2, 2],
                    [2, 3, 3],

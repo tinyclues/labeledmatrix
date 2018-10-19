@@ -4,7 +4,7 @@
 
 import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
-from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse
+from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
 from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
 from numexpr import evaluate
 
@@ -75,7 +75,7 @@ class CoClustering(object):
 
         self.n, self.m = matrix.shape
         if ranks[0] > self.n or ranks[1] > self.m:
-            print 'ranks {0} is large than matrix shape {1}'.format(ranks, (self.n, self.m))
+            print('ranks {0} is large than matrix shape {1}'.format(ranks, (self.n, self.m)))
 
         self.ranks = (min(ranks[0], self.n), min(ranks[1], self.m))
         self.matrix = matrix.clip(self._epsilon)
@@ -113,7 +113,7 @@ class CoClustering(object):
     def initial_clustering(self, w=None, h=None):
         if w is None:
             w_indices = np.random.randint(0, self.ranks[0], self.n)
-            self.w = KarmaSparse((np.ones(self.n), w_indices, np.arange(self.n + 1)),
+            self.w = KarmaSparse((np.ones(self.n, dtype=DTYPE), w_indices, np.arange(self.n + 1)),
                                  shape=((self.n, self.ranks[0])),
                                  format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
         else:
@@ -122,7 +122,7 @@ class CoClustering(object):
 
         if h is None:
             h_indices = np.random.randint(0, self.ranks[1], self.m)
-            self.h = KarmaSparse((np.ones(self.m), h_indices, np.arange(self.m + 1)),
+            self.h = KarmaSparse((np.ones(self.m, dtype=DTYPE), h_indices, np.arange(self.m + 1)),
                                  shape=((self.m, self.ranks[1])),
                                  format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
         else:
@@ -148,16 +148,14 @@ class CoClustering(object):
         self.get_cond_y_vs_haty()
         logg = self.pcond_y_vs_haty.dot(normalize(self.hat_matrix, norm='l1', axis=1).transpose())
         evaluate('log(logg)', out=logg)
-        self.w = nonzero_mask(KarmaSparse(
-            truncate_by_count(self.pcond_y_vs_x.dot(logg), axis=1, max_rank=1), copy=False))
+        self.w.indices[:] = np.argmax(self.pcond_y_vs_x.dot(logg), axis=1)
 
     def idiv_update_left(self):
         self.get_hat_matrix()
         self.get_cond_x_vs_hatx()
         logg = self.pcond_x_vs_hatx.dot(normalize(self.hat_matrix, norm='l1', axis=0))
         evaluate('log(logg)', out=logg)
-        self.h = nonzero_mask(KarmaSparse(
-            truncate_by_count(self.pcond_x_vs_y.transpose().dot(logg), axis=1, max_rank=1), copy=False))
+        self.h.indices[:] = np.argmax(self.pcond_x_vs_y.transpose().dot(logg), axis=1)
 
     def get_hat_matrix(self):
         # we should use logic from

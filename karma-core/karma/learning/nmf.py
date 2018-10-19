@@ -11,7 +11,7 @@ from connect.logging import initialize_logger
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
 from karma.core.utils import use_seed
-from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min
+from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
 from karma.learning.randomize_svd import nmf_svd_init
 from karma.runtime import KarmaSetup
 
@@ -116,7 +116,7 @@ class NMF(object):
             self.matrix_csr = matrix.tocsr()
             self.matrix_csc = matrix.tocsc()
         elif isinstance(matrix, np.ndarray):
-            self.matrix = matrix.copy()
+            self.matrix = cast_2dim_float32_transpose(matrix).copy()
             self.is_sparse = False
         else:
             raise ValueError("Wrong matrix type : {}".format(type(matrix)))
@@ -165,6 +165,7 @@ class NMF(object):
             self.h = np.random.rand(self.rank, self.m) if h is None else h
             self.w = np.asarray(self.w.clip(self.epsilon), order='C')
             self.h = np.asarray(self.h.clip(self.epsilon), order='F')
+        self.w, self.h = np.asarray(self.w, dtype=self.matrix.dtype), np.asarray(self.h, dtype=self.matrix.dtype)
 
     def iterate(self, maxiter):
         if self.metric == 'KL':

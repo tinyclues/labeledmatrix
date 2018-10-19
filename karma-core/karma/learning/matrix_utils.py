@@ -1112,10 +1112,12 @@ def normalize(matrix, norm='l1', axis=1, invpow=1., invlog=0., threshold=None, w
     factor *= np.power(np.log1p(norms), invlog)
     if threshold is not None:
         factor /= logit(norms, shift=threshold, width=width)
+    matrix = cast_float32(matrix).copy()
     if axis == 1:
-        return matrix.copy().astype(np.float) / factor[:, np.newaxis]
+        matrix /= factor[:, np.newaxis]
     elif axis == 0:
-        return matrix.copy().astype(np.float) / factor[np.newaxis, :]
+        matrix /= factor[np.newaxis, :]
+    return matrix
 
 
 def number_nonzero(matrix):
@@ -1288,7 +1290,7 @@ def anomaly(matrix, skepticism):
     assert matrix.ndim == 2
     assert skepticism > 0
     if matrix.shape[1] == 1:
-        return np.zeros_like(matrix, dtype=np.float)
+        return np.zeros_like(matrix, dtype=matrix.dtype)
     eps = 10 ** -10
     matrix = 1. * matrix
     total = np.atleast_2d(matrix.sum(axis=0))
@@ -1387,6 +1389,14 @@ def flatten_along_first_axis(data):
 
 
 def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=False):
+    """
+    >>> to_array_if_needed(np.array([1,2]), min_dtype=np.float32).dtype == np.float32
+    True
+    >>> to_array_if_needed(np.array([1,2], dtype=np.float32), min_dtype=np.float32).dtype == np.float32
+    True
+    >>> to_array_if_needed(np.array([1,2], dtype=np.float), min_dtype=np.float32).dtype == np.float
+    True
+    """
     if is_karmasparse(data):
         return data
     elif is_scipysparse(data):
@@ -1400,7 +1410,7 @@ def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=
             if scalar_transpose:
                 res = res.T
         if min_dtype is not None:
-            res = res.astype(np.promote_types(res.dtype, min_dtype), copy=False)
+            res = res.astype(max(min_dtype, res.dtype), copy=False)
         return res
 
 
@@ -1653,7 +1663,7 @@ def default_row(matrix, default):
     return v_default
 
 
-MIN_DENSITY = 0.05
+MIN_DENSITY = 0.2
 MAX_SIZE = 10 ** 9
 
 

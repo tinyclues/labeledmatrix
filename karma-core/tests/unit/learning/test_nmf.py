@@ -40,8 +40,25 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertEqual(w.shape, (1, 1))
         self.assertEqual(h.shape, (10, 1))
 
+    def test_dtype(self):
+        for dtype in [np.float, np.float32]:
+            matrix = np.random.rand(3, 10).astype(dtype)
+            w, h = nmf(matrix, rank=None)
+            self.assertEqual(w.dtype, dtype)
+            self.assertEqual(h.dtype, dtype)
+
+        matrix = (100 * np.random.rand(3, 10)).astype(np.int)
+        w, h = nmf(matrix, rank=None)
+        self.assertEqual(w.dtype, np.float32)
+        self.assertEqual(h.dtype, np.float32)
+
+        matrix = KarmaSparse(np.random.rand(3, 10))
+        w, h = nmf(matrix, rank=None)
+        self.assertEqual(w.dtype, matrix.dtype)
+        self.assertEqual(h.dtype, matrix.dtype)
+
     def test_reconstruction(self):
-        with use_seed(100):
+        with use_seed(120):
             matrix = np.dot(np.random.poisson(2, size=(10, 4)),
                             np.random.poisson(6, size=(4, 10)))
         matrix[0, 0] = 0
