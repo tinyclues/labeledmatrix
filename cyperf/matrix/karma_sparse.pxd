@@ -254,6 +254,14 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t*
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+cdef inline void mmax_loop(int n_cols, DTYPE_t* a,  A* b, DTYPE_t alpha) nogil:
+    cdef int k
+    for k in xrange(n_cols):
+        a[k] = mmax(a[k], alpha * b[k])
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef inline void inplace_arange(ITYPE_t * x, int size) nogil:
     for j in xrange(size): x[j] = j
 
@@ -563,9 +571,9 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, A[:,::1] matrix)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2, mode="c"] matrix)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2, mode="c"] matrix)
 
     cdef KarmaSparse aligned_sparse_shadow(self, KarmaSparse other)
 

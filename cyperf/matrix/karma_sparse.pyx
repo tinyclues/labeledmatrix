@@ -2586,56 +2586,50 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix):
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2, mode='c'] matrix):
         check_shape_comptibility(self.ncols, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
-            ITYPE_t i, k, ind
+            DTYPE_t[:,::1] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
             LTYPE_t j
-            DTYPE_t alpha
+            ITYPE_t i
 
-        for i in prange(self.nrows, nogil=True, schedule='static'):
+        for i in prange(self.nrows, nogil=True):
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
-                alpha = self.data[j]
-                ind = self.indices[j]
-                for k in xrange(n_cols):
-                    out[i, k] = mmax(out[i, k], alpha * matrix[ind, k])
-        return out
+                mmax_loop(n_cols, &out[i, 0], &matrix[self.indices[j], 0], self.data[j])
+
+        return np.asarray(out)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2] matrix):
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2, mode='c'] matrix):
         check_shape_comptibility(self.nrows, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
-            np.ndarray[DTYPE_t, ndim=2, mode="c"] out = np.zeros((self.ncols, n_cols), dtype=DTYPE, order='C')
-            ITYPE_t i, k
-            LTYPE_t j, ind
-            DTYPE_t alpha
+            DTYPE_t[:,::1] out = np.zeros((self.ncols, n_cols), dtype=DTYPE, order='C')
+            ITYPE_t i
+            LTYPE_t j
 
         # TODO : to make misaligned_dense_shadow parallel as for misaligned_dense_dot
         # TODO : to unify code between shadow and dot routines
         with nogil:
             for i in xrange(self.nrows):
                 for j in xrange(self.indptr[i], self.indptr[i + 1]):
-                    ind = self.indices[j]
-                    alpha = self.data[j]
-                    for k in xrange(n_cols):
-                        out[ind, k] = mmax(out[ind, k], alpha * matrix[i, k])
-        return out
+                    mmax_loop(n_cols, &out[self.indices[j], 0], &matrix[i, 0], self.data[j])
+        return np.asarray(out)
 
     def dense_shadow(self, np.ndarray[A, ndim=2] matrix):
         if np.any(matrix < 0):
             raise ValueError('Numpy matrix contains negative values while only positive are expected')
+        cdef np.ndarray[A, ndim=2, mode="c"] conti_matrix = np.ascontiguousarray(matrix)
 
         if self.format == CSR:
-            return self.aligned_dense_shadow(matrix)
+            return self.aligned_dense_shadow(conti_matrix)
         else:
             if matrix.shape[1] > 60:  # 60 is an experimentally found constant
-                return self.swap_slicing().aligned_dense_shadow(matrix)
+                return self.swap_slicing().aligned_dense_shadow(conti_matrix)
             else:
-                return self.misaligned_dense_shadow(matrix)
+                return self.misaligned_dense_shadow(conti_matrix)
 
     def sparse_shadow(self, KarmaSparse other):
         other.check_positive()
