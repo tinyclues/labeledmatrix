@@ -289,6 +289,7 @@ def logistic_coefficients_and_posteriori(X, y,
             X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
         n_samples, n_features = X.shape
+        row_nnz = X.row_nnz + 1 # to take into account the intercept
         C_priori = X.adjust_array_to_total_dimension(C_priori, 'C_priori')
 
         if w_priori is None:
@@ -354,7 +355,7 @@ def logistic_coefficients_and_posteriori(X, y,
             lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
 
         conv_dict = _conv_dict_format(conv_dict, obj_value, n_samples, nb_threads, nb_inner_threads, lbfgs_timing,
-                                      verbose, convergence_logs, double_design_width=l1_coeff > 0)
+                                      row_nnz, verbose, convergence_logs, double_design_width=l1_coeff > 0)
 
         linear_pred = X.dot(beta) + intercept
         betas = X.split_by_dims(beta)
@@ -525,8 +526,8 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
 
 
 @build_safe_decorator({})
-def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, verbose=True,
-                      logs=None, double_design_width=False):
+def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_threads, lbfgs_timing, row_nnz,
+                      verbose=True, logs=None, double_design_width=False):
     """Pretty printing of lbfgs convergence information.
     """
     conv_dict_copy = deepcopy(conv_dict)
@@ -558,6 +559,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['nit'] = conv_dict['nit']
     conv_dict_copy['n_funcalls'] = conv_dict['funcalls']
     conv_dict_copy['height'] = n_obs_design
+    conv_dict_copy['row_nnz'] = row_nnz
     conv_dict_copy['outer_thr'] = nb_threads or 1
 
     if nb_inner_threads is None:
@@ -571,7 +573,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
     conv_dict_copy['cols_to_rows_ratio'] = conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] / float(n_obs_design)
 
-    ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max',
+    ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max', 'row_nnz',
                     CONVERGENCE_INFO_DESIGN_WIDTH, 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
     conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 

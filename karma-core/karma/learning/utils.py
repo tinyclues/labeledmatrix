@@ -7,6 +7,7 @@ from math import ceil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace, argsort
+from cyperf.matrix import is_karmasparse
 
 from karma import KarmaSetup
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
@@ -304,6 +305,33 @@ class VirtualHStack(BasicVirtualHStack):
             else:
                 return self.X.T.dot(w.astype(self.X.dtype, copy=False))
 
+    @property
+    def row_nnz(self):
+        """This function computes the mean row density of the virtual hstack, defined as the sum of the row densities,
+        the mean number of non zero terms by row, of each block among the virtual hstack.
+        """
+        with blas_level_threads(self.nb_inner_threads):
+            if self.is_block:
+                def _density(i):
+                    x =self.X[i]
+                    if is_karmasparse(x):
+                        return x.density * x.shape[1]
+                    else:
+                        return np.count_nonzero(x) * x.shape[1] / np.product(x.shape)
+
+                if self.pool is not None:
+                    return np.sum(self.pool.map(_density, self.order))
+                else:
+                    return np.sum(map(_density, range(len(self.X))))
+            else:
+                if is_karmasparse(self.X):
+                    return self.X.density * self.X.shape[1]
+                else:
+                    if len(self.X.shape) > 1:
+                        p = self.X.shape[1] * 1.
+                    else:
+                        p = 1.
+                    return np.count_nonzero(self.X) * p / np.product(self.X.shape)
 
 def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
                               **kwargs):

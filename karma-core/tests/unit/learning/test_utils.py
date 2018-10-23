@@ -332,6 +332,21 @@ class VirtualHStackTestCase(unittest.TestCase):
         self.assertEqual(hstack.nb_threads, 2)
         self.assertEqual(hstack.nb_inner_threads, NB_THREADS_MAX)
 
+    def test_density_computation(self):
+        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
+                                np.full((5, 1), 3, dtype=np.float32),
+                                np.ones((5, 3), dtype=np.float64),
+                                1], nb_threads=1, nb_inner_threads=4)
+        self.assertEqual(hstack.row_nnz, 6)
+
+        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
+                                KarmaSparse(np.full((5, 1), 3, dtype=np.float32)),
+                                np.ones((5, 3), dtype=np.float64)], nb_threads=1, nb_inner_threads=4)
+        self.assertEqual(hstack.row_nnz, 6)
+
+        hstack = VirtualHStack(np.ones(5), nb_threads=1, nb_inner_threads=4)
+        self.assertEqual(hstack.row_nnz, 1.)
+
 
 class VirtualDirectProductTestCase(unittest.TestCase):
     @classmethod
