@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 from cyperf.indexing.indexed_list import is_increasing
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
+from mock import patch
 from numpy.testing import assert_equal, assert_array_equal, assert_almost_equal
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -332,20 +333,25 @@ class VirtualHStackTestCase(unittest.TestCase):
         self.assertEqual(hstack.nb_threads, 2)
         self.assertEqual(hstack.nb_inner_threads, NB_THREADS_MAX)
 
-    def test_density_computation(self):
-        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
-                                np.full((5, 1), 3, dtype=np.float32),
-                                np.ones((5, 3), dtype=np.float64),
-                                1], nb_threads=1, nb_inner_threads=4)
-        self.assertEqual(hstack.row_nnz, 6)
-
-        hstack = VirtualHStack([np.ones((5, 2), dtype=np.float16),
-                                KarmaSparse(np.full((5, 1), 3, dtype=np.float32)),
-                                np.ones((5, 3), dtype=np.float64)], nb_threads=1, nb_inner_threads=4)
-        self.assertEqual(hstack.row_nnz, 6)
-
-        hstack = VirtualHStack(np.ones(5), nb_threads=1, nb_inner_threads=4)
-        self.assertEqual(hstack.row_nnz, 1.)
+    def test_row_nnz(self):
+        rand = lambda x: np.random.randint(25, size=(10, x))
+        for i in range(20):
+            blocks = [
+                rand(3),
+                KarmaSparse(rand(5)),
+                VirtualDirectProduct(KarmaSparse(rand(2)), rand(7)),
+                2  # zeros
+            ]
+            X = VirtualHStack(blocks).materialize()
+            row_nnz = np.count_nonzero(X) / 10.
+            # we need the hack below to take into account the fact that VirtualDirectProduct is an approximation
+            row_nnz_adjusted = row_nnz + (blocks[2].nnz - blocks[2].materialize().nnz) / 10.
+            with patch('karma.learning.utils.VirtualDirectProduct.materialize') as mock_materialize:
+                np.testing.assert_almost_equal(row_nnz_adjusted, VirtualHStack(blocks).row_nnz)
+                np.testing.assert_almost_equal(row_nnz_adjusted,
+                                               VirtualHStack(blocks, nb_threads=2, nb_inner_threads=4).row_nnz)
+                np.testing.assert_almost_equal(row_nnz, VirtualHStack(X).row_nnz)
+            self.assertEqual(0, mock_materialize.call_count)
 
 
 class VirtualDirectProductTestCase(unittest.TestCase):

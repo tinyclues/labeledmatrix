@@ -1143,8 +1143,7 @@ def number_nonzero(matrix):
         >>> n * m * density - 1 <= nnz <= n * m * density + 1
         True
     """
-    return matrix.nnz if is_scipysparse(matrix) or is_karmasparse(matrix)\
-        else np.count_nonzero(matrix)
+    return matrix.nnz if hasattr(matrix, 'nnz') else np.count_nonzero(matrix)
 
 
 def sparse_quantiles(matrix, nb, axis):

@@ -7,7 +7,6 @@ from math import ceil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace, argsort
-from cyperf.matrix import is_karmasparse
 
 from karma import KarmaSetup
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
@@ -313,25 +312,16 @@ class VirtualHStack(BasicVirtualHStack):
         with blas_level_threads(self.nb_inner_threads):
             if self.is_block:
                 def _density(i):
-                    x =self.X[i]
-                    if is_karmasparse(x):
-                        return x.density * x.shape[1]
-                    else:
-                        return np.count_nonzero(x) * x.shape[1] / np.product(x.shape)
+                    x = self.X[i]
+                    return number_nonzero(x) * 1. / x.shape[0]
 
                 if self.pool is not None:
                     return np.sum(self.pool.map(_density, self.order))
                 else:
-                    return np.sum(map(_density, range(len(self.X))))
+                    return np.sum(map(_density, self.order))
             else:
-                if is_karmasparse(self.X):
-                    return self.X.density * self.X.shape[1]
-                else:
-                    if len(self.X.shape) > 1:
-                        p = self.X.shape[1] * 1.
-                    else:
-                        p = 1.
-                    return np.count_nonzero(self.X) * p / np.product(self.X.shape)
+                return number_nonzero(self.X) * 1. / self.X.shape[0]
+
 
 def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
                               **kwargs):
