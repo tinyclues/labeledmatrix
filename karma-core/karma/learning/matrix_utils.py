@@ -949,11 +949,18 @@ def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
     True
     >>> ac(safe_dot(x, y.toarray()), safe_dot(x.to_scipy_sparse(), y.toarray()))
     True
+    >>> ac(safe_dot(x.toarray()[0], y), safe_dot(x.toarray()[0], y.toarray()))
+    True
     """
-    if x.shape[1] != y.shape[0]:
+    if isinstance(x, (list, tuple)):
+        x = np.asarray(x)
+    if isinstance(y, (list, tuple)):
+        y = np.asarray(y)
+    if x.shape[x.ndim - 1] != y.shape[0]:
         raise SparseUtilsException("Inner dimensions have to be the same " +
                                    "when multiplying matrices : {} != {}".
-                                   format(x.shape[1], y.shape[0]))
+                                   format(x.shape[x.ndim - 1], y.shape[0]))
+
     if mat_mask is not None:
         return mask_dot(x, y, mat_mask, mask_mode)
 
@@ -966,9 +973,12 @@ def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
     if is_karmasparse(x) and is_karmasparse(y):
         z = x.dot(y)
     elif is_karmasparse(x):
-        z = x.dense_dot_right(y)
+        z = x.dot(y)
     elif is_karmasparse(y):
-        z = y.dense_dot_left(x)
+        if x.ndim == 1:
+            z = y.dense_vector_dot_left(x)
+        else:
+            z = y.dense_dot_left(x)
     else:  # dense dense dot
         z = x.dot(y)
     return z.toarray() if dense_output and is_karmasparse(z) else z
