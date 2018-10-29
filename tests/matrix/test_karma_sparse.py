@@ -1021,6 +1021,31 @@ class TestKarmaSparse(unittest.TestCase):
                     np_almost_equal(ks.tocsc().shadow(other, reducer=agg), dense_res)
                     np_almost_equal(ks.tocsc().shadow(other.tocsc(), reducer=agg), dense_res)
 
+    def test_shadow_vector_dot_random(self):
+        for a in self.mf.iterator(dense=True):
+            a[a < 0] = 0
+            ks = KarmaSparse(a, format='csr')
+            for other_matrix in [np.random.randn(ks.shape[1], 30),
+                                 2 * np.random.randint(-1, 2, size=ks.shape).T,
+                                 np.random.poisson(0.01, size=(ks.shape[1], 20))]:
+                other_matrix[other_matrix < 0] = 0
+                vector = 10 * np.random.rand(other_matrix.shape[1])
+                for other in [other_matrix, KarmaSparse(other_matrix, format='csr')]:
+                    for dtype in [np.float64, np.float32, np.int64, np.int32]:
+                        vector = vector.astype(dtype)
+                        for reducer in ['max', 'add']:
+                            for power in [1, 2]:
+                                old_fashion_res = (ks.shadow(other, reducer=reducer) ** power).dot(vector)
+                                np_almost_equal(ks.shadow_vector_dot(other, vector, power, reducer), old_fashion_res,
+                                                decimal=4)
+                                np_almost_equal(ks.tocsc().shadow_vector_dot(other, vector, power, reducer),
+                                                old_fashion_res, decimal=4)
+                                if is_karmasparse(other):
+                                    np_almost_equal(ks.shadow_vector_dot(other.tocsc(), vector, power, reducer),
+                                                    old_fashion_res, decimal=4)
+                                    np_almost_equal(ks.tocsc().shadow_vector_dot(other.tocsc(), vector, power,
+                                                                                 reducer), old_fashion_res, decimal=4)
+
     def test_pointwise_multiplication(self):
         for a in self.mf.iterator(dense=True):
             b1 = np.random.randint(0, 3, size=a.shape)

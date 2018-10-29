@@ -2586,7 +2586,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2, mode='c'] matrix):
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, A[:,::1] matrix):
         check_shape_comptibility(self.ncols, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
@@ -2602,7 +2602,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2, mode='c'] matrix):
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, A[:,::1] matrix):
         check_shape_comptibility(self.nrows, matrix.shape[0])
         cdef:
             ITYPE_t n_cols = matrix.shape[1]
@@ -2621,7 +2621,7 @@ cdef class KarmaSparse:
     def dense_shadow(self, np.ndarray[A, ndim=2] matrix):
         if np.any(matrix < 0):
             raise ValueError('Numpy matrix contains negative values while only positive are expected')
-        cdef np.ndarray[A, ndim=2, mode="c"] conti_matrix = np.ascontiguousarray(matrix)
+        cdef A[:,::1] conti_matrix = np.ascontiguousarray(matrix)
 
         if self.format == CSR:
             return self.aligned_dense_shadow(conti_matrix)
@@ -2662,6 +2662,111 @@ cdef class KarmaSparse:
             return self.sparse_shadow(other)
         else:
             raise ValueError(other)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_shadow_vector_dot(self, A[:,::1] matrix, B[::1] vector):
+        cdef:
+            ITYPE_t n_cols = matrix.shape[1]
+            DTYPE_t* max_res
+            DTYPE_t[::1] out = np.zeros(self.nrows, dtype=DTYPE, order='C')
+            LTYPE_t j
+            ITYPE_t i
+
+        with nogil, parallel():
+            max_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
+
+            for i in prange(self.nrows):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    mmax_loop(n_cols, max_res, &matrix[self.indices[j], 0], self.data[j])
+                out[i] = _scalar_product(n_cols, max_res, &vector[0])
+                memset(max_res, 0, n_cols * sizeof(DTYPE_t))
+            free(max_res)
+
+        return np.asarray(out)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_squared_shadow_vector_dot(self, A[:,::1] matrix, B[::1] vector):
+        cdef:
+            ITYPE_t n_cols = matrix.shape[1]
+            DTYPE_t* max_res
+            DTYPE_t[::1] out = np.zeros(self.nrows, dtype=DTYPE, order='C')
+            LTYPE_t j
+            ITYPE_t i
+
+        with nogil, parallel():
+            max_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
+
+            for i in prange(self.nrows):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    mmax_loop(n_cols, max_res, &matrix[self.indices[j], 0], self.data[j])
+                out[i] = _scalar_product_left_squared(n_cols, max_res, &vector[0])
+                memset(max_res, 0, n_cols * sizeof(DTYPE_t))
+            free(max_res)
+
+        return np.asarray(out)
+
+    def dense_shadow_vector_dot(self, np.ndarray[A, ndim=2] matrix, np.ndarray[B, ndim=1] vector, int power):
+        if np.any(matrix < 0):
+            raise ValueError('Numpy matrix contains negative values while only positive are expected')
+        cdef A[:,::1] conti_matrix = np.ascontiguousarray(matrix)
+        cdef B[::1] conti_vector = np.ascontiguousarray(vector)
+
+        if power == 1:
+            if self.format == CSR:
+                return self.aligned_dense_shadow_vector_dot(conti_matrix, conti_vector)
+            else:
+                return self.swap_slicing().aligned_dense_shadow_vector_dot(conti_matrix, conti_vector)
+        elif power == 2:
+            if self.format == CSR:
+                return self.aligned_dense_squared_shadow_vector_dot(conti_matrix, conti_vector)
+            else:
+                return self.swap_slicing().aligned_dense_squared_shadow_vector_dot(conti_matrix, conti_vector)
+        else:
+            raise ValueError('dense_shadow_vector_dot only supports power of 1 or 2, but not {}'.format(power))
+
+    def sparse_shadow_vector_dot(self, KarmaSparse matrix, np.ndarray[B, ndim=1] vector, int power):
+        """
+        no optimization is done here, it is just a shortcut
+        """
+        matrix.check_positive()
+
+        if power == 1:
+            return self.sparse_shadow(matrix).dot(vector)
+        else:
+            return self.sparse_shadow(matrix).power(power).dot(vector)
+
+    def shadow_vector_dot(self, matrix, vector, power=1, reducer='max'):
+        """
+        Equivalent to self.shadow(matrix, reducer).power(power).dot(vector)
+        If matrix is np.ndarray call is optimized and performed in a single nogil operation
+        :param matrix: np.ndarray[ndim=2] or KarmaSparse
+        :param vector: np.ndarray[ndim=1]
+        :param power: if matrix is np.ndarray must be 1 or 2
+        :param reducer: 'max' or 'add'
+        :return: np.ndarray[ndim=1]
+        """
+        supported_reducers = ['max', 'add']
+        if reducer not in supported_reducers:
+            raise ValueError('Unsupported reducer "{}", choose one from {}'
+                             .format(reducer, ', '.join(supported_reducers)))
+        if reducer == 'add':
+            if power == 1:
+                return self.dot(matrix.dot(vector))
+            else:
+                return (self.dot(matrix) ** power).dot(vector)
+
+        # so, reducer = 'max'
+        self.check_positive()
+        if isinstance(matrix, np.ndarray):
+            if vector.dtype.kind == 'b':
+                vector = np.array(vector, dtype=ITYPE)
+            return self.dense_shadow_vector_dot(matrix, vector, power)
+        elif is_karmasparse(matrix):
+            return self.sparse_shadow_vector_dot(matrix, vector, power)
+        else:
+            raise ValueError(matrix)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)

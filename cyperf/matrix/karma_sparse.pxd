@@ -74,11 +74,21 @@ cdef inline void axpy(ITYPE_t n, DTYPE_t a, A * x, DTYPE_t * y) nogil:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cdef inline DTYPE_t _scalar_product(ITYPE_t n, DTYPE_t* x, DTYPE_t* y) nogil:
+cdef inline DTYPE_t _scalar_product(ITYPE_t n, A* x, B* y) nogil:
     cdef ITYPE_t k
     cdef DTYPE_t res = 0
     for k in xrange(n):
         res += x[k] * y[k]
+    return res
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline DTYPE_t _scalar_product_left_squared(ITYPE_t n, A* x, B* y) nogil:
+    cdef ITYPE_t k
+    cdef DTYPE_t res = 0
+    for k in xrange(n):
+        res += x[k] * x[k] * y[k]
     return res
 
 
@@ -571,9 +581,13 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_dot(self, A[:,::1] matrix)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, np.ndarray[A, ndim=2, mode="c"] matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] aligned_dense_shadow(self, A[:,::1] matrix)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, np.ndarray[A, ndim=2, mode="c"] matrix)
+    cdef np.ndarray[DTYPE_t, ndim=2] misaligned_dense_shadow(self, A[:,::1] matrix)
+
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_shadow_vector_dot(self, A[:,::1] matrix, B[::1] vector)
+
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_squared_shadow_vector_dot(self, A[:,::1] matrix, B[::1] vector)
 
     cdef KarmaSparse aligned_sparse_shadow(self, KarmaSparse other)
 
