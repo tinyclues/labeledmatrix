@@ -956,19 +956,20 @@ def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
         x = np.asarray(x)
     if isinstance(y, (list, tuple)):
         y = np.asarray(y)
+
     if x.shape[x.ndim - 1] != y.shape[0]:
         raise SparseUtilsException("Inner dimensions have to be the same " +
                                    "when multiplying matrices : {} != {}".
                                    format(x.shape[x.ndim - 1], y.shape[0]))
-
-    if mat_mask is not None:
-        return mask_dot(x, y, mat_mask, mask_mode)
 
     # z = x * y if isinstance(x, np.ndarray) and is_scipysparse(y) else x.dot(y)
     if is_scipysparse(x):
         x = KarmaSparse(x)
     if is_scipysparse(y):
         y = KarmaSparse(y)
+
+    if mat_mask is not None:
+        return mask_dot(x, y, mat_mask, mask_mode)
 
     if is_karmasparse(x) and is_karmasparse(y):
         z = x.dot(y)
