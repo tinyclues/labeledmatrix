@@ -591,6 +591,8 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse aligned_sparse_shadow(self, KarmaSparse other)
 
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_squared_dot_vector_dot(self, A[:,::1] matrix, B[::1] vector)
+
     cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b, binary_func op)
 
     cdef KarmaSparse csr_mask_sparse_sparse_dot(self, KarmaSparse other_a, KarmaSparse other_b, binary_func op)

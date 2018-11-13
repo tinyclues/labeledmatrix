@@ -2892,6 +2892,70 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
+    cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_squared_dot_vector_dot(self, A[:,::1] matrix, B[::1] vector):
+        check_shape_comptibility(self.ncols, matrix.shape[0])
+        cdef:
+            ITYPE_t i, n_cols = matrix.shape[1]
+            LTYPE_t j
+            DTYPE_t* dot_res
+            DTYPE_t[::1] out = np.zeros(self.nrows, dtype=DTYPE, order='C')
+
+        with nogil, parallel():
+            dot_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
+
+            for i in prange(self.nrows):
+                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    axpy(n_cols, self.data[j], &matrix[self.indices[j], 0], dot_res)
+                out[i] = _scalar_product_left_squared(n_cols, dot_res, &vector[0])
+                memset(dot_res, 0, n_cols * sizeof(DTYPE_t))
+            free(dot_res)
+        return np.asarray(out)
+
+    def dense_dot_vector_dot(self, np.ndarray[A, ndim=2] matrix, np.ndarray[B, ndim=1] vector, int power):
+        cdef A[:,::1] conti_matrix
+        cdef B[::1] conti_vector
+
+        if power == 1:
+            return self.dense_vector_dot_right(matrix.dot(vector))
+        elif power == 2:
+            conti_matrix = np.ascontiguousarray(matrix)
+            conti_vector = np.ascontiguousarray(vector)
+            if self.format == CSR:
+                return self.aligned_dense_squared_dot_vector_dot(conti_matrix, conti_vector)
+            else:
+                return self.swap_slicing().aligned_dense_squared_dot_vector_dot(conti_matrix, conti_vector)
+        else:
+            raise ValueError('dense_dot_vector_dot only supports power of 1 or 2, but not {}'.format(power))
+
+    def sparse_dot_vector_dot(self, KarmaSparse matrix, np.ndarray[B, ndim=1] vector, int power):
+        """
+        no optimization is done here, it is just a shortcut
+        """
+        if power == 1:
+            return self.dense_vector_dot_right(matrix.dense_vector_dot_right(vector))
+        else:
+            return self.sparse_dot(matrix).power(power).dot(vector)
+
+    def dot_vector_dot(self, matrix, vector, power=1):
+        """
+        Equivalent to self.dot(matrix).power(power).dot(vector)
+        If matrix is np.ndarray and power = 2 call is optimized and performed in a single nogil operation
+        :param matrix: np.ndarray[ndim=2] or KarmaSparse
+        :param vector: np.ndarray[ndim=1]
+        :param power: if matrix is np.ndarray must be 1 or 2
+        :return: np.ndarray[ndim=1]
+        """
+        if isinstance(matrix, np.ndarray):
+            if vector.dtype.kind == 'b':
+                vector = np.array(vector, dtype=ITYPE)
+            return self.dense_dot_vector_dot(matrix, vector, power)
+        elif is_karmasparse(matrix):
+            return self.sparse_dot_vector_dot(matrix, vector, power)
+        else:
+            raise ValueError(matrix)
+
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b,
                                               binary_func op):
         check_shape_comptibility(a.shape[1], b.shape[0])
