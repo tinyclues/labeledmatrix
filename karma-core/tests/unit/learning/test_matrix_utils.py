@@ -100,3 +100,33 @@ class MatrixUtilsTestCase(unittest.TestCase):
         for m in [sparse_matrix.tocsr(), sparse_matrix.tocsc()]:
             np.testing.assert_equal(quantile_boundaries(m, 4, axis=0), np.array([[0.5] * 5, [0.5] * 5], dtype=DTYPE))
             np.testing.assert_equal(quantile_boundaries(m.T, 4, axis=1), np.array([[0.5, 0.5]] * 5, dtype=DTYPE))
+
+    def test_to_array_if_needed_dtype(self):
+        matrix = np.random.rand(100, 10)
+
+        for source_dtype, expected_dtype in [(np.bool, np.int32),
+                                             (np.int64, np.int64),
+                                             (np.uint64, np.float64),
+                                             (np.int32, np.int32),
+                                             (np.uint32, np.int64),
+                                             (np.int16, np.int32),
+                                             (np.uint16, np.int32),
+                                             (np.float64, np.float64),
+                                             (np.float32, np.float64),
+                                             (np.float16, np.float64)]:
+            self.assertEqual(expected_dtype, to_array_if_needed(matrix.astype(source_dtype), min_dtype=np.int32).dtype,
+                             msg={'source_dtype': source_dtype, 'min_dtype': np.int32})
+
+        for source_dtype, expected_dtype in [(np.bool, np.float32),
+                                             (np.int64, np.float32),
+                                             (np.uint64, np.float32),
+                                             (np.int32, np.float32),
+                                             (np.uint32, np.float32),
+                                             (np.int16, np.float32),
+                                             (np.uint16, np.float32),
+                                             (np.float64, np.float64),
+                                             (np.float32, np.float32),
+                                             (np.float16, np.float32)]:
+            self.assertEqual(expected_dtype,
+                             to_array_if_needed(matrix.astype(source_dtype), min_dtype=np.float32).dtype,
+                             msg={'source_dtype': source_dtype, 'min_dtype': np.float32})

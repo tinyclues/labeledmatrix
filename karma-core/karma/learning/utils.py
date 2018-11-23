@@ -152,8 +152,7 @@ class BasicVirtualHStack(object):
             for i in integer_entries:
                 X[i] = np.zeros((common_shape0 or 1, X[i]))
 
-            X = [xx if isinstance(xx, VirtualDirectProduct)
-                 else cast_2dim_float32_transpose(xx, min_dtype=np.float32) for xx in X]
+            X = [xx if isinstance(xx, VirtualDirectProduct) else cast_2dim_float32_transpose(xx) for xx in X]
             self.dims = np.cumsum([0] + [x.shape[1] for x in X])
         else:
             X = X if isinstance(X, VirtualDirectProduct) else cast_float32(X)

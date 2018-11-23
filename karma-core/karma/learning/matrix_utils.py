@@ -1420,7 +1420,13 @@ def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=
             if scalar_transpose:
                 res = res.T
         if min_dtype is not None:
-            res = res.astype(max(min_dtype, res.dtype), copy=False)
+            is_int = lambda x: x.kind in ['b', 'i', 'u']
+            dtype = res.dtype
+            if is_int(dtype) and not is_int(np.dtype(min_dtype)):
+                dtype = min_dtype
+            else:
+                dtype = np.promote_types(dtype, min_dtype)
+            res = res.astype(dtype, copy=False)
         return res
 
 
