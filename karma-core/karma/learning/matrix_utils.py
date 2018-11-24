@@ -933,9 +933,17 @@ def truncate_with_cutoff(matrix, cutoff):
         return matrix
 
 
+def from_float16_to_float32(x):
+    if hasattr(x, 'dtype') and x.dtype == np.float16:
+        return x.astype(np.float32)
+    else:
+        return x
+
+
 def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
     """
     >>> ac = np.allclose
+    >>> ac16 = lambda a, b: np.allclose(a, b, atol=1e-3, rtol=1e-3)
     >>> import scipy.sparse as sp
     >>> x = KarmaSparse(sp.rand(3, 4, 0.5, format="csr"))
     >>> y = KarmaSparse(sp.rand(4, 5, 0.6, format="csc") * 1000)
@@ -951,12 +959,16 @@ def safe_dot(x, y, mat_mask=None, mask_mode="last", dense_output=None):
     True
     >>> ac(safe_dot(x.toarray()[0], y), safe_dot(x.toarray()[0], y.toarray()))
     True
+    >>> ac16(safe_dot(x.toarray().astype('float16'), y), safe_dot(x.toarray(), y.toarray()))
+    True
+    >>> ac16(safe_dot(x, y.toarray().astype('float16')), safe_dot(x.to_scipy_sparse(), y.toarray()))
+    True
     """
     if isinstance(x, (list, tuple)):
         x = np.asarray(x)
     if isinstance(y, (list, tuple)):
         y = np.asarray(y)
-
+    x, y = map(from_float16_to_float32, (x, y))
     if x.shape[x.ndim - 1] != y.shape[0]:
         raise SparseUtilsException("Inner dimensions have to be the same " +
                                    "when multiplying matrices : {} != {}".
