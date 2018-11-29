@@ -49,7 +49,8 @@ EXTENSIONS = [Extension(root_path + '.' + f.replace('.pyx', '').replace('/', '.'
                         library_dirs=info['library_dirs'],
                         libraries=info['libraries'],
                         extra_compile_args=cargs,
-                        extra_link_args=largs) for f in SOURCE_FILE]
+                        extra_link_args=largs,
+                        cython_directives={'language_level': 2, 'embedsignature': True}) for f in SOURCE_FILE]
 
 
 requirements = [str(i.req) for i in parse_requirements("requirements.txt", session=False)]
