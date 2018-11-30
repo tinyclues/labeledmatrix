@@ -7,6 +7,7 @@ from math import ceil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace, argsort
+from cyperf.tools.sort_tools import parallel_sort
 
 from karma import KarmaSetup
 from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
@@ -419,7 +420,7 @@ class CrossValidationWrapper(object):
         for (train_idx, test_idx) in self.cv.split(self._classes, self._classes):
             if self._kept_indices is not None:
                 train_idx, test_idx = self._kept_indices[train_idx], self._kept_indices[test_idx]
-            train_idx, test_idx = np.sort(train_idx), np.sort(test_idx)
+            train_idx, test_idx = map(parallel_sort, (train_idx, test_idx))
             yield train_idx, test_idx
 
     def get_n_splits(self, X=None, y=None, groups=None):
