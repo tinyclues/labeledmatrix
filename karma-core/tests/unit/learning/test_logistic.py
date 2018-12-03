@@ -97,7 +97,7 @@ class LogisticCoefficientsAndPosterioriTestCase(unittest.TestCase):
 
     def test_correlated_features(self):
         with use_seed(123):
-            n = 10**5
+            n = 10 ** 5
             x = np.random.rand(n)
             X = (2 * x, x / 5)
             y = np.random.rand(n) < expit(x)

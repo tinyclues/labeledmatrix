@@ -13,7 +13,6 @@ from sklearn.utils.arrayfuncs import cholesky_delete, min_pos
 
 
 def lasso_gram(Xy, XX, max_features=None, max_iter=500, min_alpha=0, method='lasso'):
-
     """ Compute Least Angle Regression and LASSO path
 
 Parameters

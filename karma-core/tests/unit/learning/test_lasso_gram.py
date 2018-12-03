@@ -4,6 +4,7 @@ from karma.learning.lasso_gram import lasso_gram
 
 import numpy as np
 
+
 class LassoGramTestCase(unittest.TestCase):
     def test_max_features(self):
         n_row = 100

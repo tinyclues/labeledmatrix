@@ -127,7 +127,7 @@ def create_summary_of_regression(prediction, y, metrics='auc', metric_groups=Non
     initial_df = DataFrame({'predictions': prediction, 'true_values': y})
 
     metric_agg_tuple = tuple('{0}(predictions, true_values) as {0}'.format(metric) for metric in metrics)
-    agg_tuple = ('# as Count', 'sum(true_values) as CountPos',) + metric_agg_tuple # only makes sense for binary target
+    agg_tuple = ('# as Count', 'sum(true_values) as CountPos',) + metric_agg_tuple  # only makes sense for binary target
     df_grouped = initial_df.group_by(metric_groups, agg_tuple)
 
     return df_grouped

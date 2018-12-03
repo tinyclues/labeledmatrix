@@ -38,7 +38,8 @@ class CVSamplerTestCase(unittest.TestCase):
         my_params = {'axis': 'y', 'cv': 0.2, 'n_splits': 1, 'cv_groups': 'group_col'}
         cv_sampler = CVSampler(df, my_params)
         df_copy = cv_sampler.evaluate_cv(0.1, my_features)
-        metric_results = cv_sampler._metric_aggregation(df_copy, 0.1, my_features, metric_groups=['group_col', 'strat_col'])
+        metric_results = cv_sampler._metric_aggregation(df_copy, 0.1, my_features,
+                                                        metric_groups=['group_col', 'strat_col'])
         self.assertTrue('group_col' in metric_results)
         self.assertTrue('strat_col' in metric_results)
         self.assertEqual(metric_results.column_names,
@@ -90,7 +91,8 @@ class GridSearchTestCase(unittest.TestCase):
         initial_penalty_values = [0.1, 1]
         evaluated_reguls_df = grid_search.sequential_search(initial_penalty_values, my_features)
         self.assertEqual(evaluated_reguls_df.column_names,
-                         [PENALTY_COL_NAME, 'full_betas', 'fold_type', 'Count', 'CountPos', 'auc', 'penalty_hr', 'features'])
+                         [PENALTY_COL_NAME, 'full_betas', 'fold_type', 'Count', 'CountPos', 'auc', 'penalty_hr',
+                          'features'])
         self.assertEqual(len(evaluated_reguls_df),
                          (grid_search.cv_wrapper.n_splits + 1) * len(initial_penalty_values))
         self.assertEqual(len(grid_search.evaluated_reguls),
@@ -99,6 +101,8 @@ class GridSearchTestCase(unittest.TestCase):
         new_penalty_values = [0.01, 10]
         evaluated_reguls_df = grid_search.sequential_search(new_penalty_values, my_features, n_jobs=2)
         self.assertEqual(len(evaluated_reguls_df),
-                         (grid_search.cv_wrapper.n_splits + 1) * (len(initial_penalty_values) + len(new_penalty_values)))
+                         (grid_search.cv_wrapper.n_splits + 1) * (
+                         len(initial_penalty_values) + len(new_penalty_values)))
         self.assertEqual(len(grid_search.evaluated_reguls),
-                         (grid_search.cv_wrapper.n_splits + 1) * (len(initial_penalty_values) + len(new_penalty_values)))
+                         (grid_search.cv_wrapper.n_splits + 1) * (
+                         len(initial_penalty_values) + len(new_penalty_values)))

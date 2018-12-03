@@ -45,7 +45,6 @@ from karma.core.labeledmatrix.utils import (lm_occurence,
                                             dict_merge,
                                             aeq)
 
-
 __all__ = ["LabeledMatrix", "LabeledMatrixException"]
 
 
@@ -148,6 +147,7 @@ class LabeledMatrix(object):
     >>> LabeledMatrix((row, np.array(['x', 'y', 'z'])), matrix.copy()).column
     ['x', 'y', 'z']
     """
+
     def __init__(self, (row, column), matrix, deco=({}, {})):
         self.check_format((row, column), matrix)
         if is_scipysparse(matrix):
@@ -267,30 +267,30 @@ class LabeledMatrix(object):
         return unicode(repr_ + ">", encoding="utf-8", errors='replace').encode("utf-8")
 
     def __getitem__(self, *labs):
-            """
-            >>> lm = LabeledMatrix((['a', 'b', 'c'], ['a', 'b', 'c']) , np.arange(9).reshape(3, 3))
-            >>> lm #doctest: +NORMALIZE_WHITESPACE
-            <LabeledMatrix with properties :
-             * dense numpy
-             * dtype int64
-             * dimension (3, 3)
-             * number of non-zero elements 8
-             * density of non-zero elements 0.8888889
-             * min element 0
-             * max element 8
-             * sum elements 36>
-            >>> lm.matrix #doctest: +NORMALIZE_WHITESPACE
-            array([[0, 1, 2],
-                   [3, 4, 5],
-                   [6, 7, 8]])
-            >>> lm['a', 'c']
-            2
-            """
-            if len(labs[0]) == 2:
-                return self.matrix[self.row.index(labs[0][0]), self.column.index(labs[0][1])]\
-                    if (labs[0][0] in self.row) and (labs[0][1] in self.column) else 0
-            else:
-                raise LabeledMatrixException("Dimension of input should be 2.")
+        """
+        >>> lm = LabeledMatrix((['a', 'b', 'c'], ['a', 'b', 'c']) , np.arange(9).reshape(3, 3))
+        >>> lm #doctest: +NORMALIZE_WHITESPACE
+        <LabeledMatrix with properties :
+         * dense numpy
+         * dtype int64
+         * dimension (3, 3)
+         * number of non-zero elements 8
+         * density of non-zero elements 0.8888889
+         * min element 0
+         * max element 8
+         * sum elements 36>
+        >>> lm.matrix #doctest: +NORMALIZE_WHITESPACE
+        array([[0, 1, 2],
+               [3, 4, 5],
+               [6, 7, 8]])
+        >>> lm['a', 'c']
+        2
+        """
+        if len(labs[0]) == 2:
+            return self.matrix[self.row.index(labs[0][0]), self.column.index(labs[0][1])] \
+                if (labs[0][0] in self.row) and (labs[0][1] in self.column) else 0
+        else:
+            raise LabeledMatrixException("Dimension of input should be 2.")
 
     def is_square(self):
         """
@@ -814,8 +814,8 @@ class LabeledMatrix(object):
         (['b', 'c', 'd'], ['x', 'y'])
         """
         if axis is None:
-            return self.without_zeros(axis=1, min_nonzero=min_nonzero)\
-                       .without_zeros(axis=0, min_nonzero=min_nonzero)
+            return self.without_zeros(axis=1, min_nonzero=min_nonzero) \
+                .without_zeros(axis=0, min_nonzero=min_nonzero)
         index = np.where(safe_sum(nonzero_mask(self.matrix), axis=axis) >= min_nonzero)[0]
         if len(index) == self.matrix.shape[co(axis)]:
             return self
@@ -1384,8 +1384,8 @@ class LabeledMatrix(object):
 
     def __eq__(self, other):
         return isinstance(other, LabeledMatrix) \
-            and (self.row == other.row) and (self.column == other.column) \
-            and aeq(self.matrix, other.matrix)
+               and (self.row == other.row) and (self.column == other.column) \
+               and aeq(self.matrix, other.matrix)
 
     def _maximum(self, other):
         return LabeledMatrix(self.label, safe_maximum(self.matrix, other.matrix),
@@ -1637,8 +1637,10 @@ class LabeledMatrix(object):
         array([[0.02955447, 0.        , 0.08606881],
                [0.06760618, 0.04877058, 0.09516258]])
         """
+
         def np_soft_cutoff(x, threshold):
             return np.maximum(1. - np.exp(-x / threshold), 0)
+
         return self.apply_numpy_function(np_soft_cutoff, [threshold])
 
     def clip(self, lower=None, upper=None):
@@ -1729,10 +1731,10 @@ class LabeledMatrix(object):
         except LabeledMatrixException:
             print "All entries are zeros"
             return DataFrame([[my_row, 0]], columns=['entry_key', 'nb_nonzero']), \
-                DataFrame(columns=['reco', 'score'])
-        my_df = lm_loc.truncate(nb_h=nb)\
-                      .to_flat_dataframe('entry_key', 'reco', 'score')\
-                      .sort_by('score', reverse=True)
+                   DataFrame(columns=['reco', 'score'])
+        my_df = lm_loc.truncate(nb_h=nb) \
+            .to_flat_dataframe('entry_key', 'reco', 'score') \
+            .sort_by('score', reverse=True)
         if self.column_deco:
             deco_lambda = lambda x: self.column_deco.get(x, "")
             my_df['deco'] = my_df.build_callable_column(deco_lambda, 'reco')
@@ -1806,7 +1808,7 @@ class LabeledMatrix(object):
         kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
         if not self.is_sparse:
             kc += Map(inputs, output, (self.row.list, self.matrix),
-                        default_row(self.matrix, default), coordinates=coordinates)
+                      default_row(self.matrix, default), coordinates=coordinates)
         else:
             if default != 'zero':
                 raise ValueError('Sparse LabeledMatrix supports only *zero* default values')
@@ -1857,10 +1859,10 @@ class LabeledMatrix(object):
         data[col] = Column(take_indices(self.column, col_indices))
         data[dist] = Column(values)
         if deco_row:
-            data = data\
+            data = data \
                 .with_instruction_column(deco_row, Map((row,), '', self.row_deco, ""))
         if deco_col:
-            data = data\
+            data = data \
                 .with_instruction_column(deco_col, Map((col,), '', self.column_deco, ""))
         return data
 
@@ -1902,13 +1904,13 @@ class LabeledMatrix(object):
             matrix = self.matrix.tocsr()
             double = [[x, [self.column[y]
                            for y in matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]
-                      [np.argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
-                      if not (exclude * (x == self.column[y]))]]
+                           [np.argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
+                           if not (exclude * (x == self.column[y]))]]
                       for i, x in enumerate(self.row)]
         else:
             asort = self.matrix.argsort(axis=1)[:, ::-1]
             double = [[x, [self.column[y] for y in asort[i] if
-                      self.matrix[i, y] and not (exclude * (x == self.column[y]))]]
+                           self.matrix[i, y] and not (exclude * (x == self.column[y]))]]
                       for i, x in enumerate(self.row)]
         return DataFrame([x for x in double if x[1]],
                          columns=[col, prefix + col]).sort_by(col)
@@ -2133,8 +2135,8 @@ class LabeledMatrix(object):
         source = self.nonzero_mask()
         inter = source._dot(source.transpose())
         total = source.sum(axis=1)
-        union = inter.nonzero_mask()._dot(total)\
-                     ._add(total._dot(inter.nonzero_mask()))._add(-inter)
+        union = inter.nonzero_mask()._dot(total) \
+            ._add(total._dot(inter.nonzero_mask()))._add(-inter)
         return 1. * inter / union
 
     def buddies(self, rows, batch_size=100, max_iter=False):
@@ -2172,6 +2174,7 @@ class LabeledMatrix(object):
 
         def ordered_merge(new_array, old_array):
             return new_array[~np.in1d(new_array, old_array)]
+
         # Q.? : Should we first return the passed rows and next lock for any extension?
         total_indices = nonzero_argsort(batch_size, np.squeeze(vector))
         for i, col in enumerate(source.column.select(total_indices)):
@@ -2395,8 +2398,8 @@ class LabeledMatrix(object):
         >>> lm.tail_clustering(weight, 2).to_sparse().dict_argmax()
         {0: 2, 1: 2, 2: 2, 3: 3, 4: 3}
         """
-        mults = weight.sum(axis=1).align(self, axes=[(1, 1, None), (0, 1, None)])[0]\
-                      .matrix.diagonal()
+        mults = weight.sum(axis=1).align(self, axes=[(1, 1, None), (0, 1, None)])[0] \
+            .matrix.diagonal()
         if self.is_sparse:
             labels = sparse_tail_clustering(self.matrix, mults, k, min_density)
         else:
@@ -2542,7 +2545,7 @@ class LabeledMatrix(object):
             current_leader = rest.truncate(nb_h=1)
             rest = rest - current_leader
             to_remove = rest * current_leader.nonzero_mask()._dot(exclude)
-            to_remove = to_remove - to_remove.truncate(nb_h=nb-1)
+            to_remove = to_remove - to_remove.truncate(nb_h=nb - 1)
             rest = rest - to_remove
             result = result + current_leader
         return result + rest
@@ -2571,9 +2574,9 @@ class LabeledMatrix(object):
         fifa      2.0
         """
         category = category.align(self, axes=[(1, 0, None)])[0]
-        category_list = KarmaSparse(category.matrix, copy=False)\
+        category_list = KarmaSparse(category.matrix, copy=False) \
             .argmax(axis=1, only_nonzero=True)
-        new_matrix = KarmaSparse(self.matrix, copy=False)\
+        new_matrix = KarmaSparse(self.matrix, copy=False) \
             .truncate_by_count_by_groups(category_list, nb_keep)
         return LabeledMatrix(self.label, new_matrix, deco=self.deco)
 
@@ -2601,8 +2604,8 @@ class LabeledMatrix(object):
         drap3   0.21
 
         """
-        dissim_mat = dissimilarity.align(self, axes=[(1, 0, None), (0, 0, None)])[0]\
-                                  .to_sparse().matrix.copy()
+        dissim_mat = dissimilarity.align(self, axes=[(1, 0, None), (0, 0, None)])[0] \
+            .to_sparse().matrix.copy()
         dissim_mat = dissim_mat ** p
         rest = self.matrix.copy()
         result = 0 * rest
@@ -2617,8 +2620,8 @@ class LabeledMatrix(object):
             rest = rest - current_leader
             cl_mask = nonzero_mask(current_leader)
             rest = rest - safe_multiply(rest, safe_dot(cl_mask, nonzero_mask(dissim_mat),
-                                        dense_output=False))\
-                + safe_multiply(rest, safe_dot(cl_mask, dissim_mat, dense_output=False))
+                                                       dense_output=False)) \
+                   + safe_multiply(rest, safe_dot(cl_mask, dissim_mat, dense_output=False))
         return LabeledMatrix(self.label, result + rest, deco=self.deco)
 
     def soft_group_concurence(self, group, decay=0.5, max_period=4, max_group=15, groupcutoff=0):
@@ -3149,7 +3152,7 @@ class LabeledMatrix(object):
         """
         return self.transpose().rename_row(prefix, suffix, mapping).transpose()
 
-    def glove(self, rank, epochs=30, alpha=0.75, max_count=None, learning_rate=0.05, 
+    def glove(self, rank, epochs=30, alpha=0.75, max_count=None, learning_rate=0.05,
               no_threads=KarmaSetup.open_mp_nb_thread, seed=None):
         """
         Warning : works only on upper triangle matrix

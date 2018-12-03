@@ -289,7 +289,7 @@ def logistic_coefficients_and_posteriori(X, y,
             X = VirtualHStack(X, nb_threads=nb_threads, nb_inner_threads=nb_inner_threads)
 
         n_samples, n_features = X.shape
-        row_nnz = X.row_nnz + 1 # to take into account the intercept
+        row_nnz = X.row_nnz + 1  # to take into account the intercept
         C_priori = X.adjust_array_to_total_dimension(C_priori, 'C_priori')
 
         if w_priori is None:

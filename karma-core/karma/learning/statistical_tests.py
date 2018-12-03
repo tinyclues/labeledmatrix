@@ -47,7 +47,6 @@ def combine_statistics(N1, N2, mean1, mean2, std1, std2):
 
 
 class StatsObject(object):
-
     def __init__(self, N, mean, std):
         """
         >>> stats = StatsObject(1, 2.0, 3.0)
@@ -80,7 +79,6 @@ class StatsObject(object):
         self.mean = np.atleast_1d(mean)
         self.std = np.atleast_1d(std)
         # self.stats = np.atleast_1d(np.rec.fromarrays((n, mean, std), names=('N', 'mean', 'std')))
-
 
     def __add__(self, other):
         """
@@ -174,7 +172,6 @@ class StatsObject(object):
 
 
 class ControlGroupStatsObject(object):
-
     def __init__(self, stats_ncg, stats_cg):
         if not (isinstance(stats_ncg, StatsObject) and isinstance(stats_cg, StatsObject)):
             raise TypeError('ControlGroupStatsObject only supports StatsObject as inputs')
@@ -236,7 +233,7 @@ class ControlGroupStatsObject(object):
         ncg = self.ncg + other.ncg
         cg = self.cg + other.cg
         self.ncg = ncg
-        self.cg  = cg
+        self.cg = cg
         return self
 
     def __eq__(self, other):
@@ -272,10 +269,9 @@ class ControlGroupStatsObject(object):
         ControlGroupStats(nonCG: N=[2], mean=[ 1.], std=[ 1.]; CG: N=[3], mean=[ 2.], std=[ 2.])
         """
         template = 'ControlGroupStats(nonCG: N={N_ncg}, mean={mean_ncg}, std={std_ncg}; ' \
-                                        'CG: N={N_cg}, mean={mean_cg}, std={std_cg})'
+                   'CG: N={N_cg}, mean={mean_cg}, std={std_cg})'
         return template.format(N_ncg=self.ncg.N, mean_ncg=self.ncg.mean, std_ncg=self.ncg.std,
                                N_cg=self.cg.N, mean_cg=self.cg.mean, std_cg=self.cg.std)
-
 
 
 def minimum_significative_difference(stats_A, stats_B, alpha=0.1, beta=0.1):
@@ -342,8 +338,8 @@ def minimum_significative_difference(stats_A, stats_B, alpha=0.1, beta=0.1):
     zeros_B = stats_B.N == 0
     has_zero_N = zeros_A | zeros_B
 
-    z_alpha = norm.ppf(1 - alpha / 2) # should be Student distribution, but degrees of freedom computation
-    z_beta = norm.ppf(1 - beta)       # is a bit involved
+    z_alpha = norm.ppf(1 - alpha / 2)  # should be Student distribution, but degrees of freedom computation
+    z_beta = norm.ppf(1 - beta)  # is a bit involved
 
     # compute standard errors where N != 0, np.inf where N == 0
     stderr_A = np.full(stats_A.N.shape, np.inf)
@@ -353,12 +349,13 @@ def minimum_significative_difference(stats_A, stats_B, alpha=0.1, beta=0.1):
     stderr_B[~zeros_B] = stats_B.std[~zeros_B] / np.sqrt(stats_B.N[~zeros_B])
 
     # compute combined standard error for equal and non-equal variances
-    stderr_D_eq_var[~has_zero_N] = stats_A.std[~has_zero_N] * np.sqrt(1. / stats_A.N[~has_zero_N] + 1. / stats_B.N[~has_zero_N])
-    stderr_D_neq_var = np.sqrt(stderr_A ** 2 + stderr_B ** 2) # not equal variance
+    stderr_D_eq_var[~has_zero_N] = stats_A.std[~has_zero_N] * np.sqrt(
+        1. / stats_A.N[~has_zero_N] + 1. / stats_B.N[~has_zero_N])
+    stderr_D_neq_var = np.sqrt(stderr_A ** 2 + stderr_B ** 2)  # not equal variance
 
     # compute minimal difference
-    significativity_part = z_alpha * stderr_D_eq_var # minimal difference to observe for significativity
-    power_part = z_beta * stderr_D_neq_var # additional difference for test power
+    significativity_part = z_alpha * stderr_D_eq_var  # minimal difference to observe for significativity
+    power_part = z_beta * stderr_D_neq_var  # additional difference for test power
     minimum_delta = significativity_part + power_part
 
     # check if current means difference is bigger than minimal significative difference
@@ -426,10 +423,12 @@ def two_sample_ttest(stats_A, stats_B):
     result = np.ones(stats_A.N.shape, dtype='float')
 
     # compute p-values where N != 0
-    pvalue = ttest_ind_from_stats(stats_A.mean_nnz, stats_A.std_nnz, stats_A.N_nnz, stats_B.mean_nnz, stats_B.std_nnz, stats_B.N_nnz, equal_var=False)[1]
+    pvalue = ttest_ind_from_stats(stats_A.mean_nnz, stats_A.std_nnz, stats_A.N_nnz, stats_B.mean_nnz, stats_B.std_nnz,
+                                  stats_B.N_nnz, equal_var=False)[1]
     result[~has_zero_N] = pvalue
 
     return result
+
 
 def ratio_of_means_confidence_interval(stats_A, stats_B, alpha=0.1):
     """
@@ -536,13 +535,14 @@ def ratio_of_means_confidence_interval(stats_A, stats_B, alpha=0.1):
     zero_in_interval = g >= 1.
     stderr_Q = np.full(Q.shape, np.inf, dtype='float')
     # we extract all values for which g < 1
-    Q_nnz, g_nnz  = Q[~zero_in_interval], g[~zero_in_interval]
+    Q_nnz, g_nnz = Q[~zero_in_interval], g[~zero_in_interval]
     stderr_A_nnz, stderr_B_nnz = stderr_A[~zero_in_interval], stderr_B[~zero_in_interval]
     stats_A.mean_nnz, stats_B.mean_nnz = stats_A.mean[~zero_in_interval], stats_B.mean[~zero_in_interval]
 
     # for all these values, compute the standard error of the ratio
     stderr_Q[~zero_in_interval] = (Q_nnz / (1 - g_nnz)) * np.sqrt((1 - g_nnz) *
-                                    (stderr_A_nnz / stats_A.mean_nnz) ** 2 + (stderr_B_nnz / stats_B.mean_nnz) ** 2)
+                                                                  (stderr_A_nnz / stats_A.mean_nnz) ** 2 + (
+                                                                  stderr_B_nnz / stats_B.mean_nnz) ** 2)
     # from the standard error, compute the confidence interval
     low_boundary = (Q / (1 - g)) - tstar * stderr_Q
     high_boundary = (Q / (1 - g)) + tstar * stderr_Q
@@ -718,12 +718,12 @@ def difference_of_sums_confidence_interval(stats_A, stats_B, scaling_factor=1., 
     diff = SA - SB
 
     # compute standard error of each sums and standard error of the difference
-    stderr_sum_A = stats_A.std * np.sqrt(stats_A.N) # N_A * stderr(mean(A)) = N_A * ( std_A / np.sqrt(N_A) )
+    stderr_sum_A = stats_A.std * np.sqrt(stats_A.N)  # N_A * stderr(mean(A)) = N_A * ( std_A / np.sqrt(N_A) )
     stderr_sum_B = stats_B.std * np.sqrt(stats_B.N) * scaling_factor
-    stderr_diff = np.sqrt(stderr_sum_A**2 + stderr_sum_B**2)
+    stderr_diff = np.sqrt(stderr_sum_A ** 2 + stderr_sum_B ** 2)
 
     # compute confidence interval boundaries
-    tstar = norm.ppf(1 - alpha/2)
+    tstar = norm.ppf(1 - alpha / 2)
     low = diff - tstar * stderr_diff
     high = diff + tstar * stderr_diff
 

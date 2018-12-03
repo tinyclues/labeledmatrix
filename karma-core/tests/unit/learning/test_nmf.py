@@ -22,7 +22,6 @@ def shuffle_indices(sp_matrix):
 
 
 class LibNMFTestCase(unittest.TestCase):
-
     def assert_almost_binary_array(self, arr):
         self.assertIsInstance(arr, np.ndarray)
         self.assertTrue(np.sum(arr) > 0.5)

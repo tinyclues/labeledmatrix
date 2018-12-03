@@ -11,11 +11,12 @@ from sklearn.metrics import roc_auc_score
 from karma.core.utils import use_seed
 from karma.core.curve import gain_curve_from_prediction
 
+
 def skl_auc(predicted_values, true_values):
     return 2. * roc_auc_score(true_values, predicted_values) - 1.
 
-class MetricsTestCase(unittest.TestCase):
 
+class MetricsTestCase(unittest.TestCase):
     def test_normalized_log_loss_from_prediction(self):
         p = 0.25
         exp = np.mean([np.log(0.9), np.log(0.5), np.log(0.3), np.log(0.8)]) / (p * np.log(p) + (1 - p) * np.log(1 - p))
@@ -61,7 +62,7 @@ class MetricsTestCase(unittest.TestCase):
             y = x > 0.6
             self.assertEqual(auc_from_prediction(x, y), skl_auc(x, y))
             self.assertEqual(auc_from_prediction(x, y), gain_curve_from_prediction(x, y).auc)
-            self.assertEqual(auc_from_prediction(x, y), 1.) # structural given y definition
+            self.assertEqual(auc_from_prediction(x, y), 1.)  # structural given y definition
 
         with use_seed(42):
             x = np.random.uniform(size=100)
@@ -73,7 +74,7 @@ class MetricsTestCase(unittest.TestCase):
         x = np.random.uniform(size=10)
         y = [1.] * 10
         self.assertEqual(auc_from_prediction(x, y), 1.)
-        #self.assertEqual(auc_from_prediction(x, y), gain_curve_from_prediction(x, y).auc) -> gain_curve_from_pred returns 0.
+        # self.assertEqual(auc_from_prediction(x, y), gain_curve_from_prediction(x, y).auc) -> gain_curve_from_pred returns 0.
         y = [0.] * 10
         self.assertEqual(auc_from_prediction(x, y), 1.)
-        #self.assertEqual(auc_from_prediction(x, y), gain_curve_from_prediction(x, y).auc) -> gain_curve_from_pred returns -1.
+        # self.assertEqual(auc_from_prediction(x, y), gain_curve_from_prediction(x, y).auc) -> gain_curve_from_pred returns -1.

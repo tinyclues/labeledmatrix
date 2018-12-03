@@ -520,6 +520,7 @@ def safe_min(matrix, axis=None):
         except TypeError:
             return min(matrix)
 
+
 def safe_sum(matrix, axis=None):
     """
     >>> import scipy.sparse as sp
@@ -550,6 +551,7 @@ def safe_sum(matrix, axis=None):
             return matrix.sum(axis)
         except TypeError:
             return sum(matrix)
+
 
 def safe_argmax(matrix, axis=None):
     """
@@ -892,7 +894,7 @@ def idiv(mat1, mat2):
 
     if is_karmasparse(mat1) and is_karmasparse(mat2):
         if mat1.format == mat2.format and np.all(mat1.indices == mat2.indices) \
-           and np.all(mat1.indptr == mat2.indptr):  # simpler way on data only
+                and np.all(mat1.indptr == mat2.indptr):  # simpler way on data only
             return idiv_flat(mat1.data, mat2.data, eps)
         else:
             mat1, mat2 = mat1.clip(eps), mat2.clip(eps)
@@ -1261,12 +1263,12 @@ def align_along_axis(matrix, indices, axis, extend=False):
 
         if is_karmasparse(matrix):
             shape = (matrix.shape[0] + n, matrix.shape[1]) if axis == 1 else (matrix.shape[0], matrix.shape[1] + n)
-            matrix = matrix.extend(shape, copy=not(np.isscalar(indices)))  # in that case the getitem will do the copy
+            matrix = matrix.extend(shape, copy=not (np.isscalar(indices)))  # in that case the getitem will do the copy
         else:
             shape = (n, matrix.shape[axis]) if axis else (matrix.shape[axis], n)
             matrix = np.concatenate((matrix, np.zeros(shape, dtype=matrix.dtype)), axis=1 - axis)
 
-        if np.isscalar(indices): # simple extension by adding zeros rows/columns
+        if np.isscalar(indices):  # simple extension by adding zeros rows/columns
             return matrix
 
     return matrix[indices] if axis == 1 else matrix[:, indices]
@@ -1666,7 +1668,7 @@ def second_moment(mat):
 def direct_product_second_moment(left, right):
     left, right = _dp_cast(left, right)
     if is_karmasparse(left):
-        with blas_threads(1):   # turn off internal blas multithreading
+        with blas_threads(1):  # turn off internal blas multithreading
             return left.kronii_second_moment(right)
     else:
         # less memory consuming version :

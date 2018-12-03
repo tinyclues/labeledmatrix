@@ -76,7 +76,7 @@ def old_tail_clustering(vectors, multiplicities, k):
     if k >= n:
         return range(n)
     for each in xrange(n - k):
-        #print '---'
+        # print '---'
         activemults = mults.compress(mults)
         activeindices = indices.compress(mults)
         j = activemults.argmin()

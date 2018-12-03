@@ -23,9 +23,8 @@ from karma.learning.regression import create_meta_of_regression, create_summary_
 from karma.thread_setter import blas_level_threads
 from karma.core.utils.utils import LOGGER
 
-
 NB_THREADS_MAX = 16
-NB_CV_GROUPS_MAX = 10**5
+NB_CV_GROUPS_MAX = 10 ** 5
 KNOWN_LOGISTIC_METHODS = ['logistic_coefficients', 'logistic_coefficients_and_posteriori']
 
 
@@ -50,6 +49,7 @@ class VirtualDirectProduct(object):
         tuples stay for direct_product
 
     """
+
     def __init__(self, left, right, is_transposed=False):
         assert left.shape[0] == right.shape[0]
         assert left.ndim == 2
@@ -296,6 +296,7 @@ class VirtualHStack(BasicVirtualHStack):
                     if row_indices is not None:
                         x = x[row_indices]
                     return safe_dot_torch(x, w[self.dims[i]:self.dims[i + 1]].astype(x.dtype, copy=False))
+
                 if self.pool is not None:
                     return reduce(np.add, self.pool.imap_unordered(_dot, self.order))
                 else:
@@ -574,7 +575,7 @@ class CrossValidationWrapper(object):
                 cv_groups_col_filtered = cv_groups_col_filtered[0]
             else:
                 cv_groups_col_filtered = 'feature_randomizer({}, vector_size={},' \
-                                       ' seed={})'.format(', '.join(cv_groups_col_filtered), NB_CV_GROUPS_MAX, seed)
+                                         ' seed={})'.format(', '.join(cv_groups_col_filtered), NB_CV_GROUPS_MAX, seed)
             return dataframe[cv_groups_col_filtered][:]
 
 
@@ -662,12 +663,12 @@ def create_basic_virtual_hstack(dataframe, inputs):
         # a bit dirty hack
         backend = dataframe[inp]._backend
         if KarmaSetup.vdp_active and hasattr(backend, 'dependencies') and hasattr(backend, 'instruction') and \
-                backend.instruction.name == "direct_product" and len(backend.dependencies) == 2:
+                        backend.instruction.name == "direct_product" and len(backend.dependencies) == 2:
             return tuple([x[0] for x in backend.dependencies])  # this returns names
         else:
             return inp
 
-    #  local cache to take all columns only once
+    # local cache to take all columns only once
     local_column_cache, features = {}, []
 
     for col in map(find_dp, inputs):

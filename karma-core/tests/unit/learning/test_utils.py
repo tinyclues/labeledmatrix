@@ -19,7 +19,6 @@ from karma.lib.logistic_regression import logistic_regression
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         n = 10 ** 4
@@ -76,7 +75,7 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
     def test_metrics(self):
         df = self.df.copy()
-        df['dummy'] = create_column_from_data( np.random.rand(len(df), 2))
+        df['dummy'] = create_column_from_data(np.random.rand(len(df), 2))
         cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=2, seed=123)
         df += logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
 
@@ -104,8 +103,8 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as e:
             _ = CrossValidationWrapper(0.2,
-                                        [1, 0, 0, 1, 1, 0],
-                                        [3, 2, 1, 1, 1, 1], n_splits=1, seed=None)
+                                       [1, 0, 0, 1, 1, 0],
+                                       [3, 2, 1, 1, 1, 1], n_splits=1, seed=None)
         self.assertEquals(e.exception.message, "StratifiedShuffleSplit doesn't support classes of size 1")
 
     def test_sample_weight(self):
@@ -182,7 +181,6 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
         cv = CrossValidationWrapper(0.2, df['y'][:], groups=df['group'][:], seed=140191)
         _ = bayesian_logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv, 'compute_gaincurves': False})
         self.assertTrue(cv.meta is None)
-
 
     def test__prepare_and_check_classes(self):
         with use_seed(1234567):

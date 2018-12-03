@@ -8,7 +8,6 @@ from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
 from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
 from numexpr import evaluate
 
-
 __all__ = ['co_clustering']
 
 
@@ -59,7 +58,6 @@ def co_clustering(matrix, ranks=(2, 2), max_iter=50, nb_preruns=20, pre_iter=4):
 
 
 class CoClustering(object):
-
     def __init__(self, matrix, ranks):
         self._epsilon = 1e-10
 
@@ -99,12 +97,12 @@ class CoClustering(object):
         best_dist = idiv(self.matrix, self.approximate_matrix())  # To fix the common mask
 
         for _ in xrange(nb_preruns):
-                self.initial_clustering()
-                self.iterate(pre_iter)
-                cand_dist = idiv(self.matrix, self.approximate_matrix())
-                if cand_dist < best_dist:
-                    best_dist = cand_dist
-                    best_w, best_h = self.w, self.h
+            self.initial_clustering()
+            self.iterate(pre_iter)
+            cand_dist = idiv(self.matrix, self.approximate_matrix())
+            if cand_dist < best_dist:
+                best_dist = cand_dist
+                best_w, best_h = self.w, self.h
 
         # True main loop
         self.initial_clustering(w=best_w, h=best_h)

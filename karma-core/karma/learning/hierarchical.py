@@ -9,7 +9,6 @@ from scipy.spatial.distance import pdist
 import cyperf.clustering.hierarchical as perf_hc
 from cyperf.clustering.space_tools import pairwise_flat, METRIC_LIST
 
-
 __all__ = ['clustering_dispatcher']
 
 

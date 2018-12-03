@@ -58,7 +58,6 @@ def linear_coefficients_and_posteriori(X, y, w_priori=None, intercept_priori=0.,
         else:
             raise ValueError('hessian_mode needs to be one of {{skip, full, diag}}, got {}'.format(hessian_mode))
 
-
         intercept_C_post, feature_C_post = C_post[-1], C_post[:-1]
         feature_C_posts = X.split_by_dims(feature_C_post.astype(np.float))
 

@@ -101,5 +101,5 @@ class NTF(object):
     def iterate(self, maxiter):
         if self.metric == 'KL':
             for i in xrange(maxiter):
-                    self.kl_update()
+                self.kl_update()
         return self.a, self.b, self.c

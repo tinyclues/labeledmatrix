@@ -92,6 +92,7 @@ class CVSampler(object):
     test        4       3          1.0   0.1          ['aa', 'b']
     train       20      13         1.0   0.1          ['aa', 'b']
     """
+
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,
                  lib_symbol='logistic_regression', metrics='auc'):
         self.dataframe = dataframe
@@ -151,20 +152,22 @@ class CVSampler(object):
             predictions_df[pred_col_name] = fold_test_y_hat
 
             test_fold_metric_results = self._metric_aggregation(predictions_df, penalty_value, features, metric_groups)
-            full_betas = map(tuple, np.repeat(test_betas_and_intercept[i].reshape(1, -1), len(test_fold_metric_results), axis=0))
+            full_betas = map(tuple, np.repeat(test_betas_and_intercept[i].reshape(1, -1), len(test_fold_metric_results),
+                                              axis=0))
             test_fold_metric_results['full_betas'] = full_betas
             test_fold_metric_results['features'] = [str(features) for _ in xrange(len(test_fold_metric_results))]
             test_metric_results = squash(test_metric_results, test_fold_metric_results)
 
         final_metric_results = squash({'train': train_metric_results.copy(*test_metric_results.column_names),
-                                       'test': test_metric_results}, label='fold_type') # if lazy=True it breaks
+                                       'test': test_metric_results}, label='fold_type')  # if lazy=True it breaks
 
         fixed_columns = [PENALTY_COL_NAME, 'full_betas', 'fold_type']
         proper_col_order = fixed_columns + [c for c in final_metric_results.column_names if c not in fixed_columns]
 
         return final_metric_results.copy(*proper_col_order)
 
-    def _metric_aggregation(self, df, penalty_value, features, metric_groups=None): # we could remove the penalty_value arg and use an attribute instead
+    def _metric_aggregation(self, df, penalty_value, features,
+                            metric_groups=None):  # we could remove the penalty_value arg and use an attribute instead
         metric_agg_tuple = tuple('{0}({1}, {2}) as {0}'.format(metric, PRED_COL_NAME, self.training_params['axis'])
                                  for metric in self.metrics)
         agg_tuple = ('# as Count', 'sum({}) as CountPos'.format(self.training_params['axis']),) + metric_agg_tuple
@@ -249,7 +252,8 @@ class GridGenerator(object):
         """
         one_dim_grid = np.linspace(-1, 1, num=granularity)
         grid_correction = width * self.initial_point
-        corrected_grid = cartesian([one_dim_grid for _ in xrange(len(self.initial_point))]).dot(np.diag(grid_correction))
+        corrected_grid = cartesian([one_dim_grid for _ in xrange(len(self.initial_point))]).dot(
+            np.diag(grid_correction))
         local_linear_grid = self.initial_point + corrected_grid
         local_linear_grid = np.clip(local_linear_grid, a_min=1e-6, a_max=None)  # bring grid back to positive orthant
         return local_linear_grid
@@ -276,7 +280,7 @@ class GridGenerator(object):
                [ 1. ],
                [10. ]])
         """
-        one_dim_grid = np.logspace(downscale, upscale, num = np.abs(downscale) + np.abs(upscale) + 1)
+        one_dim_grid = np.logspace(downscale, upscale, num=np.abs(downscale) + np.abs(upscale) + 1)
         return self.initial_point * cartesian([one_dim_grid for _ in xrange(len(self.initial_point))])
 
     def gaussian_grid(self, n_samples=10, var_factor=1.):
@@ -324,7 +328,7 @@ class GridEvaluator(object):
             raise ValueError("You need to generate a cross-validation before!")
         else:
             penalty_df = df.group_by(['fold_type', PENALTY_COL_NAME, 'features'],
-                                      'mean({0}) as {0}'.format(metric))
+                                     'mean({0}) as {0}'.format(metric))
         splitted_df = penalty_df.split_by('fold_type')
         train_score = splitted_df['train']['{}'.format(metric)][:]
         test_score = splitted_df['test']['{}'.format(metric)][:]
@@ -427,6 +431,7 @@ class GridSearch(CVSampler):
     train       [0.1]        ['aa']     0.0755     0.0
     train       [0.1]        ['b']      0.0517     0.0
     """
+
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,
                  lib_symbol='logistic_regression', metrics='auc', metric_groups=None):
         super(GridSearch, self).__init__(dataframe=dataframe, lib_parameters=lib_parameters,
@@ -449,6 +454,7 @@ class GridSearch(CVSampler):
         stopping_condition : any function taking already evaluated reguls as input and returns a boolean
         verbose : boolean, default True
         """
+
         def partial_search(partial_penalty_grid):
             summary_df_list = []
             for penalty_value in partial_penalty_grid:
@@ -459,10 +465,11 @@ class GridSearch(CVSampler):
                 else:
                     self.training_params['w_warm'] = None
                 penalty_extended = self.extend_and_format_penalty(penalty_value, features)
-                #if tuple(penalty_extended) in self.evaluated_reguls[PENALTY_COL_NAME]: # to remove
+                # if tuple(penalty_extended) in self.evaluated_reguls[PENALTY_COL_NAME]: # to remove
                 #    continue
 
-                penalty_summary_df = self.evaluate_and_summarize_cv(penalty_value, features, pred_col_name=PRED_COL_NAME,
+                penalty_summary_df = self.evaluate_and_summarize_cv(penalty_value, features,
+                                                                    pred_col_name=PRED_COL_NAME,
                                                                     metric_groups=self.metric_groups)
                 summary_df_list.append(penalty_summary_df)
 
@@ -476,7 +483,7 @@ class GridSearch(CVSampler):
 
         if n_jobs > 1:
             n = int(len(penalty_grid) / float(n_jobs))
-            penalty_grid_chunks = [penalty_grid[i:i+n] for i in xrange(0, len(penalty_grid), n)]
+            penalty_grid_chunks = [penalty_grid[i:i + n] for i in xrange(0, len(penalty_grid), n)]
             par_summary_df = squash(Parallel(n_jobs, backend='multiprocessing').map(partial_search,
                                                                                     penalty_grid_chunks))  # broken with threading backend
             self.evaluated_reguls = squash(self.evaluated_reguls, par_summary_df)
@@ -494,7 +501,7 @@ class GridSearch(CVSampler):
             metric_tuple = tuple(chain(*metric_tuple))
             penalty_df = self.evaluated_reguls.group_by(['fold_type', 'penalty_hr', 'features'],
                                                         metric_tuple)
-        return penalty_df # do someting in summary with betas .copy(exclude=['full_betas'])
+        return penalty_df  # do someting in summary with betas .copy(exclude=['full_betas'])
 
 
 class LogisticPenaltySelector(object):
@@ -509,6 +516,7 @@ class LogisticPenaltySelector(object):
     >>> ps.naive_diagonal_search(['aa', 'b'], verbose=False)
     ({'aa': (0.1, 0.1), 'b': (0.1,), "['aa', 'b']": (0.05, 0.05, 0.05)}, {'aa': ('auc', -0.3), 'b': ('auc', -0.04), "['aa', 'b']": ('auc', -0.32)})
     """
+
     def __init__(self, dataframe, lib_parameters, penalty_parameter_name=BAYES_PRIOR_COEF_VAR_NAME,
                  lib_symbol='logistic_regression', metrics='auc', metric_groups=None):
         self.gs = GridSearch(dataframe, lib_parameters, penalty_parameter_name=penalty_parameter_name,
@@ -537,7 +545,6 @@ class LogisticPenaltySelector(object):
                               verbose=True, n_jobs=1, metric='auc', order='max', robustness_threshold=1.,
                               grid='scale_grid', **grid_kwargs):
 
-
         by_feature_penalty, by_feature_score = self.by_features_search(features,
                                                                        initial_penalty=initial_penalty,
                                                                        warm_start=warm_start,
@@ -554,7 +561,8 @@ class LogisticPenaltySelector(object):
         by_feature_penalty = np.hstack([by_feature_penalty[feat] for feat in features])
         feature_penalty_grid = by_feature_penalty * shrinkage_parameters.reshape(-1, 1)
 
-        self.gs.sequential_search(feature_penalty_grid, features, warm_start=warm_start, stopping_condition=stopping_condition,
+        self.gs.sequential_search(feature_penalty_grid, features, warm_start=warm_start,
+                                  stopping_condition=stopping_condition,
                                   verbose=verbose)
         return self.evaluator.best_mean_regul(self.gs.evaluated_reguls, metric=metric, order=order,
                                               robustness_threshold=robustness_threshold)

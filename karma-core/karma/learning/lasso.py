@@ -18,7 +18,6 @@ from karma.thread_setter import blas_threads, open_mp_threads
 from karma.learning.utils import VirtualDirectProduct
 from karma.learning.matrix_utils import second_moment
 
-
 __all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments']
 
 
@@ -207,12 +206,10 @@ def lassopath(dataframe, x, y, max_features=None, min_alpha=0., max_iter=500):
 
 
 def _lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
-
     if max_features is None:
         max_features = xx.shape[1]
 
     def lassopath_from_moments(nblines, sum_x, sum_y, sum_xx, sum_xy, sum_yy):
-
         def center_and_normalize(nblines, sum_x, sum_y, sum_xx, sum_xy, sum_yy):
             sum_x, sum_y = np.atleast_2d(sum_x), np.atleast_2d(sum_y)
             # IDEA : in principle it's possible to use only sparse representation of sum_xx=gram in `lasso_gram`
@@ -249,6 +246,7 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
         >>> np.std(yy - intercept - xx.dot(betas)) < 0.5 * np.std(yy)
         True
     """
+
     def error_by_rank(args):
         x_train, y_train, x_test, y_test = args
         betas, intercepts = _lassopath(x_train, y_train, max_features, min_alpha, max_iter)
@@ -266,7 +264,7 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
         nb_cv_jobs = min(cv.get_n_splits(), 8)
 
     with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
-        errors = Parallel(nb_cv_jobs, backend="threading")\
+        errors = Parallel(nb_cv_jobs, backend="threading") \
             .map(error_by_rank, ((xx[train], yy[train], xx[test], yy[test]) for train, test in
                                  cv.split(xx, granularity if granularity is not None else yy)))
 

@@ -18,7 +18,6 @@ from karma.runtime import KarmaSetup
 ADD_TIME = 20
 EPSILON = 10 ** (-10)
 
-
 __all__ = ['nmf', 'nmf_fold']
 
 
@@ -230,6 +229,7 @@ class GNMF(NMF):
     In article's notation X = UV^T decomposition corresponds to M = X^T = VU^T = WH in our notation,
     so in each equation we replace V by W and U by H^T
     """
+
     def __init__(self, matrix, rank, adjacency, metric='KL', weight_type='adjacency'):
         super(GNMF, self).__init__(matrix, rank, metric)
         assert adjacency.shape == (self.n, self.n)
@@ -265,7 +265,6 @@ class GNMF(NMF):
 
 
 class NMF_P(NMF):
-
     def _mean(self):
         return self.matrix_csr.mean() if self.is_sparse else self.matrix.mean()
 

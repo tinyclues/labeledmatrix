@@ -30,7 +30,6 @@ class RegressionUtilsTestCase(unittest.TestCase):
 
 
 class LassoTestCase(unittest.TestCase):
-
     def test_best_lasso_model_cv_from_moments(self):
         with use_seed(123):
             xx = np.random.rand(10 ** 4, 100).astype(DTYPE)
