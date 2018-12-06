@@ -356,9 +356,9 @@ class VirtualDirectProductTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with use_seed(124567):
-            cls.vdp = VirtualDirectProduct(KarmaSparse(np.random.randint(0, 3, size=(10, 2)),
+            cls.vdp = VirtualDirectProduct(KarmaSparse(np.random.randint(-1, 2, size=(10, 2)),
                                                        shape=(10, 2)),
-                                           np.random.rand(10, 3).astype(DTYPE))
+                                           (2 * np.random.rand(10, 3) - 1).astype(DTYPE))
             cls.vdpt = cls.vdp.T
             cls.dp = cls.vdp.materialize()
             cls.dpt = cls.vdp.materialize().T
@@ -371,6 +371,8 @@ class VirtualDirectProductTestCase(unittest.TestCase):
         self.assertEqual(self.vdp.dtype, self.dp.dtype)
         self.assertEqual(self.vdp.nnz, self.dp.nnz)
         self.assertEqual(self.vdp.ndim, self.dp.ndim)
+        self.assertEqual(self.vdp.min(), self.dp.min())
+        self.assertEqual(self.vdp.max(), self.dp.max())
 
         ind = [4, 3, 4, -1]
         assert_array_equal(self.vdp[ind], self.dp[ind])

@@ -1,4 +1,4 @@
-from itertools import izip, imap
+from itertools import izip, imap, product
 from multiprocessing.pool import ThreadPool
 
 import torch
@@ -11,14 +11,13 @@ from cyperf.tools import take_indices, logit_inplace, argsort
 from cyperf.tools.sort_tools import parallel_sort
 
 from karma import KarmaSetup
-from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
 
 from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
 from karma.core.utils.array import is_binary
 from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
                                          direct_product, direct_product_dot,
                                          direct_product_dot_transpose,
-                                         direct_product_second_moment, cast_2dim_float32_transpose)
+                                         direct_product_second_moment, cast_2dim_float32_transpose, safe_min, safe_max)
 from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
 from karma.thread_setter import blas_level_threads
 from karma.core.utils.utils import LOGGER
@@ -74,6 +73,26 @@ class VirtualDirectProduct(object):
     def nnz(self):
         # it does not work at all case (by sparse x dense should be Ok)
         return number_nonzero(self.left) * number_nonzero(self.right) / max(self.right.shape[0], 1)
+
+    def _extreme_values(self):
+        min_left = safe_min(self.left, axis=1)
+        max_left = safe_max(self.left, axis=1)
+        min_right = safe_min(self.right, axis=1)
+        max_right = safe_max(self.right, axis=1)
+
+        return list(product([min_left, max_left], [min_right, max_right]))
+
+    def min(self, axis=None):
+        if axis is None:
+            return min(map(lambda (x, y): (x * y).min(), self._extreme_values()))
+        else:
+            raise NotImplementedError('VirtualDirectProduct.min supports only axis=None')
+
+    def max(self, axis=None):
+        if axis is None:
+            return max(map(lambda (x, y): (x * y).max(), self._extreme_values()))
+        else:
+            raise NotImplementedError('VirtualDirectProduct.max supports only axis=None')
 
     @property
     def ndim(self):
@@ -468,6 +487,7 @@ class CrossValidationWrapper(object):
                 if method.func_name in KNOWN_LOGISTIC_METHODS:
                     logit_inplace(y_hat)
             else:
+                from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
                 assert isinstance(kc_formatter, RegressionKarmaCodeFormatter)
                 kc = kc_formatter.format(*self.method_output)
                 y_hat = kc.bulk_call(X_stacked[test_idx].X)[0]

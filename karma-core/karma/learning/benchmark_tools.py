@@ -1,6 +1,11 @@
 from collections import defaultdict
+
+import numpy as np
+
+from karma.core.instructions import INSTRUCTIONS
 from karma.core.dataframe import DataFrame
 from karma.learning.matrix_utils import coherence, gram_quantiles, safe_max, safe_min
+from karma.learning.utils import create_basic_virtual_hstack
 
 
 def gram_first_quartile(mat):
@@ -62,7 +67,7 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     feature | is_sparse | dimension | nonempty_rows_rate | m_l2   | coherence | safe_min
     ------------------------------------------------------------------------------------
     col_2     False       2           1.0                  0.995    0.5752      -0.4695
-    col_3     False       1           1.0                  0.9619   None        -1.9133
+    col_3     False       1           1.0                  0.9619   0.0         -1.9133
     col_1     False       2           1.0                  1.4142   1.0         1.0
     """
     if features is None:
@@ -70,14 +75,11 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
 
     result_lists = defaultdict(list)
 
-    result_lists["feature"] = features
-    result_lists["is_sparse"] = [df[feature].is_sparse() for feature in features]
-    result_lists["dimension"] = [df[feat].safe_dim() for feat in features]
-    result_lists["nonempty_rows_rate"] = [df.aggregate('mean(is_non_empty({}))'.format(feature))
-                                          for feature in features]
+    result_lists['feature'] = features
+    result_lists['is_sparse'] = [df[feature].is_sparse() for feature in features]
+    result_lists['dimension'] = [df[feature].safe_dim() for feature in features]
 
-    if column_order is None:
-        default_column_order = ["feature", "is_sparse", "dimension", "nonempty_rows_rate"]
+    default_column_order = ['feature', 'is_sparse', 'dimension', 'nonempty_rows_rate']
 
     if func_list is None:
         func_list = [('min', 'is_one_hot', 'is_one_hot'),
@@ -90,26 +92,27 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
                      coherence,
                      safe_min,
                      safe_max]
+        # TODO gram_first_quartile, gram_third_quartile, coherence will materizalize VDP !
 
     for feature in features:
+        data = create_basic_virtual_hstack(df, [feature]).X[0]
+
+        idx_non_empty = np.where(INSTRUCTIONS['is_non_empty']('input', 'output').bulk_call((data,)))[0]
+        result_lists['nonempty_rows_rate'].append(float(len(idx_non_empty)) / len(df))
 
         if restrict_nonempty:
-            df_copy = df.copy()
-            nonempty_col_name = 'is_nonempty_' + feature
-            df_copy[nonempty_col_name] = df_copy['is_non_empty({})'.format(feature)]
-            df_copy = df_copy.where(nonempty_col_name)
-        else:
-            df_copy = df.copy()
+            data = data[idx_non_empty]
 
         for func in func_list:
             if isinstance(func, tuple):
-                if len(func) == 3:
-                    col_name = func[2]
-                else:
-                    col_name = func[0] + '_' + func[1]
-                aggregate_func = func[0] + '(' + func[1] + '({}))'
+                if len(func) == 2:
+                    func += ('_'.join(func),)
+                aggregator, instruction_name, col_name = func
+
                 try:
-                    agg_val = df_copy.aggregate(aggregate_func.format(feature))
+                    instruction = INSTRUCTIONS[instruction_name]('input', 'output')
+                    transformed_data = instruction.bulk_call((data,))
+                    agg_val = DataFrame({'values': transformed_data}).aggregate('{}(values)'.format(aggregator))
                 except TypeError:
                     agg_val = None
                 result_lists[col_name].append(agg_val)
@@ -117,7 +120,7 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
             else:
                 col_name = func.__name__
                 try:
-                    func_val = func(df_copy[feature][:])
+                    func_val = func(data)
                 except TypeError:
                     func_val = None
                 result_lists[col_name].append(func_val)
