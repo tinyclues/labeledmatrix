@@ -69,6 +69,10 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     col_2     False       2           1.0                  0.995    0.5752      -0.4695
     col_3     False       1           1.0                  0.9619   0.0         -1.9133
     col_1     False       2           1.0                  1.4142   1.0         1.0
+    >>> descriptive_features_benchmark(df, features=[], func_list=f_list).preview() #doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    ----------------------------------------------------
+    feature | is_sparse | dimension | nonempty_rows_rate
+    ----------------------------------------------------
     """
     if features is None:
         features = df.vectorial_column_names + df.sparse_column_names
@@ -78,6 +82,7 @@ def descriptive_features_benchmark(df, features=None, func_list=None, column_ord
     result_lists['feature'] = features
     result_lists['is_sparse'] = [df[feature].is_sparse() for feature in features]
     result_lists['dimension'] = [df[feature].safe_dim() for feature in features]
+    result_lists['nonempty_rows_rate'] = []  # this init is needed for empty features list
 
     default_column_order = ['feature', 'is_sparse', 'dimension', 'nonempty_rows_rate']
 
