@@ -7,6 +7,8 @@ cdef void partial_unordered_sort(A* dist, B* idx, LTYPE_t size, LTYPE_t m, bool 
 cdef void partial_sort_decreasing_quick(A* dist, B* idx, LTYPE_t size, LTYPE_t m) nogil
 cdef void partial_sort_increasing_quick(A* dist, B* idx, LTYPE_t size, LTYPE_t m) nogil
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] cython_argsort(A[:] xx, ITYPE_t nb,  bool reverse)
+cpdef inplace_parallel_sort(A[::1] a)
+cpdef np.ndarray[A, ndim=1, mode="c"] parallel_sort(A[:] a)
 
 
 cdef inline void dual_swap(A * darr, B * iarr, LTYPE_t i1, LTYPE_t i2) nogil:

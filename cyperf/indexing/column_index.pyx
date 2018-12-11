@@ -13,6 +13,8 @@ from cpython.ref cimport PyObject
 from cpython.set cimport PySet_Contains, PySet_Add
 from cpython.dict cimport PyDict_GetItem
 from cpython.tuple cimport PyTuple_CheckExact
+from cyperf.tools.sort_tools import inplace_parallel_sort
+
 
 
 cpdef INDICES_NP merge_sort(INDICES_NP arr1, INDICES_NP arr2):
@@ -467,11 +469,11 @@ cpdef INDICES_NP deduplicate_indices(INDICES_NP indptr, INDICES_NP indices, str 
     if take == 'first':
         for i in xrange(nb):
             unique_indices[i] = indices[indptr[i]]
-        return unique_indices
     else:
         for i in xrange(nb):
             unique_indices[i] = indices[indptr[i + 1] - 1]
-        return np.sort(unique_indices)
+        inplace_parallel_sort(unique_indices)
+    return unique_indices
 
 
 cpdef INDICES_NP deduplicate_indices_select(INDICES_NP indptr, INDICES_NP indices,
@@ -490,8 +492,8 @@ cpdef INDICES_NP deduplicate_indices_select(INDICES_NP indptr, INDICES_NP indice
             i = indptr[reversed_indices[indices[i]] + 1]
             unique_indices[count] = indices[i - 1]
         count += 1
-
-    return np.sort(unique_indices)
+    inplace_parallel_sort(unique_indices)
+    return unique_indices
 
 
 cpdef INDICES_NP get_keys_indices(INDICES_NP indptr, INDICES_NP indices):

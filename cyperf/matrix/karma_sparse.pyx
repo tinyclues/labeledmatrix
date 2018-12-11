@@ -10,6 +10,7 @@ from scipy.special import expit
 import numpy as np
 from cython.parallel import parallel, prange
 from cyperf.tools.types import ITYPE, LTYPE
+from cyperf.tools.sort_tools import parallel_sort
 
 DTYPE = np.float32
 
@@ -3940,7 +3941,7 @@ cdef class KarmaSparse:
         if self.aligned_axis(axis):
             return np.array_equal(self.indptr, np.arange(self.shape[1 - axis] + 1))
         else:
-            return np.array_equal(np.sort(self.indices), np.arange(self.shape[1 - axis]))
+            return np.array_equal(parallel_sort(self.indices), np.arange(self.shape[1 - axis]))
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
