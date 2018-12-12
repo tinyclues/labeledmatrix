@@ -4,13 +4,14 @@ from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sort
                                    indices_truncation_lookup, first_indices_lookup, last_indices_lookup)
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
+from cyperf.tools.types import get_open_mp_num_thread
+
 from pandas.core.algorithms import htable
 from pandas import to_datetime
 from multiprocessing.pool import ThreadPool
 
 MaxSizeHtable = 10 ** 6
 MinCompression = 0.9
-NbThreads = 4
 
 
 def _merge_ks_struct(series):
@@ -282,10 +283,11 @@ class LookUpTruncatedIndex(BaseTruncatedIndex):
             return truncation_method(positions[slice_], self.user_index.indices,
                                      self.user_index.indptr, local_dates, d[slice_], lower, upper)
 
-        if len(positions) >= NbThreads:  # Parallel partition + merge
-            pp = ThreadPool(NbThreads)
+        nb_threads = get_open_mp_num_thread()
+        if len(positions) >= nb_threads:  # Parallel partition + merge
+            pp = ThreadPool(nb_threads)
             indices, indptr = _merge_ks_struct(pp.map(partial_ks,
-                                                      _slice_batches(len(positions), NbThreads)))
+                                                      _slice_batches(len(positions), nb_threads)))
             pp.close()
             pp.terminate()
         else:
@@ -322,10 +324,11 @@ class SortedTruncatedIndex(BaseTruncatedIndex):
             return truncation_method(positions[slice_], self.user_index.indices,
                                      self.user_index.indptr, lower_bound[slice_], upper_bound[slice_])
 
-        if len(positions) >= NbThreads:  # Parallel partition + merge
-            pp = ThreadPool(NbThreads)
+        nb_threads = get_open_mp_num_thread()
+        if len(positions) >= nb_threads:  # Parallel partition + merge
+            pp = ThreadPool(nb_threads)
             indices, indptr = _merge_ks_struct(pp.map(partial_ks,
-                                                      _slice_batches(len(positions), NbThreads)))
+                                                      _slice_batches(len(positions), nb_threads)))
             pp.close()
             pp.terminate()
         else:

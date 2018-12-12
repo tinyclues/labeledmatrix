@@ -15,7 +15,7 @@ from cyperf.tools.sort_tools import parallel_sort
 DTYPE = np.float32
 
 from cython.parallel cimport threadid
-from openmp cimport omp_get_num_threads
+from openmp cimport omp_get_max_threads
 from libc.string cimport memset, memcpy
 from libc.stdlib cimport RAND_MAX, rand, srand
 from libc.math cimport fabs
@@ -2794,8 +2794,7 @@ cdef class KarmaSparse:
             LTYPE_t j
             int ti, n_th
 
-        for ti in prange(1, nogil=True):
-            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+        n_th = min(omp_get_max_threads(), 8)
 
         cdef int size = self.nrows / n_th, start, stop
         cdef DTYPE_t[:,:,::1] out_tmp = np.zeros((n_th, self.ncols, n_cols), dtype=DTYPE, order='C')
@@ -2823,8 +2822,7 @@ cdef class KarmaSparse:
 
         cdef int ti, n_th
 
-        for ti in prange(1, nogil=True):
-            n_th = omp_get_num_threads()  # workaround to detect threads number
+        n_th = omp_get_max_threads()
 
         cdef int size = self.nrows / n_th, start, stop
 
@@ -2845,8 +2843,7 @@ cdef class KarmaSparse:
 
         cdef int ti, n_th
 
-        for ti in prange(1, nogil=True):
-            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+        n_th = min(omp_get_max_threads(), 8)
 
         cdef int size = self.nrows / n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.ncols), dtype=DTYPE)
@@ -3790,8 +3787,7 @@ cdef class KarmaSparse:
         cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
         cdef int ti, n_th
 
-        for ti in prange(1, nogil=True):
-            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+        n_th = min(omp_get_max_threads(), 8)
 
         cdef int batch_size = self.nrows / n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * matrix.shape[1]), dtype=DTYPE)
@@ -3822,8 +3818,7 @@ cdef class KarmaSparse:
         cdef DTYPE_t[::1] _factor = np.asarray(factor, dtype=DTYPE, order="C")
         cdef int ti, n_th
 
-        for ti in prange(1, nogil=True):
-            n_th = min(omp_get_num_threads(), 8)  # workaround to detect threads number
+        n_th = min(omp_get_max_threads(), 8)
 
         cdef int batch_size = self.nrows / n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * other.shape[1]), dtype=DTYPE)
