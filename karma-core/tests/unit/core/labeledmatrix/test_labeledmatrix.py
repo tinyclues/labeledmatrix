@@ -178,6 +178,14 @@ class LabeledMatrixTestCase(unittest.TestCase):
             _ = lm.rank_dispatch(1, 2, [2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
+        with self.assertRaises(ValueError) as e:
+            _ = lm.rank_dispatch(1, 2, {'a': -3, 'b': 1, 'c': 2})
+        self.assertEqual('max_volumes must be positive or 0', str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            _ = lm.rank_dispatch(1, {'a': -3, 'b': 1, 'c': 2}, 2)
+        self.assertEqual('max_ranks must be positive or 0', str(e.exception))
+
     def test_argmax_dispatch(self):
         """Testing argmax dispatch."""
         matrix = np.array([[0.2, 0.5, 0.7], [0.1, 0.4, 0.3], [0.8, 0.3, 0.75], [0.2, 0.7, 0.9]])

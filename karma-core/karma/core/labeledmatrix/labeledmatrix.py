@@ -2898,6 +2898,35 @@ class LabeledMatrix(object):
         choice = rank_dispatch(self.matrix, maximum_pressure, np.asarray(max_ranks), np.asarray(max_volumes))
         return LabeledMatrix(self.label, choice, self.deco)
 
+    def _check_dispatch_params(self, max_ranks=None, max_volumes=None):
+        nb_topic = len(self.column)
+
+        if max_volumes is None:
+            max_volumes = self.matrix.shape[0]
+        if is_integer(max_volumes):
+            max_volumes = np.full(nb_topic, max_volumes, dtype=np.int)
+        elif isinstance(max_volumes, dict):
+            max_volumes = np.array([max_volumes.get(topic, 0) for topic in self.column])
+        else:
+            raise ValueError('max_volumes must be integer or dict')
+
+        if max_ranks is None:
+            max_ranks = self.matrix.shape[0]
+        if is_integer(max_ranks):
+            max_ranks = np.full(nb_topic, max_ranks, dtype=np.int)
+        elif isinstance(max_ranks, dict):
+            max_ranks = np.array([max_ranks[topic] for topic in self.column])
+        else:
+            raise ValueError('max_ranks must be integer or dict')
+
+        if np.min(max_volumes) < 0:
+            raise ValueError('max_volumes must be positive or 0')
+
+        if np.min(max_ranks) < 0:
+            raise ValueError('max_ranks must be positive or 0')
+
+        return max_ranks, max_volumes
+
     def rank_dispatch(self, maximum_pressure, max_ranks=None, max_volumes=None):
         """
         Return LabeledMatrix with allocation user-topic.
@@ -2937,24 +2966,7 @@ class LabeledMatrix(object):
         2         c          6.0
         3         c          5.0
         """
-        nb_topic = len(self.column)
-        if max_volumes is None:
-            max_volumes = self.matrix.shape[0]
-        if is_integer(max_volumes):
-            max_volumes = np.full(nb_topic, max_volumes, dtype=np.int)
-        elif isinstance(max_volumes, dict):
-            max_volumes = np.array([max_volumes.get(topic, 0) for topic in self.column])
-        else:
-            raise ValueError('max_volumes must be integer or dict')
-
-        if max_ranks is None:
-            max_ranks = self.matrix.shape[0]
-        if is_integer(max_ranks):
-            max_ranks = np.full(nb_topic, max_ranks, dtype=np.int)
-        elif isinstance(max_ranks, dict):
-            max_ranks = np.array([max_ranks[topic] for topic in self.column])
-        else:
-            raise ValueError('max_ranks must be integer or dict')
+        max_ranks, max_volumes = self._check_dispatch_params(max_ranks, max_volumes)
 
         return self._rank_dispatch(maximum_pressure, max_ranks, max_volumes)
 
@@ -2969,27 +2981,9 @@ class LabeledMatrix(object):
             max_volumes: int/dict: maximal value of population volume each topic can be allocated to;
                                              default: all users
         """
-        matrix = self.matrix
-        nb_topic = len(self.column)
-        if max_volumes is None:
-            max_volumes = matrix.shape[0]
-        if is_integer(max_volumes):
-            max_volumes = np.full(nb_topic, max_volumes, dtype=np.int)
-        elif isinstance(max_volumes, dict):
-            max_volumes = np.array([max_volumes.get(topic, 0) for topic in self.column])
-        else:
-            raise ValueError('max_volumes must be integer or dict')
+        max_ranks, max_volumes = self._check_dispatch_params(max_ranks, max_volumes)
 
-        if max_ranks is None:
-            max_ranks = matrix.shape[0]
-        if is_integer(max_ranks):
-            max_ranks = np.full(nb_topic, max_ranks, dtype=np.int)
-        elif isinstance(max_ranks, dict):
-            max_ranks = np.array([max_ranks[topic] for topic in self.column])
-        else:
-            raise ValueError('max_ranks must be integer or dict')
-
-        choice = argmax_dispatch(matrix, maximum_pressure, max_ranks, max_volumes)
+        choice = argmax_dispatch(self.matrix, maximum_pressure, max_ranks, max_volumes)
         return LabeledMatrix(self.label, choice, self.deco)
 
     def population_allocation(self, dispatch_mask, norm='l1'):
