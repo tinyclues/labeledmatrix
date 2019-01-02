@@ -7,9 +7,9 @@
 
 
 from cython.parallel import prange
-from cyperf.matrix.karma_sparse cimport KarmaSparse, np, DTYPE_t, ITYPE_t, LTYPE_t
+from cyperf.matrix.karma_sparse cimport KarmaSparse, np, DTYPE_t, ITYPE_t, LTYPE_t, BOOL_t
 from cyperf.tools.types cimport INT1, INT2, A
-from cyperf.matrix.karma_sparse import KarmaSparse, np, LTYPE, DTYPE, ITYPE
+from cyperf.matrix.karma_sparse import KarmaSparse, np, LTYPE, DTYPE, ITYPE, BOOL
 from cyperf.tools.sort_tools cimport partial_sort_decreasing_quick
 from libcpp.vector cimport vector
 from libc.string cimport memcpy
@@ -35,7 +35,7 @@ cpdef KarmaSparse matrix_rank_dispatch(np.ndarray[A, ndim=2] raw_matrix,
     cdef ITYPE_t rank, topic, candidate, nb_full = 0
     cdef ITYPE_t[::1] pressure = np.zeros(length, dtype=ITYPE)
     cdef ITYPE_t[::1] count = np.zeros(nb_topic, dtype=ITYPE)
-    cdef np.uint8_t[::1] full = np.zeros(nb_topic, dtype=np.uint8)
+    cdef BOOL_t[::1] full = np.zeros(nb_topic, dtype=BOOL)
     cdef vector[vector[ITYPE_t]] choice
 
     with nogil:

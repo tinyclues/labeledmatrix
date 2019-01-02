@@ -23,7 +23,7 @@ cdef bool check_values(ITER values, dtype=np.int32) except? False:
     return True
 
 
-cpdef list take_indices_on_iterable(ITER_t iterable, INDICE_t indices):
+cpdef list take_indices_on_iterable(ITER iterable, INDICE_t indices):
     assert PySequence_Check(iterable)
     assert PySequence_Check(indices)
     cdef object x
@@ -39,10 +39,10 @@ cpdef list take_indices_on_iterable(ITER_t iterable, INDICE_t indices):
     return result
 
 
-cpdef ITER_NP_t take_indices_on_numpy(ITER_NP_t ar, INDICE_t indices):
+cpdef ITER_NP take_indices_on_numpy(ITER_NP ar, INDICE_t indices):
     assert PySequence_Check(indices)
     cdef long i, j, nb = len(indices)
-    cdef ITER_NP_t result = np.empty(nb, dtype=ar.dtype)
+    cdef ITER_NP result = np.empty(nb, dtype=ar.dtype)
 
     for i in xrange(nb):
         with cython.wraparound(False), cython.boundscheck(False):
@@ -127,6 +127,8 @@ def apply_python_dict_int(dict mapping, ITER indices, long default):
 @cython.boundscheck(False)
 def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.nan):
     """
+    It should always return a copy !
+
     >>> x = [4, 3, '3']
 
     >>> cast_to_float_array(x, 'safe') #doctest: +ELLIPSIS
@@ -144,7 +146,7 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
     check_values(values)
     if isinstance(values, np.ndarray) and values.dtype.kind not in ['O', 'S', 'U']:
         try:
-            return values.astype(DTYPE, casting=casting, copy=False)
+            return values.astype(DTYPE, casting=casting)
         except (ValueError, TypeError):
             pass
 
@@ -179,6 +181,8 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
 @cython.boundscheck(False)
 def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iinfo(LTYPE).min):
     """
+    It should always return a copy !
+
     >>> x = [4, 3, '3']
 
     >>> cast_to_long_array(x, 'safe') #doctest: +ELLIPSIS
@@ -193,7 +197,7 @@ def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iin
     check_values(values)
     if isinstance(values, np.ndarray) and values.dtype.kind not in ['O', 'S', 'U']:
         try:
-            return values.astype(LTYPE, casting=casting, copy=False)
+            return values.astype(LTYPE, casting=casting)
         except (ValueError, TypeError):
             pass
 
@@ -325,7 +329,7 @@ cpdef np.ndarray[dtype=np.int32_t, ndim=1] python_feature_hasher(ITER inp, int n
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cpdef list inplace_default_setter(list inp,
-                                  np.ndarray[dtype=np.int8_t, ndim=1, mode='c', cast=True] mask,
+                                  np.ndarray[dtype=BOOL_t, ndim=1, mode='c', cast=True] mask,
                                   object default):
     """
         Replace mask elements in list in place by default value:

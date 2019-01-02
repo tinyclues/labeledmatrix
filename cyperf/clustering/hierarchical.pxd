@@ -30,9 +30,9 @@ cdef class TailTree:
 
     cpdef np.ndarray[dtype=DTYPE_t, ndim=2] build(self)
 
-cpdef IVEC traversal(ITYPE_t[:,::1] link, ITYPE_t node)
+cpdef IVEC traversal(const ITYPE_t[:,::1] link, ITYPE_t node)
 
-cdef DTYPE_t simple_dist(DTYPE_t[::1] matrix, IVEC rows, IVEC cols, ITYPE_t n)
+cdef DTYPE_t simple_dist(const DTYPE_t[::1] matrix, IVEC rows, IVEC cols, ITYPE_t n)
 
 
 cdef inline LTYPE_t pnt(LTYPE_t i, LTYPE_t n) nogil:

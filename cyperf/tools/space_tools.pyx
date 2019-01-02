@@ -33,7 +33,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclid
     >>> pairwise_flat([[1, 2], [1, 2], [1, 3]])
     array([0., 1., 1.], dtype=float32)
     """
-    cdef DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
+    cdef const DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
     cdef ITYPE_t n_dim = X.shape[1]
     cdef LTYPE_t n_samples = X.shape[0], i, j, it
     cdef DTYPE_t[::1] D = np.zeros((n_samples - 1) * n_samples // 2, dtype=DTYPE, order="C")
@@ -44,8 +44,6 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclid
         for j in xrange(i+1, n_samples):
             D[it + j] = dist_func(&X[i, 0], &X[j, 0], n_dim)
     out = np.asarray(D)
-    X = None
-    D = None
     return out
 
 
@@ -58,7 +56,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_square(mat, string metric='eucl
            [0., 0., 1.],
            [1., 1., 0.]], dtype=float32)
     """
-    cdef DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
+    cdef const DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
     cdef ITYPE_t n_dim = X.shape[1], n_samples = X.shape[0], i, j
     cdef DTYPE_t[:, ::1] D = np.zeros((n_samples, n_samples), dtype=DTYPE, order="C")
     cdef DTYPE_t tmp
@@ -80,8 +78,8 @@ cdef DTYPE_t[::1] _ward_pairwise_flat(np.ndarray mat, np.ndarray weight):
     >>> _ward_pairwise_flat(np.array([[1, 2], [1, 2], [1, 3]]), np.array(10, 5, 3))
     """
 
-    cdef DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
-    cdef DTYPE_t[::1] W = np.asarray(weight, dtype=DTYPE, order="C")
+    cdef const DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
+    cdef const DTYPE_t[::1] W = np.asarray(weight, dtype=DTYPE, order="C")
     cdef ITYPE_t n_dim = X.shape[1],
     cdef LTYPE_t n_samples = X.shape[0]
     cdef LTYPE_t i, j, it
@@ -107,7 +105,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] fast_buddies(np.ndarray mat,
     array([1, 0, 0, 0], dtype=int32)
     """
     cdef:
-        DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
+        const DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
         ITYPE_t n_samples = X.shape[0]
         ITYPE_t n_dim = X.shape[1]
         ITYPE_t i, j, ind
@@ -139,8 +137,8 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] vector_distance(np.ndarray vector,
     """
 
     cdef:
-        DTYPE_t[::1] vec = np.asarray(vector, dtype=DTYPE, order="C")
-        DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
+        const DTYPE_t[::1] vec = np.asarray(vector, dtype=DTYPE, order="C")
+        const DTYPE_t[:, ::1] X = np.asarray(mat, dtype=DTYPE, order="C")
         ITYPE_t n_samples = X.shape[0]
         DTYPE_t[::1] D = np.zeros(n_samples, dtype=DTYPE, order="C")
         metric_func_type dist_func = get_distance(metric)

@@ -11,7 +11,7 @@ from cython cimport floating
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.string cimport memcpy
 from libc.math cimport pow as _cpow
-from cyperf.tools.types cimport ITYPE_t, LTYPE_t, bool, string, A, B, cmap
+from cyperf.tools.types cimport ITYPE_t, LTYPE_t, BOOL_t, bool, string, A, B, cmap
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
 
 ctypedef np.float32_t DTYPE_t
@@ -320,7 +320,7 @@ cdef inline DTYPE_t computed_quantile(DTYPE_t* data, DTYPE_t quantile, LTYPE_t s
     return res
 
 
-ctypedef DTYPE_t (*binary_func)(DTYPE_t, DTYPE_t) nogil
+ctypedef DTYPE_t (*DTYPE_t_binary_func)(DTYPE_t, DTYPE_t) nogil
 
 
 @cython.cdivision(True)
@@ -364,8 +364,8 @@ cdef inline DTYPE_t complement(DTYPE_t a, DTYPE_t b) nogil:
         return 0
 
 
-cdef cmap[string, binary_func] REDUCERLIST
-cdef binary_func get_reducer(string x) nogil except *
+cdef cmap[string, DTYPE_t_binary_func] REDUCERLIST
+cdef DTYPE_t_binary_func get_reducer(string x) nogil except *
 
 
 cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
@@ -494,9 +494,9 @@ cdef class KarmaSparse:
 
     cpdef KarmaSparse truncate_by_cumulative(self, DTYPE_t percentage, axis)
 
-    cdef KarmaSparse csr_generic_dot_top(self, KarmaSparse other, ITYPE_t nb_keep, DTYPE_t cutoff, binary_func op)
+    cdef KarmaSparse csr_generic_dot_top(self, KarmaSparse other, ITYPE_t nb_keep, DTYPE_t cutoff, DTYPE_t_binary_func op)
 
-    cdef KarmaSparse generic_dot_top(self, KarmaSparse other, ITYPE_t nb_keep, DTYPE_t cutoff, binary_func fn)
+    cdef KarmaSparse generic_dot_top(self, KarmaSparse other, ITYPE_t nb_keep, DTYPE_t cutoff, DTYPE_t_binary_func fn)
 
     cpdef KarmaSparse sparse_dot_top(self, KarmaSparse other, ITYPE_t nb_keep)
 
@@ -508,9 +508,9 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse sparse_dot(self, KarmaSparse other)
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_axis_reduce(self, binary_func fn, bool only_nonzero)
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_axis_reduce(self, DTYPE_t_binary_func fn, bool only_nonzero)
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_axis_reduce(self, binary_func fn, bool only_nonzero)
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_axis_reduce(self, DTYPE_t_binary_func fn, bool only_nonzero)
 
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, string name, int axis, bool only_nonzero=*)
 
@@ -593,15 +593,15 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=1] aligned_dense_squared_dot_vector_dot(self, A[:,::1] matrix, B[::1] vector)
 
-    cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b, binary_func op)
+    cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b, DTYPE_t_binary_func op)
 
-    cdef KarmaSparse csr_mask_sparse_sparse_dot(self, KarmaSparse other_a, KarmaSparse other_b, binary_func op)
+    cdef KarmaSparse csr_mask_sparse_sparse_dot(self, KarmaSparse other_a, KarmaSparse other_b, DTYPE_t_binary_func op)
 
-    cdef KarmaSparse csr_mask_sparse_dense_dot(self, KarmaSparse other, np.ndarray b, binary_func op)
+    cdef KarmaSparse csr_mask_sparse_dense_dot(self, KarmaSparse other, np.ndarray b, DTYPE_t_binary_func op)
 
-    cdef inline KarmaSparse generic_restricted_binary_operation(self, KarmaSparse other, binary_func fn)
+    cdef inline KarmaSparse generic_restricted_binary_operation(self, KarmaSparse other, DTYPE_t_binary_func fn)
 
-    cdef inline KarmaSparse generic_binary_operation(self, KarmaSparse other, binary_func fn)
+    cdef inline KarmaSparse generic_binary_operation(self, KarmaSparse other, DTYPE_t_binary_func fn)
 
     cpdef KarmaSparse complement(self, other)
 
@@ -649,8 +649,8 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[DTYPE_t, ndim=1] misaligned_dense_vector_dot(self, A[::1] vector)
 
-    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, binary_func fn)
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, DTYPE_t_binary_func fn)
 
-    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn)
+    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, DTYPE_t_binary_func fn)
 
     cdef np.ndarray[DTYPE_t, ndim=2] aligned_quantile_boundaries(self, long nb)

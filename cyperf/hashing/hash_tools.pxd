@@ -10,7 +10,7 @@ cdef extern from "farmhash.cc" nogil:
     unsigned int Hash32WithSeed(const char* s, size_t len, unsigned int seed)
 
 
-cdef inline long python_string_length(char* ch, long size) nogil:
+cdef inline long python_string_length(const char* ch, long size) nogil:
     cdef long i = size - 1
 
     while ch[i] == 0 and i >= 0:
@@ -19,7 +19,7 @@ cdef inline long python_string_length(char* ch, long size) nogil:
     return i + 1
 
 
-cdef inline unsigned int composition_part(int residue, np.uint32_t* composition) nogil:
+cdef inline unsigned int composition_part(int residue, const np.uint32_t* composition) nogil:
     """
     nb_group = len(composition) > 0
     total = sum(composition)

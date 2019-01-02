@@ -33,7 +33,7 @@ def cluster_center(labels, weights):
     assert labels.shape[0] == weights.shape[0]
     order = np.lexsort((weights, labels))[::-1]
     ordered_labels = labels[order]
-    index = np.empty(labels.shape[0], 'bool')
+    index = np.empty(labels.shape[0], np.bool_)
     index[0] = True
     index[1:] = ordered_labels[1:] != ordered_labels[:-1]
     return order[index][::-1][np.asarray(labels, dtype=ITYPE)]
@@ -71,7 +71,7 @@ cpdef IVEC traversal(ITYPE_t[:,::1] link, ITYPE_t node):
     return vec
 
 
-cdef DTYPE_t simple_dist(DTYPE_t[::1] matrix, IVEC rows, IVEC cols, ITYPE_t n):
+cdef DTYPE_t simple_dist(const DTYPE_t[::1] matrix, IVEC rows, IVEC cols, ITYPE_t n):
     cdef ITYPE_t pt
     cdef ITYPE_t i, j
     cdef DTYPE_t mm = INF
@@ -87,13 +87,12 @@ cdef DTYPE_t simple_dist(DTYPE_t[::1] matrix, IVEC rows, IVEC cols, ITYPE_t n):
                 return 0.
             if mm > val:
                 mm = val
-    matrix = None
     return mm
 
 
 def huffman_encoding_reordering(np.ndarray full_link not None, np.ndarray dist_matrix):
     cdef:
-        DTYPE_t[::1] distance_matrix = np.asarray(dist_matrix, dtype=DTYPE, order='C')
+        const DTYPE_t[::1] distance_matrix = np.asarray(dist_matrix, dtype=DTYPE, order='C')
         ITYPE_t n = full_link.shape[0] + 1
         np.ndarray[ITYPE_t, ndim=2, mode="c"] link = full_link[:, :2].astype(ITYPE)
         ITYPE_t left, right, uncle, u, f
@@ -122,8 +121,6 @@ def huffman_encoding_reordering(np.ndarray full_link not None, np.ndarray dist_m
         mr = simple_dist(distance_matrix, leaf_right, leaf_uncle, n)
         if (swap and ml < mr) or (ml > mr and not swap):
             link[u, 0], link[u, 1] = right, left
-    distance_matrix = None
-    father = None
     return huffman_encoding(np.asarray(link))
 
 

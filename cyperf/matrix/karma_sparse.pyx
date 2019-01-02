@@ -9,7 +9,7 @@ from scipy.special import expit
 
 import numpy as np
 from cython.parallel import parallel, prange
-from cyperf.tools.types import ITYPE, LTYPE
+from cyperf.tools.types import ITYPE, LTYPE, BOOL
 from cyperf.tools.sort_tools import parallel_sort
 
 DTYPE = np.float32
@@ -40,7 +40,7 @@ def logit(x, shift=0., width=1.):
     return expit((x - shift) / width)
 
 
-cdef binary_func get_reducer(string x) nogil except *:
+cdef DTYPE_t_binary_func get_reducer(string x) nogil except *:
     if REDUCERLIST.count(x) > 0:
         return REDUCERLIST[x]
     else:
@@ -226,9 +226,9 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
             raise ValueError('Cannot derive shape value from empty data')
         shape = (maxx + 1, maxy + 1)
 
-    cdef binary_func reducer = get_reducer(aggregator)
+    cdef DTYPE_t_binary_func reducer = get_reducer(aggregator)
     cdef floating[:,::1] result = np.full(shape, default, dtype=np.array(values).dtype)
-    cdef np.uint8_t[:,::1] mask = np.zeros(shape, dtype=np.uint8)
+    cdef BOOL_t[:,::1] mask = np.zeros(shape, dtype=BOOL)
     cdef DTYPE_t val
 
     with nogil:
@@ -909,7 +909,7 @@ cdef class KarmaSparse:
             ITYPE_t i, j, pos
             DTYPE_t x
             ITYPE_t * address
-            binary_func op = get_reducer(aggregator)
+            DTYPE_t_binary_func op = get_reducer(aggregator)
 
         self.prune()
         if self.has_canonical_format or self._has_canonical_format():
@@ -1484,7 +1484,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef KarmaSparse csr_generic_dot_top(self, KarmaSparse other,
-                                         ITYPE_t nb_keep, DTYPE_t cutoff, binary_func op):
+                                         ITYPE_t nb_keep, DTYPE_t cutoff, DTYPE_t_binary_func op):
         check_shape_comptibility(self.ncols, other.nrows)
         assert nb_keep > 0, "Parameter nb_keep should be positive, got {}".format(nb_keep)
         cdef:
@@ -1551,7 +1551,7 @@ cdef class KarmaSparse:
                            has_sorted_indices=1, has_canonical_format=1)
 
     cdef KarmaSparse generic_dot_top(self, KarmaSparse other,
-                                     ITYPE_t nb_keep, DTYPE_t cutoff, binary_func op):
+                                     ITYPE_t nb_keep, DTYPE_t cutoff, DTYPE_t_binary_func op):
         if (self.format == CSR) and (other.format == CSR):
             return self.csr_generic_dot_top(other, nb_keep, cutoff, op)
         elif self.format == CSR:
@@ -1785,7 +1785,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_axis_reduce(self, binary_func fn, bool only_nonzero):
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_axis_reduce(self, DTYPE_t_binary_func fn, bool only_nonzero):
         cdef:
             np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i
@@ -1807,17 +1807,16 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_axis_reduce(self, binary_func fn,
-                                                                  bool only_nonzero):
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_axis_reduce(self, DTYPE_t_binary_func fn, bool only_nonzero):
         cdef:
             np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
             ITYPE_t[::1] count = None if only_nonzero else np.zeros(self.ncols, dtype=ITYPE)
-            bool * first = <bool *>malloc(self.ncols * sizeof(bool))
+            BOOL_t * first = <BOOL_t *>malloc(self.ncols * sizeof(BOOL_t))
             ITYPE_t i
             LTYPE_t j
 
         with nogil:
-            memset(first, 1, self.ncols * sizeof(bool))
+            memset(first, 1, self.ncols * sizeof(BOOL_t))
             for j in xrange(self.get_nnz()):
                 i = self.indices[j]
                 if first[i]:
@@ -1834,8 +1833,7 @@ cdef class KarmaSparse:
             free(first)
         return res
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, string name, int axis,
-                                                   bool only_nonzero=False):
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, string name, int axis, bool only_nonzero=False):
         if self.aligned_axis(axis):
             return self.aligned_axis_reduce(get_reducer(name), only_nonzero)
         else:
@@ -1845,7 +1843,7 @@ cdef class KarmaSparse:
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_sum(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i
             LTYPE_t j
             DTYPE_t mx
@@ -1855,13 +1853,13 @@ cdef class KarmaSparse:
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + self.data[j]
             res[i] = mx
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_sum_abs(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i
             LTYPE_t j
             DTYPE_t mx
@@ -1871,13 +1869,13 @@ cdef class KarmaSparse:
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + fabs(self.data[j])
             res[i] = mx
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_max_abs(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i
             LTYPE_t j
             DTYPE_t mx
@@ -1887,46 +1885,46 @@ cdef class KarmaSparse:
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 mx = max(mx, fabs(self.data[j]))
             res[i] = mx
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_max_abs(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
             for i in xrange(self.get_nnz()):
                 res[self.indices[i]] = max(fabs(self.data[i]), res[self.indices[i]])
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_sum(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
             for i in xrange(self.get_nnz()):
                 res[self.indices[i]] += self.data[i]
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_sum_abs(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
             for i in xrange(self.get_nnz()):
                 res[self.indices[i]] += fabs(self.data[i])
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_sum_power(self, DTYPE_t p):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i
             LTYPE_t j
             DTYPE_t mx
@@ -1936,18 +1934,18 @@ cdef class KarmaSparse:
             for j in xrange(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + cpow(self.data[j], p)
             res[i] = mx
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_sum_power(self, DTYPE_t p):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
             for i in xrange(self.get_nnz()):
                 res[self.indices[i]] += cpow(self.data[i], p)
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -1959,20 +1957,20 @@ cdef class KarmaSparse:
         self.make_canonical()
         for i in prange(self.nrows, nogil=True, schedule='static'):
             res[i] = self.indptr[i + 1] - self.indptr[i]
-        return res
+        return np.asarray(res)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_count_nonzero(self):
         cdef:
-            np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
 
         self.eliminate_zeros()
         with nogil:
             for i in xrange(self.get_nnz()):
                 res[self.indices[i]] += 1
-        return res
+        return np.asarray(res)
 
     cdef sum_abs(self, axis=None):
         if axis is None:
@@ -2060,8 +2058,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_quantile(self, DTYPE_t quantile,
-                                                            bool only_nonzero=False):
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_quantile(self, DTYPE_t quantile, bool only_nonzero=False):
         cdef:
             np.ndarray[dtype=DTYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=DTYPE)
             ITYPE_t i, size, dim
@@ -2333,8 +2330,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)  # turn of bounds-checking for entire function
-    cdef np.ndarray[dtype=ITYPE_t, ndim=1] aligned_argminmax(self, bool reverse,
-                                                             bool only_nonzero=False):
+    cdef np.ndarray[dtype=ITYPE_t, ndim=1] aligned_argminmax(self, bool reverse, bool only_nonzero=False):
         cdef:
             np.ndarray[ITYPE_t, ndim=1, mode="c"] out = - np.ones(self.nrows, dtype=ITYPE)
             np.ndarray[DTYPE_t, ndim=1, mode="c"] value = np.zeros(self.nrows, dtype=DTYPE)
@@ -2438,15 +2434,13 @@ cdef class KarmaSparse:
         else:
             return pair_swap(res)
 
-    cdef np.ndarray[dtype=ITYPE_t, ndim=1] axis_argmax(self, axis,
-                                                       bool only_nonzero=False):
+    cdef np.ndarray[dtype=ITYPE_t, ndim=1] axis_argmax(self, axis, bool only_nonzero=False):
         if self.aligned_axis(axis):
             return self.aligned_argminmax(True, only_nonzero)
         else:
             return self.misaligned_argminmax(True, only_nonzero)
 
-    cdef np.ndarray[dtype=ITYPE_t, ndim=1] axis_argmin(self, axis,
-                                                       bool only_nonzero=False):
+    cdef np.ndarray[dtype=ITYPE_t, ndim=1] axis_argmin(self, axis, bool only_nonzero=False):
         if self.aligned_axis(axis):
             return self.aligned_argminmax(False, only_nonzero)
         else:
@@ -2762,7 +2756,7 @@ cdef class KarmaSparse:
         self.check_positive()
         if isinstance(matrix, np.ndarray):
             if vector.dtype.kind == 'b':
-                vector = np.array(vector, dtype=ITYPE)
+                vector = vector.view(BOOL)
             return self.dense_shadow_vector_dot(matrix, vector, power)
         elif is_karmasparse(matrix):
             return self.sparse_shadow_vector_dot(matrix, vector, power)
@@ -2945,7 +2939,7 @@ cdef class KarmaSparse:
         """
         if isinstance(matrix, np.ndarray):
             if vector.dtype.kind == 'b':
-                vector = np.array(vector, dtype=ITYPE)
+                vector = vector.view(BOOL)
             return self.dense_dot_vector_dot(matrix, vector, power)
         elif is_karmasparse(matrix):
             return self.sparse_dot_vector_dot(matrix, vector, power)
@@ -2955,7 +2949,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef KarmaSparse csr_mask_dense_dense_dot(self, np.ndarray a, np.ndarray b,
-                                              binary_func op):
+                                              DTYPE_t_binary_func op):
         check_shape_comptibility(a.shape[1], b.shape[0])
         check_shape_comptibility(a.shape[0], self.nrows)
         check_shape_comptibility(b.shape[1], self.ncols)
@@ -2985,7 +2979,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef KarmaSparse csr_mask_sparse_sparse_dot(self, KarmaSparse other_a, KarmaSparse other_b,
-                                                binary_func op):
+                                                DTYPE_t_binary_func op):
         check_shape_comptibility(self.nrows, other_a.shape[0])
         check_shape_comptibility(self.ncols, other_b.shape[1])
         check_shape_comptibility(other_a.shape[1], other_b.shape[0])
@@ -3032,7 +3026,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef KarmaSparse csr_mask_sparse_dense_dot(self, KarmaSparse other, np.ndarray b,
-                                               binary_func op):
+                                               DTYPE_t_binary_func op):
         check_shape_comptibility(other.shape[1], b.shape[0])
         check_shape_comptibility(other.shape[0], self.nrows)
         check_shape_comptibility(b.shape[1], self.ncols)
@@ -3062,7 +3056,7 @@ cdef class KarmaSparse:
         return res
 
     def mask_dot(self, a, b, string mask_mode="last"):
-        cdef binary_func op = get_reducer(mask_mode)
+        cdef DTYPE_t_binary_func op = get_reducer(mask_mode)
         check_shape_comptibility(a.shape[1], b.shape[0])
         check_shape_comptibility(a.shape[0], self.shape[0])
         check_shape_comptibility(b.shape[1], self.shape[1])
@@ -3099,7 +3093,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, binary_func fn):
+    cdef KarmaSparse generic_dense_restricted_binary_operation(self, floating[:,:] other, DTYPE_t_binary_func fn):
         check_shape_comptibility(self.shape, np.asarray(other).shape)
 
         if self.format != CSR:
@@ -3125,7 +3119,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, binary_func fn):
+    cdef np.ndarray[DTYPE_t, ndim=2] generic_dense_binary_operation(self, DTYPE_t[:,:] other, DTYPE_t_binary_func fn):
         check_shape_comptibility(self.shape, np.asarray(other).shape)
 
         cdef:
@@ -3149,7 +3143,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef inline KarmaSparse generic_restricted_binary_operation(self, KarmaSparse other,
-                                                                binary_func fn):
+                                                                DTYPE_t_binary_func fn):
         check_shape_comptibility(self.shape, other.shape)
         if self.format != other.format:
             other = other.swap_slicing()
@@ -3188,7 +3182,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef inline KarmaSparse generic_binary_operation(self, KarmaSparse other, binary_func fn):
+    cdef inline KarmaSparse generic_binary_operation(self, KarmaSparse other, DTYPE_t_binary_func fn):
         check_shape_comptibility(self.shape, other.shape)
         if self.format != other.format:
             other = other.swap_slicing()
@@ -3278,7 +3272,7 @@ cdef class KarmaSparse:
         if isinstance(other, np.ndarray) and other.dtype.str not in ['<f4', '<f8']:
             other = other.astype(self.dtype, copy=False)
 
-        cdef binary_func fn = get_reducer('multiply')
+        cdef DTYPE_t_binary_func fn = get_reducer('multiply')
         if is_karmasparse(other):
             return self.generic_restricted_binary_operation(other, fn)
         elif isinstance(other, np.ndarray):
@@ -3294,7 +3288,7 @@ cdef class KarmaSparse:
         if isinstance(other, np.ndarray) and other.dtype.str not in ['<f4', '<f8']:
             other = other.astype(self.dtype, copy=False)
 
-        cdef binary_func fn = get_reducer('divide')
+        cdef DTYPE_t_binary_func fn = get_reducer('divide')
 
         if is_karmasparse(other):
             return self.generic_restricted_binary_operation(other, fn)

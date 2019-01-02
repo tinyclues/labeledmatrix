@@ -1,7 +1,7 @@
 cimport numpy as np
 import numpy as np
 
-from cyperf.matrix.karma_sparse cimport KarmaSparse, DTYPE_t, ITYPE_t, LTYPE_t, bool
+from cyperf.matrix.karma_sparse cimport KarmaSparse, DTYPE_t, ITYPE_t, LTYPE_t, BOOL_t, bool
 from cyperf.matrix.routine cimport all_equal
 
 cdef DTYPE_t MINF = - np.inf
@@ -17,13 +17,13 @@ cdef class SAFP:
         readonly DTYPE_t[::1] responsibility
         readonly ITYPE_t[::1] cluster_map
         DTYPE_t[::1] similarity
-        ITYPE_t[::1] indices
-        LTYPE_t[::1] indptr
+        const ITYPE_t[::1] indices
+        const LTYPE_t[::1] indptr
         LTYPE_t[::1] diag_indices
 
         # temporal pointers
-        bool * is_exemplar
-        bool * is_old_exemplar
+        BOOL_t * is_exemplar
+        BOOL_t * is_old_exemplar
         LTYPE_t * tranpose_indptr
         ITYPE_t * tranpose_indices
         LTYPE_t * tranpose_data_index
@@ -41,7 +41,7 @@ cdef class SAFP:
 
     cdef void find_diagonal_indices(self)
 
-    cdef void diagonal_extractor(self, DTYPE_t[::1] array) nogil
+    cdef void diagonal_extractor(self, const DTYPE_t[::1] array) nogil
 
     cdef void responsibility_update(self, DTYPE_t damping)
 

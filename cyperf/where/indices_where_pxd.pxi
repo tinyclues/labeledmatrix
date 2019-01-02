@@ -2,7 +2,7 @@ cimport cython
 cimport numpy as np
 from libcpp.vector cimport vector
 
-from cyperf.tools.types cimport bool, ITER
+from cyperf.tools.types cimport BOOL_t, bool, ITER, ITER_BIS
 from cyperf.tools.getter cimport check_values
 
 
@@ -19,15 +19,4 @@ ctypedef fused VAL_T:
     long
     float
     double
-    object
-
-
-ctypedef fused ITER_BIS:
-    list
-    tuple
-    np.ndarray[dtype=int, ndim=1]
-    np.ndarray[dtype=long, ndim=1]
-    np.ndarray[dtype=float, ndim=1]
-    np.ndarray[dtype=double, ndim=1]
-    np.ndarray[dtype=object, ndim=1]
     object

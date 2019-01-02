@@ -77,8 +77,8 @@ cdef class SAFP:
         self.responsibility = np.zeros(self.nnz, dtype=DTYPE)
 
         # Allocate all temporally pointers
-        self.is_exemplar = <bool *>calloc(self.nrows, sizeof(bool))
-        self.is_old_exemplar = <bool *>calloc(self.nrows, sizeof(bool))
+        self.is_exemplar = <BOOL_t *>calloc(self.nrows, sizeof(BOOL_t))
+        self.is_old_exemplar = <BOOL_t *>calloc(self.nrows, sizeof(BOOL_t))
 
         self.out_indices =  <ITYPE_t *>calloc(self.nrows, sizeof(ITYPE_t))
         self.row_max = <DTYPE_t *>calloc(self.nrows, sizeof(DTYPE_t))
@@ -146,7 +146,7 @@ cdef class SAFP:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cpdef update_preference(self, preference):
-        cdef DTYPE_t[::1] pp
+        cdef const DTYPE_t[::1] pp
         cdef ITYPE_t u
         if preference is None:
             preference = np.mean(np.asarray(self.similarity))
@@ -183,7 +183,7 @@ cdef class SAFP:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef void diagonal_extractor(self, DTYPE_t[::1] array) nogil:
+    cdef void diagonal_extractor(self, const DTYPE_t[::1] array) nogil:
         cdef:
             ITYPE_t i
             LTYPE_t u
@@ -266,7 +266,7 @@ cdef class SAFP:
         Convergence is considered as obtained if:
             * the exemplars haven't change since a given number of iterations (examplars_stable_criteria)
         """
-        memcpy(self.is_old_exemplar, self.is_exemplar, self.nrows * sizeof(bool))
+        memcpy(self.is_old_exemplar, self.is_exemplar, self.nrows * sizeof(BOOL_t))
         self.compute_examplars()
         if all_equal(self.is_old_exemplar, self.is_exemplar, self.nrows):
             self.no_change += 1

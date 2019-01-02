@@ -14,6 +14,7 @@ from cpython.set cimport PySet_Contains, PySet_Add
 from cpython.dict cimport PyDict_GetItem
 from cpython.tuple cimport PyTuple_CheckExact
 from cyperf.tools.sort_tools import inplace_parallel_sort
+from cyperf.tools.types import BOOL
 
 
 
@@ -49,7 +50,7 @@ cpdef INDICES_NP merge_sort(INDICES_NP arr1, INDICES_NP arr2):
 cpdef INDICES_NP get_unique_indices(INDICES_NP_BIS positions, INDICES_NP indptr, INDICES_NP indices):
     cdef long i, nb = positions.shape[0], pos, size, total_size = 0, count = 0, k
     cdef INDICES_NP result
-    cdef np.int8_t[::1] mask
+    cdef BOOL_t[::1] mask
 
     with nogil:
         for i in xrange(nb):
@@ -60,9 +61,9 @@ cpdef INDICES_NP get_unique_indices(INDICES_NP_BIS positions, INDICES_NP indptr,
                 count += 1
 
     # we use counter-sort for many values. It scales linearly but has constant penalty O(len(indices))
-    # and requires O(len(indices)) memory (bool flags)
+    # and requires O(len(indices)) memory (BOOL_t flags)
     if count > 5 + len(indices) / (1 + total_size):  # constant 5 is arbitrary, but works well for uniform distribution
-        mask = np.zeros(len(indices), dtype=np.int8)
+        mask = np.zeros(len(indices), dtype=BOOL)
         with nogil:
             for i in xrange(nb):  # this can be done in parallel
                 pos = positions[i]

@@ -8,6 +8,9 @@ cimport numpy as np
 import numpy as np
 from libc.math cimport round as cround
 
+from cyperf.tools.types import BOOL
+from cyperf.tools.types cimport BOOL_t
+
 
 __all__ = ['cy_compute_serie']
 
@@ -30,7 +33,7 @@ cdef inline double my_round(const double a, const double scale) nogil:
     return cround(a * scale) / scale
 
 
-def round_up(double[:] x, double[:] y, int precision=2):
+def round_up(const double[:] x, const double[:] y, int precision=2):
     assert x.shape[0] == y.shape[0]
 
     cdef double scale = 10. ** precision, scale_up = 10. ** (precision + 1)
@@ -54,10 +57,10 @@ def round_up(double[:] x, double[:] y, int precision=2):
     return np.asarray(xx)[:j], np.asarray(yy)[:j]
 
 
-def make_more_concave(double[:] x, double[:] y):
+def make_more_concave(const double[:] x, const double[:] y):
     assert x.shape[0] == y.shape[0]
     cdef:
-        np.uint8_t[:] mask = np.ones_like(x, dtype=np.uint8)
+        BOOL_t[:] mask = np.ones_like(x, dtype=BOOL)
         long i, n = x.shape[0]
 
     with nogil:
@@ -65,5 +68,5 @@ def make_more_concave(double[:] x, double[:] y):
             if (y[i] - y[i-1]) * (x[i+1] - x[i-1]) <= \
                (x[i] - x[i-1]) * (y[i+1] - y[i-1]):
                 mask[i] = 0
-
-    return (np.asarray(x)[np.asarray(mask, dtype=np.bool)], np.asarray(y)[np.asarray(mask, dtype=np.bool)])
+    np_mask = np.asarray(mask).view(np.bool_)
+    return (np.asarray(x)[np_mask], np.asarray(y)[np_mask])

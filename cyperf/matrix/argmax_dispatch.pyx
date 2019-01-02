@@ -5,11 +5,11 @@
 
 import numpy as np
 from cyperf.tools import argsort
-from cyperf.matrix.karma_sparse import KarmaSparse, ITYPE, DTYPE, LTYPE
+from cyperf.matrix.karma_sparse import KarmaSparse, ITYPE, DTYPE, LTYPE, BOOL
 from cyperf.where.indices_where_long import Vector
 
 cimport numpy as np
-from cyperf.matrix.karma_sparse cimport KarmaSparse, ITYPE_t, DTYPE_t, LTYPE_t
+from cyperf.matrix.karma_sparse cimport KarmaSparse, ITYPE_t, DTYPE_t, LTYPE_t, BOOL_t
 from cyperf.tools.types cimport INT1, INT2
 from cyperf.where.indices_where_long cimport Vector
 
@@ -39,13 +39,13 @@ def sparse_argmax_dispatch(KarmaSparse matrix, int maximum_pressure, INT1[:] max
     assert maximum_pressure > 0
 
     cdef:
-        ITYPE_t[::1] user, topic
+        const ITYPE_t[::1] user, topic
         ITYPE_t[::1] topic_volume = np.zeros(nb_topic, dtype=ITYPE)
         ITYPE_t[::1] topic_user_rank = np.zeros(nb_topic, dtype=ITYPE)
         ITYPE_t[::1] user_pressure = np.zeros(nb_user, dtype=ITYPE)
-        char[::1] is_active_topic = np.full(nb_topic, 1, dtype=np.int8)
+        BOOL_t[::1] is_active_topic = np.full(nb_topic, 1, dtype=BOOL)
         Vector choice = Vector(nb_user * maximum_pressure)
-        LTYPE_t[::1] sorted_indices = argsort(matrix.data, reverse=True).astype(LTYPE, copy=False)
+        const LTYPE_t[::1] sorted_indices = argsort(matrix.data, reverse=True).astype(LTYPE)
         LTYPE_t i, ind
         ITYPE_t u, t, j
 

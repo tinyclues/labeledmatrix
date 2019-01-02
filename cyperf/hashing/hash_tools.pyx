@@ -12,10 +12,10 @@ cdef np.ndarray[char, ndim=2, mode="c"] safe_convertor(np.ndarray keys):
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray keys, unsigned int seed):
-    cdef char[:,::1] keys_str = safe_convertor(keys)
+    cdef const char[:,::1] keys_str = safe_convertor(keys)
     cdef long k, n = len(keys), size = keys.dtype.itemsize
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
-    cdef char* ch
+    cdef const char* ch
 
     with nogil:
         for k in xrange(n):
@@ -27,7 +27,7 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray key
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, unsigned int seed):
     cdef long k, n = len(keys)
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
-    cdef char* ch
+    cdef const char* ch
     cdef object x
 
     for k in xrange(n):
@@ -45,9 +45,9 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, u
 
 
 cpdef np.ndarray[np.uint32_t, ndim=2, mode="c"] hash_numpy_string_with_many_seeds(np.ndarray keys,
-                                                                                  np.uint32_t[::1] seed):
-    cdef char[:,::1] keys_str = safe_convertor(keys)
-    cdef char * ch
+                                                                                  const np.uint32_t[::1] seed):
+    cdef const char[:,::1] keys_str = safe_convertor(keys)
+    cdef const char * ch
     cdef long k, i, n = len(keys), s = len(seed), size = keys.dtype.itemsize
     cdef np.uint32_t[:,::1] result = np.zeros((n, s), dtype=np.uint32)
 
@@ -62,7 +62,7 @@ cpdef np.ndarray[np.uint32_t, ndim=2, mode="c"] hash_numpy_string_with_many_seed
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hasher_numpy_string(np.ndarray keys,
                                                                     signed int nb_feature,
                                                                     unsigned int seed):
-    cdef char[:,::1] keys_str = safe_convertor(keys)
+    cdef const char[:,::1] keys_str = safe_convertor(keys)
     cdef long k, n = len(keys), size = keys.dtype.itemsize
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
 
@@ -73,9 +73,9 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hasher_numpy_string(np.ndarray k
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_numpy_string(np.ndarray keys,
-                                                                        np.uint32_t[::1] composition,
+                                                                        const np.uint32_t[::1] composition,
                                                                         unsigned int seed):
-    cdef char[:,::1] keys_str = safe_convertor(keys)
+    cdef const char[:,::1] keys_str = safe_convertor(keys)
     cdef long k, n = len(keys), size = keys.dtype.itemsize
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
     cdef signed int total = np.asarray(composition).sum()
@@ -87,12 +87,12 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_numpy_string(np.ndarr
 
 
 cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list keys,
-                                                                         np.uint32_t[::1] composition,
+                                                                         const np.uint32_t[::1] composition,
                                                                          unsigned int seed):
     cdef long k, n = len(keys)
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
     cdef signed int total = np.asarray(composition).sum()
-    cdef char* ch
+    cdef const char* ch
     cdef object x
 
     for k in xrange(n):
@@ -110,17 +110,17 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list ke
 
 
 def increment_over_numpy_string(np.ndarray keys,
-                                cython.integral[:] segments,
-                                A[:, ::1] values,
-                                np.uint32_t[::1] seeds,
-                                np.uint32_t[::1] composition,
+                                np.ndarray[cython.integral, ndim=1] segments,
+                                np.ndarray[A, ndim=2, mode="c"] values,
+                                const np.uint32_t[::1] seeds,
+                                const np.uint32_t[::1] composition,
                                 int nb_segments):
     assert len(keys) == segments.shape[0] == values.shape[0]
     assert np.asarray(segments).min() >= 0
     assert len(composition) == 2
     assert nb_segments >= np.asarray(segments).max() + 1
 
-    cdef char[:,::1] keys_str = safe_convertor(keys)
+    cdef const char[:,::1] keys_str = safe_convertor(keys)
     cdef long n = len(keys), size = keys.dtype.itemsize
     cdef long d = values.shape[1]
     cdef long nb_seeds = len(seeds)

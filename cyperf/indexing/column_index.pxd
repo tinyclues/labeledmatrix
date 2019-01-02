@@ -1,6 +1,6 @@
 cimport cython
 cimport numpy as np
-from cyperf.tools.types cimport bool, ITER
+from cyperf.tools.types cimport BOOL_t, bool, ITER
 
 ctypedef fused INDICES_NP:
     np.ndarray[dtype=int, ndim=1, mode="c"]

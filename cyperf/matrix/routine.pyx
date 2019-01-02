@@ -14,7 +14,7 @@ from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject, PyUni
 
 import numpy as np
 cimport numpy as np
-from cyperf.tools.types import LTYPE
+from cyperf.tools.types import LTYPE, BOOL
 
 from cyperf.where.indices_where_long cimport Vector
 from cyperf.where.indices_where_long import Vector
@@ -104,7 +104,7 @@ cpdef str cy_safe_slug(object x, unify=True):
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef cy_domain_from_email_lambda(x, str delimiter='@', str missing='', bool unify=True):
+cpdef cy_domain_from_email_lambda(x, str delimiter='@', str missing='', BOOL_t unify=True):
     cdef list l = x.rsplit(delimiter, 1)
 
     if len(l) <= 1:
@@ -123,7 +123,7 @@ def batch_contains_mask(ITER values, SET_FRSET kt):
     PySequence_Check(values)
     cdef:
         long i, nb = len(values)
-        np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
+        BOOL_t[:] result = np.zeros(nb, dtype=BOOL)
         object x
 
     for i in xrange(nb):
@@ -174,7 +174,7 @@ def batch_is_exceptional_mask(ITER values, SET_FRSET exceptional_set, str except
     PySequence_Check(values)
     cdef:
         long i, k, nb = len(values)
-        np.int8_t[:] result = np.zeros(nb, dtype=np.int8)
+        BOOL_t[:] result = np.zeros(nb, dtype=BOOL)
         object x
     for i in xrange(nb):
         result[i] = cy_is_exceptional(values[i], exceptional_set, exceptional_char)
@@ -226,8 +226,7 @@ def indices_truncation_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] 
     assert len(lower_bound) == len(lower_bound) == nrows
     assert indptr[len(indptr) - 1] == len(indices)
 
-    cdef LTYPE_t j, i, ll, uu
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, ind, p
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(2 * nrows)
@@ -277,8 +276,7 @@ def first_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indpt
     assert indptr[len(indptr) - 1] == len(indices)
 
 
-    cdef LTYPE_t j, i, ll, uu
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, ind, p
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
@@ -328,8 +326,7 @@ def last_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr
     assert indptr[len(indptr) - 1] == len(indices)
 
 
-    cdef LTYPE_t j, i, ll, uu
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, ind, p
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
     cdef Vector truncated_indices = Vector(nrows)
@@ -372,8 +369,7 @@ def indices_truncation_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] 
     cdef Vector truncated_indices = Vector(2 * nrows)
     cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
-    cdef LTYPE_t j, i, ll, uu, date
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, date, ind, p
 
     with nogil:
         for i in xrange(nrows):
@@ -415,8 +411,7 @@ def last_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr
     cdef Vector truncated_indices = Vector(nrows)
     cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
-    cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind, ind, p
 
     with nogil:
         for i in xrange(nrows):
@@ -464,8 +459,7 @@ def first_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indpt
     if nrows <= 0:
         return np.asarray(indices), np.asarray(indptr)
 
-    cdef LTYPE_t j, i, ll, uu, date, min_date, min_ind
-    cdef INT1 ind, p
+    cdef LTYPE_t j, i, ll, uu, date, min_date, min_ind, ind, p
 
     with nogil:
         for i in xrange(nrows):

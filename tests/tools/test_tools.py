@@ -3,7 +3,7 @@ import numpy as np
 import unittest
 
 from cyperf.tools import slice_length, compose_slices, take_indices
-from cyperf.tools.getter import (apply_python_dict, python_feature_hasher,
+from cyperf.tools.getter import (apply_python_dict, python_feature_hasher, cy_safe_intern,
                                  cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
                                  coalesce_is_not_none, coalesce_generic, Unifier)
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort,
@@ -51,6 +51,13 @@ class GetterTestCase(unittest.TestCase):
         self.assertEqual(apply_python_dict(mapping, [], -1, True), [])
         with self.assertRaises(AssertionError):
             apply_python_dict(mapping, int, -1, True)
+
+    def test_cy_safe_intern_ITER_type(self):
+        s1_array = np.array(['1', '2', '4'], dtype='S1')
+        self.assertEqual(cy_safe_intern(s1_array), s1_array.tolist())
+
+        s2_array = np.array(['1', '2', '4'], dtype='S2')
+        self.assertEqual(cy_safe_intern(s2_array), s2_array.tolist())
 
     def test_python_feature_hasher(self):
         features = [1, 'toto', (1, 4), 4.55]
@@ -138,6 +145,13 @@ class GetterTestCase(unittest.TestCase):
 
     def test_coerse_float(self):
         np.testing.assert_equal(cast_to_float_array([]), [])
+
+        # making copy in trivial case
+        aa = np.array([3., 4, 5], dtype=np.float)
+        bb = cast_to_float_array(aa)
+        self.assertNotEqual(id(aa), id(bb))
+        np.testing.assert_equal(aa, bb)
+
         np.testing.assert_equal(cast_to_float_array(['3', '4', '5.4']), [3, 4, 5.4])
         np.testing.assert_equal(cast_to_float_array(('3.0', 4, '5???4')), [3, 4, np.nan])
         np.testing.assert_equal(cast_to_float_array(['3.0', str, 5]), [3, np.nan, 5])
@@ -148,11 +162,18 @@ class GetterTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             cast_to_float_array(np.array([4, 're', 3.1], dtype=np.object), 'safe')
         np.testing.assert_equal(cast_to_float_array([4, 're', 3.1]), [4., np.nan, 3.1])
-        np.testing.assert_equal(cast_to_float_array(np.array([4, 3]), 'safe'), [4.,  3.])
+        np.testing.assert_equal(cast_to_float_array(np.array([4, 3]), 'safe'), [4., 3.])
         np.testing.assert_equal(cast_to_float_array(['3', np.nan, '5.4']), [3, np.nan, 5.4])
 
     def test_coerse_long(self):
         np.testing.assert_equal(cast_to_long_array([]), [])
+
+        # making copy in trivial case
+        aa = np.array([3, 4, 5], dtype=np.int64)
+        bb = cast_to_long_array(aa)
+        self.assertNotEqual(id(aa), id(bb))
+        np.testing.assert_equal(aa, bb)
+
         np.testing.assert_equal(cast_to_long_array(['3', '4', '5.4']), [3, 4, 5])
         np.testing.assert_equal(cast_to_long_array(['3', '4', '5.9']), [3, 4, 5])
         np.testing.assert_equal(cast_to_long_array(('3.0', 4, '5???4'), default=-1), [3, 4, -1])
