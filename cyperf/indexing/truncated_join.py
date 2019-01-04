@@ -1,3 +1,4 @@
+from cyperf.indexing.indexed_list import is_increasing
 from cyperf.matrix.routine import indices_truncation_lookup
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
@@ -91,6 +92,82 @@ def safe_datetime64_cast(date_values):
     except ValueError:
         return to_datetime(date_values, errors='coerce',
                            infer_datetime_format=True, box=False).astype("datetime64[D]")
+
+
+def sorted_unique(array):
+    """
+    Equivalent to np.unique(array, return_index=True)
+    Assumes that array is already sorted, so works faster than np.unique
+    """
+    if len(array) == 0:
+        return array, np.array([], dtype=np.int)
+    else:
+        index = np.where(array[1:] > array[:-1])[0]
+        index += 1
+        index = np.hstack([[0], index])
+    return array[index], index
+
+
+class SortedDateIndex(object):
+    def __init__(self, date_values):
+        self.date_values = safe_datetime64_cast(date_values)
+        assert is_increasing(self.date_values)
+        self.min_date = np.min(self.date_values)  # this will ignore NaT
+        self.max_date = np.max(self.date_values)
+        self._create_index()
+
+    @property
+    def is_without_holes(self):
+        return len(self.unique_date) == (self.max_date - self.min_date).view(int) + 1
+
+    def _create_index(self):
+        self.unique_date, self.interval_indices = sorted_unique(self.date_values)
+        if not self.is_without_holes:
+            full_unique_date = np.arange(self.min_date, self.max_date + 1)
+            full_interval_indices = np.zeros(len(full_unique_date), dtype=np.int)
+
+            # It's not too big - no need to cythonize it
+            j = 0
+            for i, d in enumerate(self.unique_date):
+                while full_unique_date[j] < d:
+                    full_interval_indices[j] = self.interval_indices[i]
+                    j += 1
+
+                full_interval_indices[j] = self.interval_indices[i]
+                j += 1
+
+            self.unique_date = full_unique_date
+            self.interval_indices = full_interval_indices
+
+        self.interval_indices = np.hstack([self.interval_indices, [len(self.date_values)]])
+
+    def get_window_indices(self, d, lower=-1, upper=0):
+        """
+        Returns indices for day such that lower <= day - d  < upper
+        """
+        assert lower < upper
+        d = safe_datetime64_cast(d)
+
+        lower_bound = self.get_lower_window_indices(d, lower)
+        upper_bound = self.get_upper_window_indices(d, upper)
+
+        return lower_bound, upper_bound
+
+    def get_upper_window_indices(self, d, upper=0):
+        d = safe_datetime64_cast(d)
+
+        d_upper = (d + upper).clip(self.min_date, self.max_date + 1)
+        d_upper = (d_upper - self.min_date).view(np.int)
+
+        return self.interval_indices[d_upper]
+
+    def get_lower_window_indices(self, d, lower=0):
+        d = safe_datetime64_cast(d)
+
+        d_lower = (d + lower).clip(self.min_date, self.max_date + 1)
+        d_lower = (d_lower - self.min_date).view(np.int)
+
+        return self.interval_indices[d_lower]
 
 
 def _date_deltas_to_intensities(deltas, half_life):

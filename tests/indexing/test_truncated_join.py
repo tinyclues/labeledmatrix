@@ -7,8 +7,8 @@ import numpy as np
 
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from cyperf.indexing.truncated_join import (LookUpTruncatedIndex, create_truncated_index,
-                                            two_integer_array_deduplication, _merge_ks_struct, compactify_on_right)
+from cyperf.indexing.truncated_join import (sorted_unique, SortedDateIndex, LookUpTruncatedIndex, compactify_on_right,
+                                            create_truncated_index, two_integer_array_deduplication, _merge_ks_struct)
 from cyperf.indexing import ColumnIndex
 from cyperf.tools import take_indices
 
@@ -36,6 +36,38 @@ class TestDeduplication(unittest.TestCase):
         np.testing.assert_equal(indices, [1, 2, 2, 3])
         np.testing.assert_equal(indptr, [0, 2, 4, 4, 4])
         self.assertEqual(indptr.dtype.kind, 'i')
+
+
+class TestSortedDateIndex(unittest.TestCase):
+    def test_sorted_unique(self):
+        a = np.sort(np.arange(90) % 11)
+        np.testing.assert_equal(sorted_unique(a), np.unique(a, return_index=True))
+
+    def test_init(self):
+        with self.assertRaises(AssertionError):
+            _ = SortedDateIndex(['2017-03-12', '2017-03-11'])
+
+        ii = SortedDateIndex(['2017-03-12', '2017-03-22', '2017-03-22', '2017-03-31', '2017-04-01', '2017-04-01'])
+        self.assertEqual(ii.max_date, np.datetime64('2017-04-01'))
+        self.assertEqual(ii.min_date, np.datetime64('2017-03-12'))
+        self.assertEqual(len(ii.unique_date), 21)
+        np.testing.assert_array_equal(ii.interval_indices,
+                                      [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 6])
+        self.assertTrue(ii.is_without_holes)
+
+    def test_get_window_indices(self):
+        ii = SortedDateIndex(['2017-03-12', '2017-03-22', '2017-03-22', '2017-03-31', '2017-04-01', '2017-04-01'])
+        with self.assertRaises(AssertionError):
+            _ = ii.get_window_indices('2017-03-28', lower=-1, upper=-2)
+        self.assertEqual(ii.get_window_indices('2017-03-28', lower=-6, upper=3), (1, 3))
+        self.assertEqual(ii.get_window_indices('2017-03-28', lower=-5, upper=3), (3, 3))
+        self.assertEqual(ii.get_window_indices('2017-03-28', lower=-6, upper=4), (1, 4))
+        self.assertEqual(ii.get_window_indices('2017-03-28', lower=-100, upper=100), (0, 6))
+
+        self.assertEqual(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-6, upper=3)),
+                         [(1, 3), (3, 4)])
+        self.assertEqual(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-7, upper=4)),
+                         [(1, 4), (1, 6)])
 
 
 class TruncatedIndexUnsortedTestCase(unittest.TestCase):
