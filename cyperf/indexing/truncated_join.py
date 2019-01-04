@@ -1,7 +1,4 @@
-
-from cyperf.indexing.indexed_list import is_increasing
-from cyperf.matrix.routine import (indices_truncation_sorted, first_indices_sorted, last_indices_sorted,
-                                   indices_truncation_lookup, first_indices_lookup, last_indices_lookup)
+from cyperf.matrix.routine import indices_truncation_lookup
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 from cyperf.tools.types import get_open_mp_num_thread
@@ -16,11 +13,12 @@ MinCompression = 0.9
 
 def _merge_ks_struct(series):
     if len(series) > 1:
-        indices = np.concatenate([x[0] for x in series])
-        indptr = np.cumsum(np.concatenate([[0]] + [np.diff(x[1]) for x in series]))
+        deltas = np.concatenate([x[0] for x in series])
+        indices = np.concatenate([x[1] for x in series])
+        indptr = np.cumsum(np.concatenate([[0]] + [np.diff(x[2]) for x in series]))
     else:
-        indices, indptr = series[0]
-    return indices, indptr
+        deltas, indices, indptr = series[0]
+    return deltas, indices, indptr
 
 
 def _slice_batches(length, n):
@@ -73,21 +71,7 @@ def two_integer_array_deduplication(arr1, arr2, shift=1):
 
 
 def create_truncated_index(user_index, date_values):
-    assert user_index.indices.shape[0] == len(date_values)
-
-    date_values = safe_datetime64_cast(date_values)
-    mask = np.logical_not(np.isnat(date_values))
-
-    if len(date_values) == 0:
-        raise ValueError('Empty data is not supported')
-
-    if not np.any(mask):
-        raise ValueError('Date conversion failed')
-
-    if np.all(mask) and is_increasing(date_values):
-        return SortedTruncatedIndex(user_index, SortedDateIndex(date_values))
-    else:
-        return LookUpTruncatedIndex(user_index, LookUpDateIndex(date_values))
+    return LookUpTruncatedIndex(user_index, date_values)
 
 
 def safe_datetime64_cast(date_values):
@@ -109,233 +93,107 @@ def safe_datetime64_cast(date_values):
                            infer_datetime_format=True, box=False).astype("datetime64[D]")
 
 
-def sorted_unique(array):
+def _date_deltas_to_intensities(deltas, half_life):
     """
-    Equivalent to np.unique(array, return_index=True)
-    Assumes that array is already sorted, so works faster than np.unique
+    Given deltas between dates and a half-life, returns 2 ** (deltas / half_life)
+
+    :param deltas: numeric array, difference between `source` and `target` dates on the relevant indices
+    :param half_life: numeric
+
+    :return: array
     """
-    if len(array) == 0:
-        return array, np.array([], dtype=np.int)
-    else:
-        index = np.where(array[1:] > array[:-1])[0]
-        index += 1
-        index = np.hstack([[0], index])
-    return array[index], index
+    intensities = deltas.astype(DTYPE, copy=True)
+    intensities /= half_life
+    intensities.clip(-16, 16, out=intensities)
+    intensities *= np.log(2.)
+    np.exp(intensities, out=intensities)
+    return intensities
 
 
-class LookUpDateIndex(object):
-
-    def __init__(self, date_values):
-        self.date_values = safe_datetime64_cast(date_values)
-        self.min_date = np.min(self.date_values)  # this will ignore NaT
-        self.max_date = np.max(self.date_values)
-        self.mask = np.logical_not(np.isnat(self.date_values))
-
-    def apply_decay_inplace(self, ks, d, half_life):
-        if ks.shape != (len(d), len(self.date_values)):
-            raise ValueError('Bad matrix shape : {} != {}'.format(ks.shape, (len(d), len(self.date_values))))
-
-        d = safe_datetime64_cast(d)
-
-        if np.all(np.isnat(d)):
-            return ks * 0
-
-        x, y = ks.nonzero()
-        # do this inplace as much as possible
-        delta = self.date_values[y] - d[x]  # this handles NaT correctly
-        dirty_mask = np.isnat(delta)
-        del x, y
-        delta = delta.astype(ks.dtype, copy=False)
-        delta /= half_life
-        delta.clip(-16, 16, out=delta)
-        delta *= np.log(2.)
-        np.exp(delta, out=delta)  # it's faster than 2 ** x
-
-        # hack to write values inplace
-        delta[dirty_mask] = 0
-        ks.data[:] = delta
-        del delta
-        if np.any(dirty_mask):
-            ks.eliminate_zeros()
-        return ks
-
-
-class SortedDateIndex(LookUpDateIndex):
-
-    def __init__(self, date_values):
-        super(SortedDateIndex, self).__init__(date_values)
-        assert is_increasing(self.date_values)
-        self._create_index()
-
-    @property
-    def is_without_holes(self):
-        return len(self.unique_date) == (self.max_date - self.min_date).view(int) + 1
-
-    def _create_index(self):
-        self.unique_date, self.interval_indices = sorted_unique(self.date_values)
-        if not self.is_without_holes:
-            full_unique_date = np.arange(self.min_date, self.max_date + 1)
-            full_interval_indices = np.zeros(len(full_unique_date), dtype=np.int)
-
-            # It's not too big - no need to cythonize it
-            j = 0
-            for i, d in enumerate(self.unique_date):
-                while full_unique_date[j] < d:
-                    full_interval_indices[j] = self.interval_indices[i]
-                    j += 1
-
-                full_interval_indices[j] = self.interval_indices[i]
-                j += 1
-
-            self.unique_date = full_unique_date
-            self.interval_indices = full_interval_indices
-
-        self.interval_indices = np.hstack([self.interval_indices, [len(self.date_values)]])
-
-    def get_window_indices(self, d, lower=-1, upper=0):
+class LookUpTruncatedIndex(object):
+    def __init__(self, user_index, source_dates):
         """
-        Returns indices for day such that lower <= day - d  < upper
+        we're  joining `source` onto `target`. The variables are named accordingly.
+        :param user_index: ColumnIndex, index of the user key on the `source` table
+        :param source_dates: array, `source` dates
         """
-        assert lower < upper
-        d = safe_datetime64_cast(d)
-
-        lower_bound = self.get_lower_window_indices(d, lower)
-        upper_bound = self.get_upper_window_indices(d, upper)
-
-        return lower_bound, upper_bound
-
-    def get_upper_window_indices(self, d, upper=0):
-        d = safe_datetime64_cast(d)
-
-        d_upper = (d + upper).clip(self.min_date, self.max_date + 1)
-        d_upper = (d_upper - self.min_date).view(np.int)
-
-        return self.interval_indices[d_upper]
-
-    def get_lower_window_indices(self, d, lower=0):
-        d = safe_datetime64_cast(d)
-
-        d_lower = (d + lower).clip(self.min_date, self.max_date + 1)
-        d_lower = (d_lower - self.min_date).view(np.int)
-
-        return self.interval_indices[d_lower]
-
-
-class BaseTruncatedIndex(object):
-
-    def __init__(self, user_index, date_index):
+        assert user_index.indices.shape[0] == len(source_dates)
+        if len(source_dates) == 0:
+            raise ValueError('Empty data is not supported')
         self.user_index = user_index
-        self.date_index = date_index
 
-    def ks_get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all', half_life=None, nb=None):
-        indices, indptr, repeated_indices, d = self._get_batch_window_indices(u, d, lower, upper, truncation)
+        source_dates = safe_datetime64_cast(source_dates)
+        if np.all(np.isnat(source_dates)):
+            raise ValueError('All dates are NaT after conversion: check the input date format!')
+        self.source_dates = source_dates
 
-        data = np.ones(len(indices), dtype=DTYPE)
-        ks = KarmaSparse((data, indices, indptr), format="csr",
-                         shape=(len(d), self.user_index.indptr[-1]),
-                         copy=False, has_sorted_indices=True, has_canonical_format=True)
+    def get_batch_window_indices_with_intensity(self, target_users, target_dates,
+                                                lower=-1, upper=0, half_life=None, nb=None):
+        """
+        :param target_users: iterable, user keys on the target table
+        :param target_dates: iterable, date keys on the target table
+        :param lower: int, relative lower bound of the date window
+        :param upper: int, relative upper bound of the date window
+        :param half_life: float or None, half_life to be applied to ks_intensity
+        :param nb: int, number of elements to keep
+            if > 0: keeps only the most recent ones (closer to upper)
+                if == 1: equivalent to last
+            if < 0: keeps only the most ancient ones (closer to lower)
+                if == -1: equivalent to first
+            if 0 or None: keeps all of them
+
+        :return: (source_indices, ks_intensity, repeated_indices)
+            source_indices: array, indices of `source` table corresponding to the columns of ks_intensity
+            ks_intensity: KarmaSparse, matrix mapping each unique `target` line
+                            to the intensities of the different `source` lines
+            repeated_indices: array, line of ks_intensity for each `target` line
+        """
+        assert len(target_dates) == len(target_users)
+        assert lower < upper
+        nb = nb or 0
+
+        target_users_position_in_source_index = self.user_index._get_positions(target_users)
+        source_dates = self.source_dates.view(np.int)
+
+        target_dates = safe_datetime64_cast(target_dates).view(np.int)
+
+        repeated_indices, (target_users_position_in_source_index_, target_dates_) = two_integer_array_deduplication(
+            target_users_position_in_source_index, target_dates)
+        if len(target_users_position_in_source_index_) < MinCompression * len(target_users_position_in_source_index):
+            target_users_position_in_source_index, target_dates = target_users_position_in_source_index_, target_dates_
+        else:
+            del target_users_position_in_source_index_, target_dates_
+            repeated_indices = None
+
+        def partial_ks(slice_):
+            return indices_truncation_lookup(target_users_position_in_source_index[slice_], target_dates[slice_],
+                                             self.user_index.indices, self.user_index.indptr, source_dates,
+                                             lower, upper, nb)
+
+        nb_threads = get_open_mp_num_thread()
+        if len(target_users_position_in_source_index) >= nb_threads:  # Parallel partition + merge
+            pp = ThreadPool(nb_threads)
+            deltas, indices, indptr = _merge_ks_struct(pp.map(partial_ks,
+                                                              _slice_batches(len(target_users_position_in_source_index),
+                                                                             nb_threads)))
+            pp.close()
+            pp.terminate()
+        else:
+            deltas, indices, indptr = partial_ks(slice(None))
+
         if half_life is not None:
-            ks = self.date_index.apply_decay_inplace(ks, d, half_life=half_life)
-
-        if nb is not None:
-            # this can be done inside cython routine earlier to be more memory efficient ...
-            ks = ks.truncate_by_count(nb, axis=1)
-        target_indices, ks_compact = compactify_on_right(ks)
-
-        return target_indices, ks_compact, repeated_indices
-
-    def get_batch_window_indices_with_intensity(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
-        return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='all', half_life=half_life, nb=nb)
-
-    def get_first_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
-        return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='first', half_life=half_life, nb=nb)
-
-    def get_last_batch_window_indices_with_intensities(self, u, d, lower=-1, upper=0, half_life=None, nb=None):
-        return self.ks_get_batch_window_indices(u, d, lower, upper,
-                                                truncation='last', half_life=half_life, nb=nb)
-
-
-class LookUpTruncatedIndex(BaseTruncatedIndex):
-
-    _truncation_method_map = {'first': first_indices_lookup,
-                              'last': last_indices_lookup,
-                              'all': indices_truncation_lookup}
-
-    def _get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
-        assert len(d) == len(u)
-        assert lower < upper
-        truncation_method = self._truncation_method_map[truncation]
-
-        positions = self.user_index._get_positions(u)
-        local_dates = self.date_index.date_values.view(np.int)
-
-        d = safe_datetime64_cast(d).view(np.int)
-        repeated_indices, (positions_, d_) = two_integer_array_deduplication(positions, d)
-        if len(positions_) < MinCompression * len(positions):
-            positions, d = positions_, d_
+            data = _date_deltas_to_intensities(deltas, half_life)
         else:
-            del positions_, d_
-            repeated_indices = None
+            data = np.ones(len(deltas), dtype=DTYPE)
+        del deltas
 
-        def partial_ks(slice_):
-            return truncation_method(positions[slice_], self.user_index.indices,
-                                     self.user_index.indptr, local_dates, d[slice_], lower, upper)
-
-        nb_threads = get_open_mp_num_thread()
-        if len(positions) >= nb_threads:  # Parallel partition + merge
-            pp = ThreadPool(nb_threads)
-            indices, indptr = _merge_ks_struct(pp.map(partial_ks,
-                                                      _slice_batches(len(positions), nb_threads)))
-            pp.close()
-            pp.terminate()
-        else:
-            indices, indptr = partial_ks(slice(None))
+        ks = KarmaSparse((data, indices, indptr), format="csr",
+                         shape=(len(indptr) - 1, self.user_index.indptr[-1]),
+                         copy=False, has_sorted_indices=False, has_canonical_format=False)
+        source_indices, ks_compact = compactify_on_right(ks)
 
         # we may want to make a switch based on the compression rate
-        return indices, indptr, repeated_indices, d.view('M8[D]')
-
-
-class SortedTruncatedIndex(BaseTruncatedIndex):
-
-    _truncation_method_map = {'first': first_indices_sorted,
-                              'last': last_indices_sorted,
-                              'all': indices_truncation_sorted}
-
-    def _get_batch_window_indices(self, u, d, lower=-1, upper=0, truncation='all'):
-        assert len(d) == len(u)
-        assert lower < upper
-        truncation_method = self._truncation_method_map[truncation]
-
-        positions = self.user_index._get_positions(u)
-
-        d = safe_datetime64_cast(d).view(np.int)
-        repeated_indices, (positions_, d_) = two_integer_array_deduplication(positions, d)
-        if len(positions_) < MinCompression * len(positions):
-            positions, d = positions_, d_
-        else:
-            del positions_, d_
-            repeated_indices = None
-
-        lower_bound, upper_bound = self.date_index.get_window_indices(d.view('M8[D]'), lower, upper)
-
-        def partial_ks(slice_):
-            return truncation_method(positions[slice_], self.user_index.indices,
-                                     self.user_index.indptr, lower_bound[slice_], upper_bound[slice_])
-
-        nb_threads = get_open_mp_num_thread()
-        if len(positions) >= nb_threads:  # Parallel partition + merge
-            pp = ThreadPool(nb_threads)
-            indices, indptr = _merge_ks_struct(pp.map(partial_ks,
-                                                      _slice_batches(len(positions), nb_threads)))
-            pp.close()
-            pp.terminate()
-        else:
-            indices, indptr = partial_ks(slice(None))
-
-        # we may want to make a switch based on the compression rate
-        return indices, indptr, repeated_indices, d.view('M8[D]')
+        return source_indices, ks_compact, repeated_indices
 
 
 def compactify_on_right(ks):

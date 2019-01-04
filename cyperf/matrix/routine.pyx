@@ -11,6 +11,7 @@ from cpython.number cimport PyNumber_Check
 from cpython.tuple cimport PyTuple_Check
 from cpython.list cimport PyList_Check
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject, PyUnicode_AsUTF8String
+from cyperf.tools.sort_tools cimport partial_sort_decreasing_quick, partial_sort_increasing_quick
 
 import numpy as np
 cimport numpy as np
@@ -208,284 +209,76 @@ def idiv_flat(A[:] a, B[:] b, const double eps=10**-9):
 # That can be viewed as new KarmaSparse operation
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def indices_truncation_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
-                              LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
+def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, LTYPE_t[::1] target_dates,
+                              INT1[::1] source_index_indices, INT2[::1] source_index_indptr, LTYPE_t[::1] source_dates,
+                              LTYPE_t lower, LTYPE_t upper, INT1 nb):
     """
-    >>> positions = np.array([0, 1], dtype=np.int32)
-    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
-    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
-    >>> indptr = np.array([0, 13, 23])
-    >>> ll = np.array([3, 5])
-    >>> bb = np.array([14, 19])
-    >>> indices, indptr = indices_truncation_sorted(positions, indices, indptr, ll, bb)
-    >>> indices, indptr
-    (array([ 3,  6,  7,  8,  9, 10, 11,  5,  8, 10, 12, 13, 15, 18]), array([ 0,  7, 14]))
+    :param target_users_position_in_source_index: array, position of the `target` user keys in the `source` user index
+    :param target_dates: array, `target` dates
+    :param source_index_indices: representation of the `source` user index
+    :param source_index_indptr: representation of the `source` user index
+    :param source_dates: array, `source` dates
+    :param lower: int, relative lower bound of the date window
+    :param upper: int, relative upper bound of the date window
+    :param nb: int, number of elements to keep
+        if > 0: keeps only the most recent ones (closer to upper)
+        if < 0: keeps only the most ancient ones (closer to lower)
+        if 0: keeps all of them
+
+    :return: (truncated_deltas, truncated_indices, truncated_indptr) to create the ks_intensity
     """
-    cdef LTYPE_t nrows = len(positions)
+    assert len(target_users_position_in_source_index) == len(target_dates)
+    assert source_index_indptr[len(source_index_indptr) - 1] == len(source_index_indices)
+    assert len(source_dates) == len(source_index_indices)
 
-    assert len(lower_bound) == len(lower_bound) == nrows
-    assert indptr[len(indptr) - 1] == len(indices)
-
-    cdef LTYPE_t j, i, ll, uu, ind, p
+    cdef LTYPE_t nrows = len(target_users_position_in_source_index)
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
+    cdef Vector truncated_deltas = Vector(2 * nrows)
     cdef Vector truncated_indices = Vector(2 * nrows)
     cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
-    with nogil:
-        for i in xrange(nrows):
-            truncated_indptr[i] = truncated_indices.size()
-            p = positions[i]
-            if p == -1:
-                continue
-
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll == NAT or uu == NAT or ll >= uu:
-                continue
-
-            for j in xrange(indptr[p], indptr[p + 1]):
-                ind = indices[j]
-                if ind >= ll and ind < uu:
-                    truncated_indices.append(ind)
-                elif ind >= uu:
-                    break
-
-        truncated_indptr[nrows] = truncated_indices.size()
-
-    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def first_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
-                         LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
-    """
-    >>> positions = np.array([0, 1], dtype=np.int32)
-    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
-    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
-    >>> indptr = np.array([0, 13, 23])
-    >>> ll = np.array([3, 5])
-    >>> bb = np.array([14, 19])
-    >>> indices, indptr = first_indices_sorted(positions, indices, indptr, ll, bb)
-    >>> indices, indptr
-    (array([3, 5]), array([0, 1, 2]))
-    """
-    cdef LTYPE_t nrows = len(positions)
-
-    assert len(lower_bound) == len(lower_bound) == nrows
-    assert indptr[len(indptr) - 1] == len(indices)
-
-
-    cdef LTYPE_t j, i, ll, uu, ind, p
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-
-    cdef Vector truncated_indices = Vector(nrows)
-    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
-
-    with nogil:
-        for i in xrange(nrows):
-            truncated_indptr[i] = truncated_indices.size()
-            p = positions[i]
-            if p == -1:
-                continue
-
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll == NAT or uu == NAT or ll >= uu:
-                continue
-
-            for j in xrange(indptr[p], indptr[p + 1]):
-                ind = indices[j]
-                if ind >= ll and ind < uu:
-                    truncated_indices.append(ind)
-                    break
-                elif ind >= uu:
-                    break
-
-        truncated_indptr[nrows] = truncated_indices.size()
-    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def last_indices_sorted(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
-                        LTYPE_t[::1] lower_bound, LTYPE_t[::1] upper_bound):
-    """
-    >>> positions = np.array([0, 1], dtype=np.int32)
-    >>> indices = np.array([ 1,  3,  6,  7,  8,  9, 10, 11, 14, 15, 16, 17, 18,
-    ...                      2,  3,  4,  5, 8, 10, 12, 13, 15, 18], dtype=np.int32)
-    >>> indptr = np.array([0, 13, 23])
-    >>> ll = np.array([3, 5])
-    >>> bb = np.array([14, 19])
-    >>> indices, indptr = last_indices_sorted(positions, indices, indptr, ll, bb)
-    >>> indices, indptr
-    (array([11, 18]), array([0, 1, 2]))
-    """
-    cdef LTYPE_t nrows = len(positions)
-
-    assert len(lower_bound) == len(lower_bound) == nrows
-    assert indptr[len(indptr) - 1] == len(indices)
-
-
-    cdef LTYPE_t j, i, ll, uu, ind, p
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-
-    cdef Vector truncated_indices = Vector(nrows)
-    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
-
-    with nogil:
-        for i in xrange(nrows):
-            truncated_indptr[i] = truncated_indices.size()
-            p = positions[i]
-            if p == -1:
-                continue
-
-            ll, uu = lower_bound[i], upper_bound[i]
-            if ll == NAT or uu == NAT or ll >= uu:
-                continue
-
-            for j in xrange(indptr[p + 1] - 1, indptr[p] - 1, -1):
-                ind = indices[j]
-                if ind >= ll and ind < uu:
-                    truncated_indices.append(ind)
-                    break
-                elif ind < ll:
-                    break
-
-        truncated_indptr[nrows] = truncated_indices.size()
-    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def indices_truncation_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr,
-                              LTYPE_t[::1] local_dates,
-                              LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-    assert len(positions) == len(boundary_dates)
-    assert indptr[len(indptr) - 1] == len(indices)
-
-    cdef LTYPE_t nrows = len(positions)
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-
-    cdef Vector truncated_indices = Vector(2 * nrows)
-    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
-
-    cdef LTYPE_t j, i, ll, uu, date, ind, p
+    cdef LTYPE_t j, i, dd, uu, date, ind, p, count
+    cdef int source_max_nb_matches_one_user = np.max(np.diff(np.asarray(source_index_indptr)))
+    cdef INT1[::1] source_indices_one_user = np.zeros(source_max_nb_matches_one_user,
+                                                      dtype=np.asarray(source_index_indices).dtype)
+    cdef LTYPE_t[::1] source_dates_one_user = np.zeros(source_max_nb_matches_one_user, dtype=LTYPE)
 
     with nogil:
         for i in xrange(nrows):
             truncated_indptr[i] = truncated_indices.size()
 
-            p = positions[i]
+            p = target_users_position_in_source_index[i]
             if p == -1:
                 continue
 
-            ll = boundary_dates[i]
-            if ll == NAT:
+            dd = target_dates[i]
+            if dd == NAT:
                 continue
 
-            uu = ll + upper
-            ll = ll + lower
-            for j in xrange(indptr[p], indptr[p + 1]):
-                ind = indices[j]
-                date = local_dates[ind]
+            uu = dd + upper
+            ll = dd + lower
+            count = 0
+            for j in xrange(source_index_indptr[p], source_index_indptr[p + 1]):
+                ind = source_index_indices[j]
+                date = source_dates[ind]
                 if date == NAT:
                     continue
                 if date >= ll and date < uu:
-                    truncated_indices.append(ind)
+                    source_indices_one_user[count] = ind
+                    source_dates_one_user[count] = date
+                    count += 1
+            if nb > 0:
+                partial_sort_decreasing_quick(&source_dates_one_user[0], &source_indices_one_user[0], count, nb)
+                count = min(count, nb)
+            elif nb < 0:
+                partial_sort_increasing_quick(&source_dates_one_user[0], &source_indices_one_user[0], count, -nb)
+                count = min(count, -nb)
+
+            for j in xrange(count):
+                truncated_indices.append(source_indices_one_user[j])
+                truncated_deltas.append(source_dates_one_user[j] - dd)
 
         truncated_indptr[nrows] = truncated_indices.size()
 
-    return np.asarray(truncated_indices), np.asarray(truncated_indptr)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def last_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
-                        LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-    assert len(positions) == len(boundary_dates)
-    assert indptr[len(indptr) - 1] == len(indices)
-
-    cdef LTYPE_t nrows = len(positions)
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-
-    cdef Vector truncated_indices = Vector(nrows)
-    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
-
-    cdef LTYPE_t j, i, ll, uu, date, max_date, max_ind, ind, p
-
-    with nogil:
-        for i in xrange(nrows):
-            truncated_indptr[i] = truncated_indices.size()
-            p = positions[i]
-            if p == -1:
-                continue
-
-            ll = boundary_dates[i]
-            if ll == NAT:
-                continue
-
-            uu = ll + upper
-            ll = ll + lower
-
-            max_date = ll - 1
-            for j in xrange(indptr[p], indptr[p + 1]):
-                ind = indices[j]
-                date = local_dates[ind]
-                if date == NAT:
-                    continue
-                if date >= ll and date < uu and date >= max_date:
-                    max_date, max_ind = date, ind
-            if max_date >= ll:
-                truncated_indices.append(max_ind)
-        truncated_indptr[nrows] = truncated_indices.size()
-
-    return np.array(truncated_indices), np.asarray(truncated_indptr)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-def first_indices_lookup(INT3[::1] positions, INT1[::1] indices, INT2[::1] indptr, LTYPE_t[::1] local_dates,
-                         LTYPE_t[::1] boundary_dates, LTYPE_t lower, LTYPE_t upper):
-
-    assert len(positions) == len(boundary_dates)
-    assert indptr[len(indptr) - 1] == len(indices)
-
-    cdef LTYPE_t nrows = len(positions)
-    cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
-
-    cdef Vector truncated_indices = Vector(nrows)
-    cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
-
-    if nrows <= 0:
-        return np.asarray(indices), np.asarray(indptr)
-
-    cdef LTYPE_t j, i, ll, uu, date, min_date, min_ind, ind, p
-
-    with nogil:
-        for i in xrange(nrows):
-            truncated_indptr[i] = truncated_indices.size()
-            p = positions[i]
-            if p == -1:
-                continue
-
-            ll = boundary_dates[i]
-            if ll == NAT:
-                continue
-
-            uu = ll + upper
-            ll = ll + lower
-            min_date = uu
-
-            for j in xrange(indptr[p], indptr[p + 1]):
-                ind = indices[j]
-                date = local_dates[ind]
-                if date == NAT:
-                    continue
-                if date >= ll and date < uu and date < min_date:
-                    min_date, min_ind = date, ind
-            if min_date < uu:
-                truncated_indices.append(min_ind)
-
-        truncated_indptr[nrows] = truncated_indices.size()
-
-    return np.array(truncated_indices), np.asarray(truncated_indptr)
+    return np.asarray(truncated_deltas), np.asarray(truncated_indices), np.asarray(truncated_indptr)
