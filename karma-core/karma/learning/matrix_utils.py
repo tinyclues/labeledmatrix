@@ -1386,6 +1386,8 @@ def as_vector_batch(array):
 def as_sparse(array):
     if is_karmasparse(array):
         return array
+    elif is_scipysparse(array):
+        return KarmaSparse(array, format="csr", copy=False)
     elif isinstance(array, np.ndarray):
         if array.ndim == 1:
             array = to_array_if_needed(array, force_dim2=True).T
@@ -1394,6 +1396,13 @@ def as_sparse(array):
         return ks_vstack(array)
     else:
         return as_sparse(np.asarray(array))
+
+
+def as_numpy(data):
+    if hasattr(data, 'toarray'):  # we go through class's routine when it exists (e.g. for scipy.sparse, KarmaSparse)
+        return data.toarray()
+    else:
+        return np.vstack(data)  # we want to convert 1D data to 2D array
 
 
 def flatten_along_first_axis(data):

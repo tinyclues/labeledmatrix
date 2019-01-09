@@ -3,7 +3,7 @@ from itertools import product
 
 from cyperf.matrix.karma_sparse import DTYPE
 from numpy.testing import assert_almost_equal, assert_allclose
-from scipy.sparse import rand
+from scipy.sparse import rand, csr_matrix
 
 from karma.core.utils.utils import use_seed
 from karma.learning.matrix_utils import *
@@ -130,3 +130,17 @@ class MatrixUtilsTestCase(unittest.TestCase):
             self.assertEqual(expected_dtype,
                              to_array_if_needed(matrix.astype(source_dtype), min_dtype=np.float32).dtype,
                              msg={'source_dtype': source_dtype, 'min_dtype': np.float32})
+
+    def test_as_sparse(self):
+        with use_seed(153):
+            arr = np.random.randint(0, 2, (100, 10))
+        for data in [arr, arr.tolist(), KarmaSparse(arr), csr_matrix(arr)]:
+            res = as_sparse(data)
+            self.assertTrue(isinstance(res, KarmaSparse))
+            assert_almost_equal(res.toarray(), arr)
+
+    def test_as_numpy(self):
+        with use_seed(153):
+            arr = np.random.randint(0, 2, (100, 10))
+        for data in [arr, arr.tolist(), KarmaSparse(arr), csr_matrix(arr)]:
+            assert_almost_equal(as_numpy(data), arr)
