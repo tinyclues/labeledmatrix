@@ -546,8 +546,8 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['stopping_criterion'] = conv_dict_copy.pop('task')
 
     warn_flag_translation_dict = {0: 'Convergence',
-                                  1: 'No Convergence: too many function evaluations',
-                                  2: 'No Convergence: stopping criterion not reached'}
+                                  1: conv_dict_copy['stopping_criterion'].capitalize(),
+                                  2: conv_dict_copy['stopping_criterion'].capitalize()}
 
     conv_dict_copy[CONVERGENCE_INFO_STATUS] = warn_flag_translation_dict[conv_dict['warnflag']]
     if double_design_width:
@@ -561,6 +561,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['height'] = n_obs_design
     conv_dict_copy['row_nnz'] = row_nnz
     conv_dict_copy['outer_thr'] = nb_threads or 1
+    conv_dict_copy['mean_objective'] = obj_value / float(n_obs_design)
 
     if nb_inner_threads is None:
         if nb_threads is None or nb_threads == 1:
@@ -573,7 +574,7 @@ def _conv_dict_format(conv_dict, obj_value, n_obs_design, nb_threads, nb_inner_t
     conv_dict_copy['time_by_iteration'] = lbfgs_timing / float(conv_dict['nit'])
     conv_dict_copy['cols_to_rows_ratio'] = conv_dict_copy[CONVERGENCE_INFO_DESIGN_WIDTH] / float(n_obs_design)
 
-    ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max', 'row_nnz',
+    ordered_keys = [CONVERGENCE_INFO_STATUS, 'nit', 'grad_l2_momentum', 'grad_max', 'mean_objective', 'row_nnz',
                     CONVERGENCE_INFO_DESIGN_WIDTH, 'height', 'outer_thr', 'inner_thr', 'time_by_iteration']
     conv_dict_ordered = OrderedDict([(key, conv_dict_copy[key]) for key in ordered_keys])
 
