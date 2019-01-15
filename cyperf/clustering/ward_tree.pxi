@@ -20,7 +20,7 @@ def labels_builder(np.ndarray full_link not None, ITYPE_t n):
             else:
                 aux[link[u, 0]] = aux[link[u, 1]] = u + n
         link = None
-        return np.searchsorted(np.unique(aux[:n]), aux[:n])
+        return np.searchsorted(parallel_unique(aux[:n]), aux[:n])
     else:
         return np.arange(n)
 

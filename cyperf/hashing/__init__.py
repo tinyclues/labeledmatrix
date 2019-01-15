@@ -1,4 +1,5 @@
 import numpy as np
+from cyperf.tools import parallel_unique
 
 from .hash_tools import hash_numpy_string, hash_generic_string, hasher_numpy_string
 from .hash_tools import hash_numpy_string_with_many_seeds as _hash_numpy_string_with_many_seeds
@@ -27,8 +28,9 @@ def randomizer_string(keys, composition, seed):
 
 
 def increment_over_numpy_string(keys, segments, values, seeds, composition, nb_segments=None):
+    segments = np.asarray(segments, dtype=np.int64)
     if nb_segments is None:
-        nb_segments = np.unique(segments).shape[0]
+        nb_segments = parallel_unique(segments).shape[0]
     values = np.asarray(values)
     if values.ndim == 1:
         values = values[:, None]
@@ -37,7 +39,7 @@ def increment_over_numpy_string(keys, segments, values, seeds, composition, nb_s
         squeeze = False
 
     increment = _increment_over_numpy_string(np.ascontiguousarray(keys, dtype='S'),
-                                             np.asarray(segments, dtype='int'),
+                                             segments,
                                              np.ascontiguousarray(values),
                                              np.ascontiguousarray(seeds, dtype='uint32'),
                                              np.ascontiguousarray(composition, dtype='uint32'),

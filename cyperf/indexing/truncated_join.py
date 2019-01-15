@@ -1,8 +1,11 @@
-from cyperf.indexing.indexed_list import is_increasing
-from cyperf.matrix.routine import indices_truncation_lookup
+
 import numpy as np
-from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 from cyperf.tools.types import get_open_mp_num_thread
+from cyperf.tools import parallel_unique
+from cyperf.indexing.indexed_list import is_increasing
+
+from cyperf.matrix.routine import indices_truncation_lookup
+from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 
 from pandas.core.algorithms import htable
 from pandas import to_datetime
@@ -284,9 +287,9 @@ def compactify_on_right(ks):
     """
     if ks.nnz / (ks.shape[1] + 1.) < 0.1:
         if ks.format == "csr":
-            required_indices = np.unique(ks.indices)
+            required_indices = parallel_unique(ks.indices)
         else:
-            required_indices = np.unique(ks.nonzero()[1])
+            required_indices = parallel_unique(ks.nonzero()[1])
     else:
         required_indices = np.where(ks.count_nonzero(axis=0).astype(np.bool_))[0]
     nb_unique_indices = len(required_indices)

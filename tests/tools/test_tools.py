@@ -2,7 +2,7 @@ from itertools import product
 import numpy as np
 import unittest
 
-from cyperf.tools import slice_length, compose_slices, take_indices
+from cyperf.tools import slice_length, compose_slices, take_indices, parallel_unique
 from cyperf.tools.getter import (apply_python_dict, python_feature_hasher, cy_safe_intern,
                                  cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
                                  coalesce_is_not_none, coalesce_generic, Unifier)
@@ -25,6 +25,20 @@ class GetterTestCase(unittest.TestCase):
             np_res = np.argpartition(-x, size)
             self.assertEqual(len(np.intersect1d(res[:size], np_res[:size], assume_unique=True)),
                              size)
+
+    def test_unique_parallel(self):
+        for _ in xrange(20):
+            x = np.random.randint(-np.random.randint(100), np.random.randint(100), np.random.randint(1000))
+            x /= 7
+            for dtype in [np.int32, np.int64, np.float32, np.float64]:
+                y = x.astype(dtype)
+                np.testing.assert_equal(parallel_unique(y), np.unique(y))
+
+        np.testing.assert_equal(parallel_unique([]), np.unique([]))
+        np.testing.assert_equal(parallel_unique([1] * 100), np.unique([1]))
+        np.testing.assert_equal(parallel_unique([1.23] * 100), np.unique([1.23]))
+        x = ['R', 'T', 'B', 'TR', 'T']
+        np.testing.assert_equal(parallel_unique(x), np.unique(x))  # it should fall back on numpy implem
 
     def test_inplace_permutation(self):
         for _ in xrange(1000):

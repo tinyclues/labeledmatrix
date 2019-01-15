@@ -3,9 +3,25 @@ import numpy as np
 from itertools import islice
 from scipy.special import expit
 
-from cyperf.tools.sort_tools import cython_argsort
+from cyperf.tools.sort_tools import cython_argsort, parallel_sort
 from cyperf.tools.getter import (take_indices_on_numpy, take_indices_on_iterable,
                                  apply_python_dict, cast_to_float_array, python_feature_hasher)
+
+
+def parallel_unique(a):
+    """
+    equivalent np.unique(a)
+    """
+    try:
+        a_sorted = parallel_sort(np.asarray(a))
+    except TypeError:
+        return np.unique(a)
+
+    if len(a_sorted) < 2:
+        return a_sorted
+    else:
+        uindex = np.concatenate([[True], a_sorted[1:] > a_sorted[:-1]])
+        return a_sorted[uindex]
 
 
 def argsort(xx, nb=-1, reverse=False):

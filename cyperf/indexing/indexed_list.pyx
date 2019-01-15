@@ -7,6 +7,7 @@
 from cytoolz import complement
 import numpy as np
 from cyperf.tools.types import ITYPE
+from cyperf.tools import parallel_unique
 
 cimport cython
 cimport numpy as np
@@ -283,7 +284,7 @@ cdef class IndexedList:
         if nb == 0:
             return IndexedList([], {})
 
-        if len(np.unique(ind)) < len(ind):
+        if len(parallel_unique(ind)) < len(ind):
             raise ValueError('Indices should be unique')
         if np.min(ind) < 0 or np.max(ind) >= len(self):
             raise IndexError('Indices out of bound')

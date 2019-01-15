@@ -12,6 +12,7 @@ cimport numpy as np
 import numpy as np
 from cython.parallel import prange
 from cyperf.tools.types import ITYPE, FTYPE as DTYPE
+from cyperf.tools import parallel_unique
 from heap import ActiveList, MinHeap
 
 cdef DTYPE_t INF = np.inf
