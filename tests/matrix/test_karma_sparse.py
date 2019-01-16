@@ -1048,25 +1048,23 @@ class TestKarmaSparse(unittest.TestCase):
 
     def test_dot_vector_dot_random(self):
         for a in self.mf.iterator(dense=True):
-            ks = KarmaSparse(a, format='csr')
+            ks = KarmaSparse(a.astype(np.float32), format='csr')
             for other_matrix in [np.random.randn(ks.shape[1], 30),
                                  2 * np.random.randint(-1, 2, size=ks.shape).T,
                                  np.random.poisson(0.01, size=(ks.shape[1], 20))]:
-                vector = 10 * np.random.rand(other_matrix.shape[1])
+                other_matrix = other_matrix.astype(np.float32)
+                vector = 10 * np.random.rand(other_matrix.shape[1]).astype(np.float32)
                 for other in [other_matrix, KarmaSparse(other_matrix, format='csr')]:
                     for dtype in [np.float64, np.float32, np.int64, np.int32]:
                         vector = vector.astype(dtype)
                         for power in [1, 2]:
                             old_fashion_res = (ks.dot(other) ** power).dot(vector)
-                            np_almost_equal(ks.dot_vector_dot(other, vector, power), old_fashion_res,
-                                            decimal=4)
-                            np_almost_equal(ks.tocsc().dot_vector_dot(other, vector, power),
-                                            old_fashion_res, decimal=4)
+                            eq(ks.dot_vector_dot(other, vector, power), old_fashion_res, rtol=1e-6)
+                            eq(ks.tocsc().dot_vector_dot(other, vector, power), old_fashion_res, rtol=1e-6)
                             if is_karmasparse(other):
-                                np_almost_equal(ks.dot_vector_dot(other.tocsc(), vector, power),
-                                                old_fashion_res, decimal=4)
-                                np_almost_equal(ks.tocsc().dot_vector_dot(other.tocsc(), vector, power),
-                                                old_fashion_res, decimal=4)
+                                eq(ks.dot_vector_dot(other.tocsc(), vector, power), old_fashion_res, rtol=1e-6)
+                                eq(ks.tocsc().dot_vector_dot(other.tocsc(), vector, power), old_fashion_res,
+                                   rtol=1e-6)
 
     def test_pointwise_multiplication(self):
         for a in self.mf.iterator(dense=True):
