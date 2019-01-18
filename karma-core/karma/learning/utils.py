@@ -4,6 +4,7 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 from math import ceil
+from cyperf.tools import parallel_unique
 
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -600,7 +601,7 @@ class CrossValidationWrapper(object):
 
 
 def check_axis_values(y):
-    axis_unique_values = np.unique(y)
+    axis_unique_values = parallel_unique(y)
     if axis_unique_values.tolist() not in ([0.], [1.], [0., 1.]):
         raise ValueError('Set of values taken by axis, {}, is not a subset of [0, 1]'
                          .format(axis_unique_values))

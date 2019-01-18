@@ -24,7 +24,7 @@ from karma.core.method import enforce_lib_closure
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
 from cyperf.matrix.karma_sparse import ks_diag
-from cyperf.tools import logit_inplace, take_indices
+from cyperf.tools import logit_inplace, take_indices, argsort
 from cyperf.tools.getter import apply_python_dict
 
 from karma.learning.affinity_propagation import affinity_propagation
@@ -1904,7 +1904,7 @@ class LabeledMatrix(object):
             matrix = self.matrix.tocsr()
             double = [[x, [self.column[y]
                            for y in matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]
-                           [np.argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
+                           [argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
                            if not (exclude * (x == self.column[y]))]]
                       for i, x in enumerate(self.row)]
         else:
@@ -2168,7 +2168,7 @@ class LabeledMatrix(object):
             return safe_maximum(vector, normalize(safe_dot(vector_trunc, matrix), axis=None, norm="linf") * old_min)
 
         def nonzero_argsort(batch_size, vector):
-            batch_indices = np.argsort(vector)[-batch_size:][::-1]
+            batch_indices = argsort(vector)[-batch_size:][::-1]
             batch_indices = batch_indices[vector[batch_indices] != 0]
             return batch_indices
 
@@ -3153,7 +3153,7 @@ class LabeledMatrix(object):
         For params, see https://github.com/maciejkula/glove-python
                         https://nlp.stanford.edu/projects/glove/
         Result is stable only if seed is fixed and no_threads=1
-        
+
         Test on random matrix to show usage:
 
         >>> with use_seed(122): a = np.random.rand(100, 5)

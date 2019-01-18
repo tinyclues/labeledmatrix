@@ -4,6 +4,7 @@
 
 import numpy as np
 from karma import KarmaSetup
+from cyperf.tools import parallel_unique
 from cyperf.clustering.sparse_affinity_propagation import SAFP
 from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.sparse import isspmatrix as is_scipy_sparse
@@ -140,7 +141,7 @@ def dense_affinity_propagation(similarity, preference=None,
         clust = np.argmax(similarity[:, exemplar_ind], axis=1)
         clust[exemplar_ind] = np.arange(nb_exem)
         labels = exemplar_ind[clust]
-        cluster_centers_indices = np.unique(labels)
+        cluster_centers_indices = parallel_unique(labels)
         labels = np.searchsorted(cluster_centers_indices, labels)
     else:
         labels = cluster_centers_indices = ind

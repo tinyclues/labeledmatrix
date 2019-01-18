@@ -8,7 +8,7 @@ from cytoolz import curry
 from scipy.stats.mstats import mquantiles
 from scipy.linalg import solve_triangular, get_blas_funcs
 from scipy.sparse import isspmatrix as is_scipysparse, csr_matrix as scipy_csr_matrix
-from cyperf.tools import logit
+from cyperf.tools import logit, argsort
 from cyperf.matrix.rank_dispatch import matrix_rank_dispatch
 from cyperf.matrix.argmax_dispatch import sparse_argmax_dispatch
 from cyperf.matrix.karma_sparse import (KarmaSparse, is_karmasparse,
@@ -433,12 +433,12 @@ def argsort_vector(vec, reverse=False):
         raise SparseUtilsException("vec should be of shape (1,n)")
     if is_scipysparse(vec) or is_karmasparse(vec):
         vec = KarmaSparse(vec, format="csr")
-        order = np.argsort(vec.data)
+        order = argsort(vec.data)
         if reverse:
             order = order[::-1]
         return (vec.indices[order], vec.data[order])
     else:
-        order = np.argsort(vec)
+        order = argsort(vec)
         if reverse:
             order = order[::-1]
         return (order, vec.flatten()[order])

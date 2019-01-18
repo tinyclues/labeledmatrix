@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.utils import check_array, check_consistent_length
+from cyperf.tools import parallel_unique
 from scipy.stats import rankdata
 
 __all__ = ['normalized_log_loss_from_prediction', 'auc_from_prediction']
@@ -22,7 +23,7 @@ def normalized_log_loss_from_prediction(predicted_values, true_values):
     """
     predicted_values, true_values = check_metric_arrays(predicted_values, true_values)
 
-    unique_true_values = set(np.unique(true_values))
+    unique_true_values = set(parallel_unique(true_values))
 
     if len(unique_true_values) == 1:
         if unique_true_values == {1.} and np.min(predicted_values) == 1:
@@ -66,7 +67,7 @@ def auc_from_prediction(predicted_values, true_values):
     """
     predicted_values, true_values = check_metric_arrays(predicted_values, true_values)
 
-    unique_true_values = set(np.unique(true_values))
+    unique_true_values = set(parallel_unique(true_values))
 
     if len(unique_true_values) == 1:
         if unique_true_values == {1.} or unique_true_values == {0.}:
