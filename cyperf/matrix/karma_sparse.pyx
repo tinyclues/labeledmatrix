@@ -44,8 +44,7 @@ cdef DTYPE_t_binary_func get_reducer(string x) nogil except *:
     if REDUCERLIST.count(x) > 0:
         return REDUCERLIST[x]
     else:
-        with gil:
-            raise ValueError('Unknown reducer : {}'.format(x))
+        raise ValueError('Unknown reducer : {}'.format(x))
 
 
 @cython.wraparound(False)
@@ -209,13 +208,13 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
     cdef LTYPE_t n, nnz = rows.shape[0]
     cdef ITYPE_t x, y, maxx = 0, maxy = 0
 
-    for n in xrange(nnz):
-        x = rows[n]
-        y = cols[n]
-        if x < 0 or y < 0:
-            raise ValueError("Coordinates cannot be negative")
-        if x > maxx: maxx = x
-        if y > maxy: maxy = y
+    with nogil:
+        for n in xrange(nnz):
+            x, y = rows[n], cols[n]
+            if x < 0 or y < 0:
+                raise ValueError("Coordinates cannot be negative")
+            if x > maxx: maxx = x
+            if y > maxy: maxy = y
 
     if shape is not None:
         check_nonzero_shape(shape)
@@ -265,7 +264,7 @@ def truncate_by_count_axis1_sparse(A[:,::1] matrix, cython.integral[::1] max_cou
     with nogil, parallel():
         rank_matrix = <ITYPE_t *>malloc(length * sizeof(ITYPE_t))
         if rank_matrix == NULL:
-            with gil: raise MemoryError()
+            raise MemoryError()
 
         for row in prange(nb_row):
             inplace_arange(rank_matrix, length)
@@ -297,7 +296,7 @@ def truncate_by_count_axis1_dense(A[:,::1] matrix, cython.integral[::1] max_coun
     with nogil, parallel():
         rank_matrix = <ITYPE_t *>malloc(length * sizeof(ITYPE_t))
         if rank_matrix == NULL:
-            with gil: raise MemoryError()
+            raise MemoryError()
 
         for row in prange(nb_row):
             inplace_arange(rank_matrix, length)
@@ -618,13 +617,13 @@ cdef class KarmaSparse:
             ITYPE_t row
             ITYPE_t x, y, maxx = 0, maxy = 0
 
-        for n in xrange(nnz):
-            x = xx[n]
-            y = yy[n]
-            if x < 0 or y < 0:
-                raise ValueError("Coordinates cannot be negative")
-            if x > maxx: maxx = x
-            if y > maxy: maxy = y
+        with nogil:
+            for n in xrange(nnz):
+                x, y = xx[n], yy[n]
+                if x < 0 or y < 0:
+                    raise ValueError("Coordinates cannot be negative")
+                if x > maxx: maxx = x
+                if y > maxy: maxy = y
 
         if shape is not None:
             check_nonzero_shape(shape)
@@ -729,8 +728,7 @@ cdef class KarmaSparse:
         with nogil:
             for j in xrange(total_nnz):
                 if self.data[j] < 0:
-                    with gil:
-                        raise ValueError('KarmaSparse contains negative values while only positive are expected')
+                    raise ValueError('KarmaSparse contains negative values while only positive are expected')
 
         return 1
 
@@ -1509,8 +1507,7 @@ cdef class KarmaSparse:
             icol = <DTYPE_t *>malloc(ncols * sizeof(DTYPE_t))
             locind = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
             if ires == NULL or icol == NULL or locind == NULL:
-                with gil:
-                    raise MemoryError()
+                raise MemoryError()
             for i in prange(nrows, schedule='guided'):
                 memset(ires, 0, ncols * sizeof(DTYPE_t))
                 for k in xrange(self.indptr[i], self.indptr[i + 1]):
@@ -1594,7 +1591,7 @@ cdef class KarmaSparse:
         with nogil, parallel():
             mask = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
             if mask == NULL:
-                with gil: raise MemoryError()
+                raise MemoryError()
             memset(mask, -1, ncols * sizeof(ITYPE_t))
             for i in prange(nrows, schedule='static'):
                 row_nnz = 0
@@ -1620,7 +1617,7 @@ cdef class KarmaSparse:
                 ires = <DTYPE_t *>calloc(ncols, sizeof(DTYPE_t))
                 mask = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
                 if ires == NULL or mask == NULL:
-                    with gil: raise MemoryError()
+                    raise MemoryError()
                 memset(mask, -1, ncols * sizeof(ITYPE_t))
                 for i in prange(nrows, schedule='guided'):
                     head = - 2
@@ -1649,7 +1646,7 @@ cdef class KarmaSparse:
             with nogil, parallel():
                 ires = <DTYPE_t *>calloc(ncols, sizeof(DTYPE_t))
                 if ires == NULL:
-                    with gil: raise MemoryError()
+                    raise MemoryError()
                 for i in prange(nrows, schedule='guided'):
                     for kk in xrange(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
@@ -2248,7 +2245,7 @@ cdef class KarmaSparse:
         with nogil, parallel():
             cat_count = <LTYPE_t *>calloc(nb_cat, sizeof(LTYPE_t))
             if cat_count == NULL:
-                with gil: raise MemoryError()
+                raise MemoryError()
             for i in prange(self.nrows, schedule='static'):
                 memset(cat_count, 0, nb_cat * sizeof(LTYPE_t))
                 size = self.indptr[i + 1] - self.indptr[i]
@@ -2503,7 +2500,7 @@ cdef class KarmaSparse:
         with nogil, parallel():
             mask = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
             if mask == NULL:
-                with gil: raise MemoryError()
+                raise MemoryError()
             memset(mask, -1, ncols * sizeof(ITYPE_t))
             for i in prange(nrows, schedule='static'):
                 row_nnz = 0
@@ -2529,7 +2526,7 @@ cdef class KarmaSparse:
                 ires = <DTYPE_t *>calloc(ncols, sizeof(DTYPE_t))
                 mask = <ITYPE_t *>malloc(ncols * sizeof(ITYPE_t))
                 if ires == NULL or mask == NULL:
-                    with gil: raise MemoryError()
+                    raise MemoryError()
                 memset(mask, -1, ncols * sizeof(ITYPE_t))
                 for i in prange(nrows, schedule='guided'):
                     head = - 2
@@ -2558,7 +2555,7 @@ cdef class KarmaSparse:
             with nogil, parallel():
                 ires = <DTYPE_t *>calloc(ncols, sizeof(DTYPE_t))
                 if ires == NULL:
-                    with gil: raise MemoryError()
+                    raise MemoryError()
                 for i in prange(nrows, schedule='guided'):
                     for kk in xrange(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
@@ -3948,8 +3945,7 @@ cdef class KarmaSparse:
             data_slice = <DTYPE_t *>malloc(max_size * sizeof(DTYPE_t))
             argsort_indices = <ITYPE_t *>malloc(max_size * sizeof(ITYPE_t))
             if data_slice == NULL or argsort_indices == NULL:
-                with gil:
-                    raise MemoryError()
+                raise MemoryError()
 
             for i in prange(dim):
                 start_idx = self.indptr[i]
