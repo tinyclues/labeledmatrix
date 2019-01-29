@@ -254,14 +254,13 @@ class DeepFM(AbstractTorchKarmaIntegrator):
 
     name = 'model_compiler'
 
-    def __init__(self, model_kwargs):
+    def __init__(self, model_kwargs, seed=None):
 
         super(DeepFM, self).__init__()
         self.model_kwargs = model_kwargs
         self.size_dict = model_kwargs['size_dict']
         self.features = model_kwargs['features']
         assert(set(self.features).issubset(self.size_dict.keys()))
-        seed = self.model_kwargs.get('seed', None)
         base_out_dim = 0
         for idx, base_cell in enumerate(coerce_to_tuple(self.model_kwargs['base_cells'])):
             cell = module_mapping[base_cell['type']](seed=seed, identifier=idx, size_dict=self.size_dict,
