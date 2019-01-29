@@ -1,18 +1,18 @@
-from collections import OrderedDict
 from copy import deepcopy
 from functools import partial
 from itertools import chain
+
 import numpy as np
+
 from karma.core.dataframe import DataFrame
 from sklearn.utils.extmath import cartesian
-from karma.macros import squash
+from karma.dataframe_squash import squash
 from karma.core.column import Column
 from karma.learning.utils import CrossValidationWrapper, BasicVirtualHStack
 from karma.learning.bayesian_constants import (BAYES_PRIOR_COEF_VAR_NAME, BAYES_POST_INTERCEPT_MEAN_NAME,
                                                BAYES_POST_COEF_MEAN_NAME)
 from karma.core.utils.utils import Parallel
 from karma.core.utils.utils import coerce_to_tuple_and_check_all_strings
-from multiprocessing.pool import ThreadPool
 
 CV_KEYS = ['cv', 'cv_n_splits', 'seed', 'cv_groups']
 PRED_COL_NAME = 'predictions'
@@ -159,7 +159,7 @@ class CVSampler(object):
             test_metric_results = squash(test_metric_results, test_fold_metric_results)
 
         final_metric_results = squash({'train': train_metric_results.copy(*test_metric_results.column_names),
-                                       'test': test_metric_results}, label='fold_type')  # if lazy=True it breaks
+                                       'test': test_metric_results}, label='fold_type', lazy=False, on_disk=False)
 
         fixed_columns = [PENALTY_COL_NAME, 'full_betas', 'fold_type']
         proper_col_order = fixed_columns + [c for c in final_metric_results.column_names if c not in fixed_columns]

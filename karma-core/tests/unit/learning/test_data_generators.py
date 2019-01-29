@@ -3,7 +3,7 @@ import numpy as np
 from karma.learning.data_generators import feedback_by_granularity_generator
 from karma.core.utils.utils import use_seed
 from karma.core.dataframe import DataFrame
-from karma.macros import squash
+from karma.dataframe_squash import squash
 from inspect import isgeneratorfunction
 from functools import partial
 

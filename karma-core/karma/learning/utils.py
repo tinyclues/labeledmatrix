@@ -501,7 +501,7 @@ class CrossValidationWrapper(object):
             if compute_summary and method.func_name in KNOWN_LOGISTIC_METHODS:
                 fold_summary = create_summary_of_regression(prediction=y_hat, y=y[test_idx],
                                                             metrics=metrics, metric_groups=metric_groups)
-                from karma.macros import squash
+                from karma.dataframe_squash import squash
                 self.summary = squash(self.summary, fold_summary)
 
             i += self.test_size
@@ -519,13 +519,13 @@ class CrossValidationWrapper(object):
 
     def calculate_train_test_metrics(self, trained_dataframe, group_by_cols, pred_col, response_col):
         from karma.core.column import create_column_from_data
-        from karma.macros import squash
+        from karma.dataframe_squash import squash
 
         test_dataframe = trained_dataframe.copy(response_col, *group_by_cols)[self.test_indices]
         test_dataframe[pred_col] = create_column_from_data(self.test_y_hat)
 
         dataframe = squash({'train': trained_dataframe.copy(response_col, pred_col, *group_by_cols),
-                            'test': test_dataframe}, lazy=True, label='label')
+                            'test': test_dataframe}, label='label')
         res = {}
         for col in group_by_cols:
             res[col] = calculate_train_test_metrics(dataframe, col, pred_col, response_col, split_col='label')
