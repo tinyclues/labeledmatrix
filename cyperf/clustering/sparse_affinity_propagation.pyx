@@ -105,16 +105,16 @@ cdef class SAFP:
         cdef ITYPE_t col, ind
 
         # compute number of occurence per indice
-        for u in xrange(self.nnz):
+        for u in range(self.nnz):
             self.tranpose_indptr[self.indices[u] + 1] += 1
 
         # cum_sum of number of occurence
-        for col in xrange(self.nrows):
+        for col in range(self.nrows):
             self.tranpose_indptr[col+1] += self.tranpose_indptr[col]
 
 
-        for col in xrange(self.nrows):
-            for u in xrange(self.indptr[col], self.indptr[col+1]):
+        for col in range(self.nrows):
+            for u in range(self.indptr[col], self.indptr[col+1]):
                 ind = self.indices[u]
                 self.tranpose_data_index[self.tranpose_indptr[ind]] = u
                 self.tranpose_indices[self.tranpose_indptr[ind]] = col
@@ -122,13 +122,13 @@ cdef class SAFP:
 
         # shift all transpose_indptr values, so that the first on is zero
         last = 0
-        for col in xrange(self.nrows):
+        for col in range(self.nrows):
             u = self.tranpose_indptr[col]
             self.tranpose_indptr[col] = last
             last = u
 
         for col in prange(self.nrows, nogil=True):
-            for u in xrange(self.tranpose_indptr[col], self.tranpose_indptr[col+1]):
+            for u in range(self.tranpose_indptr[col], self.tranpose_indptr[col+1]):
                 self.similarity_transpose[u] = self.similarity[self.tranpose_data_index[u]]
 
     @cython.wraparound(False)
@@ -174,7 +174,7 @@ cdef class SAFP:
         cdef ITYPE_t col
         self.diag_indices = - np.ones(self.nrows, dtype=LTYPE)
         for col in prange(self.nrows, nogil=True, schedule="static"):
-                for u in xrange(self.indptr[col], self.indptr[col + 1]):
+                for u in range(self.indptr[col], self.indptr[col + 1]):
                     if self.indices[u] == col:
                         self.diag_indices[col] = u  # because it is deduplicated
                         break
@@ -187,7 +187,7 @@ cdef class SAFP:
         cdef:
             ITYPE_t i
             LTYPE_t u
-        for i in xrange(self.nrows):
+        for i in range(self.nrows):
             u = self.diag_indices[i]
             if u != -1:
                 self.temp_diag[i] = array[u]
@@ -208,7 +208,7 @@ cdef class SAFP:
             a = MINF
             b = MINF
             col = -1
-            for u in xrange(self.tranpose_indptr[row], self.tranpose_indptr[row+1]):
+            for u in range(self.tranpose_indptr[row], self.tranpose_indptr[row+1]):
                 d = self.similarity_transpose[u] + self.availability[self.tranpose_data_index[u]]
                 if d > a:
                     b = a
@@ -221,7 +221,7 @@ cdef class SAFP:
             self.row_second[row] = b
 
         for col in prange(self.nrows, nogil=True, schedule="static"):
-            for u in xrange(self.indptr[col], self.indptr[col + 1]):
+            for u in range(self.indptr[col], self.indptr[col + 1]):
                 row = self.indices[u]
                 if col == self.out_indices[row]:
                     newval = self.similarity[u] - self.row_second[row]
@@ -246,11 +246,11 @@ cdef class SAFP:
 
         for col in prange(self.nrows, nogil=True, schedule="static"):
             mx = 0
-            for u in xrange(self.indptr[col], self.indptr[col + 1]):
+            for u in range(self.indptr[col], self.indptr[col + 1]):
                 if self.responsibility[u] > 0 and self.indices[u] != col:
                     mx = mx + self.responsibility[u]
 
-            for u in xrange(self.indptr[col], self.indptr[col + 1]):
+            for u in range(self.indptr[col], self.indptr[col + 1]):
                 if self.indices[u] == col:
                     newval = mx
                 else:
@@ -289,7 +289,7 @@ cdef class SAFP:
             LTYPE_t u
             DTYPE_t val
 
-        for row in xrange(self.nrows):
+        for row in range(self.nrows):
             u = self.diag_indices[row]
             if u != -1:
                 val = self.availability[u] + self.responsibility[u]
@@ -305,12 +305,12 @@ cdef class SAFP:
 
         self.compute_examplars()
         self.cluster_map = np.arange(self.nrows, dtype=ITYPE)
-        for row in xrange(self.nrows):
+        for row in range(self.nrows):
             mx = MINF
             if self.is_exemplar[row]:
                 pass
             else:
-                for u in xrange(self.tranpose_indptr[row], self.tranpose_indptr[row+1]):
+                for u in range(self.tranpose_indptr[row], self.tranpose_indptr[row+1]):
                     col = self.tranpose_indices[u]
                     if self.is_exemplar[col]:
                         val = self.similarity_transpose[u]
@@ -323,7 +323,7 @@ cdef class SAFP:
               ITYPE_t examplars_stable_criteria=30, bool verbose=False):
         cdef ITYPE_t i, nb = 0
 
-        for i in xrange(max_iter):
+        for i in range(max_iter):
             self.iterate(damping)
 
             if i >= min_iter and check_conv:
@@ -333,7 +333,7 @@ cdef class SAFP:
                     break
         self.finish()
         if verbose:
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 if self.is_exemplar[i]:
                     nb += 1
             print("SAFP : {} clusters have been obtained".format(nb))

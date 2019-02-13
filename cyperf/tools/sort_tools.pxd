@@ -1,5 +1,5 @@
 cimport numpy as np
-from types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, A, B, INT1
+from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, A, B, INT1
 
 
 cdef void partial_sort(A* dist, B* idx, LTYPE_t size, LTYPE_t m, bool reverse=*) nogil
@@ -99,7 +99,7 @@ cdef inline void inplace_reordering(A* arr, INT1* ind, long size) nogil:
     cdef long i
     cdef INT1 k, j
 
-    for i in xrange(size):
+    for i in range(size):
         j = ind[i]
         while j != i:
             x = arr[i]; arr[i] = arr[j]; arr[j] = x

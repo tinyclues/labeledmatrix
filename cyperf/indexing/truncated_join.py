@@ -10,6 +10,7 @@ from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
 from pandas.core.algorithms import htable
 from pandas import to_datetime
 from multiprocessing.pool import ThreadPool
+from six.moves import range
 
 MaxSizeHtable = 10 ** 6
 MinCompression = 0.9
@@ -26,11 +27,11 @@ def _merge_ks_struct(series):
 
 
 def _slice_batches(length, n):
-    size = length / n
+    size = length // n
     if size == 0:
         return [slice(0, length)]
     else:
-        return [slice(i * size, length if i + 1 == n else (i + 1) * size) for i in xrange(n)]
+        return [slice(i * size, length if i + 1 == n else (i + 1) * size) for i in range(n)]
 
 
 def two_integer_array_deduplication(arr1, arr2, shift=1):
@@ -65,7 +66,7 @@ def two_integer_array_deduplication(arr1, arr2, shift=1):
 
     # doing maximum inplace
     # first factor
-    au1 = u12 / coef
+    au1 = u12 // coef
     au1 = u1[au1]
     # second factor
     u12 %= coef  # inplace "au2"

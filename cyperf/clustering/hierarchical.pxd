@@ -1,8 +1,8 @@
 
 cimport numpy as np
 from cyperf.tools.types cimport string, bool, LTYPE_t, ITYPE_t, FTYPE_t as DTYPE_t
-from heap cimport ActiveList, MinHeap
-from space_tools cimport get_distance, _ward_pairwise_flat, metric_func_type
+from cyperf.clustering.heap cimport ActiveList, MinHeap
+from cyperf.clustering.space_tools cimport get_distance, _ward_pairwise_flat, metric_func_type
 from libcpp.vector cimport vector
 from libc.math cimport sqrt, fmax, fmin
 

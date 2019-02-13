@@ -18,15 +18,17 @@ def _indices_from_condition(cond, length):
 
 def indices_where(column, value=None):
     # see https://docs.scipy.org/doc/numpy/reference/generated/numpy.dtype.kind.html
-    if column.dtype.kind in ['S', 'U', 'V']:
+    if column.dtype.kind in ['S', 'U', 'O', 'V']:
         return np.where(column)[0]
     else:
         return np.where(column.astype(np.bool_, copy=False))[0]
 
 
 def indices_where_not(column, value=None):
-    if column.dtype.kind in ['S', 'U']:
-        return np.where(column == "")[0]
+    if column.dtype.kind == 'S':
+        return np.where(column == b"")[0]
+    elif column.dtype.kind == 'U':
+        return np.where(column == u"")[0]
     else:
         return np.where(~column.astype(np.bool_, copy=False))[0]
 

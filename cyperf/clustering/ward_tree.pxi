@@ -14,7 +14,7 @@ def labels_builder(np.ndarray full_link not None, ITYPE_t n):
     cdef ITYPE_t[:,::1] link = full_link[:, :2].astype(ITYPE)
 
     if link.shape[0] > 0:
-        for u in xrange(link.shape[0] - 1, -1, -1):
+        for u in range(link.shape[0] - 1, -1, -1):
             if aux[u + n] != -1:
                 aux[link[u, 0]] = aux[link[u, 1]] = aux[u + n]
             else:
@@ -46,7 +46,7 @@ def huffman_encoding(np.ndarray full_link not None):
     cdef str one = "1", zero = "0"
     cdef ITYPE_t u
 
-    for u in xrange(link.shape[0] - 1, -1, -1):
+    for u in range(link.shape[0] - 1, -1, -1):
         res[link[u, 0]] += res[u + n] + zero
         res[link[u, 1]] += res[u + n] + one
     link = None
@@ -63,9 +63,9 @@ cpdef IVEC traversal(ITYPE_t[:,::1] link, ITYPE_t node):
         vec1 = traversal(link, link[d, 1])
         vec2 = traversal(link, link[d, 0])
         vec.reserve(vec1.size() + vec2.size())
-        for i in xrange(<LTYPE_t>vec1.size()):
+        for i in range(<LTYPE_t>vec1.size()):
             vec.push_back(vec1[i])
-        for i in xrange(<LTYPE_t>vec2.size()):
+        for i in range(<LTYPE_t>vec2.size()):
             vec.push_back(vec2[i])
     link = None
     return vec
@@ -103,7 +103,7 @@ def huffman_encoding_reordering(np.ndarray full_link not None, np.ndarray dist_m
 
     father[link[n-2, 0]] = father[link[n-2, 1]] = n - 2
 
-    for u in xrange(n - 3, -1, -1):
+    for u in range(n - 3, -1, -1):
         left, right = link[u, 0], link[u, 1]
         father[left] = father[right] = u
 

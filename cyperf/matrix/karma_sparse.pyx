@@ -6,6 +6,7 @@
 cimport cython
 import scipy.sparse as sp
 from scipy.special import expit
+from six import PY3
 
 import numpy as np
 from cython.parallel import parallel, prange
@@ -20,31 +21,27 @@ from libc.string cimport memset, memcpy
 from libc.stdlib cimport RAND_MAX, rand, srand
 from libc.math cimport fabs
 
-cdef string CSR = 'csr'
-cdef string CSC = 'csc'
-cdef string DEFAULT_AGG = 'add'
+cdef str CSR = 'csr', CSC = 'csc'
+cdef str DEFAULT_AGG = 'add'
 
-
-REDUCERLIST['max'] = mmax
-REDUCERLIST['min'] = mmin
-REDUCERLIST['add'] = cadd
-REDUCERLIST['multiply'] = mult
-REDUCERLIST['divide'] = save_division
-REDUCERLIST['subtract'] = cminus
-REDUCERLIST['first'] = first
-REDUCERLIST['last'] = last
-REDUCERLIST['complement'] = complement
 
 
 def logit(x, shift=0., width=1.):
     return expit((x - shift) / width)
 
 
-cdef DTYPE_t_binary_func get_reducer(string x) nogil except *:
-    if REDUCERLIST.count(x) > 0:
-        return REDUCERLIST[x]
-    else:
-        raise ValueError('Unknown reducer : {}'.format(x))
+cdef DTYPE_t_binary_func get_reducer(str x) except *:
+    if x == 'max': return mmax
+    if x == 'min': return mmin
+    if x == 'add': return cadd
+    if x == 'multiply': return mult
+    if x == 'divide': return save_division
+    if x == 'subtract': return cminus
+    if x == 'first': return first
+    if x == 'last': return last
+    if x == 'complement': return complement
+
+    raise ValueError('Unknown reducer : {}'.format(x))
 
 
 @cython.wraparound(False)
@@ -74,7 +71,7 @@ cpdef np.ndarray[ndim=1, dtype=DTYPE_t] cython_power(DTYPE_t[::1] a, const doubl
         DTYPE_t[::1] result = np.zeros(nb, dtype=DTYPE)
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             result[i] = cpow(a[i], p)
     return np.asarray(result)
 
@@ -151,7 +148,7 @@ cdef bool is_shape(tuple shape) except? 0:
             return 0
 
 
-cdef bool check_acceptable_format(string format) except 0:
+cdef bool check_acceptable_format(str format) except 0:
     if not (format == CSR or format == CSC):
         raise ValueError('Format should be one of [{}, {}], got {}'
                          .format(CSR, CSC, format))
@@ -196,11 +193,11 @@ cdef bool check_shape_comptibility(x1, x2) except 0:
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
-                                                            ITYPE_t[::1] cols,
-                                                            floating[::1] values,
-                                                            shape=None,
-                                                            string aggregator=DEFAULT_AGG,
-                                                            DTYPE_t default=0):
+                                                     ITYPE_t[::1] cols,
+                                                     floating[::1] values,
+                                                     shape=None,
+                                                     str aggregator=DEFAULT_AGG,
+                                                     DTYPE_t default=0):
     if not (rows.shape[0] == cols.shape[0] == values.shape[0]):
         raise ValueError("Incompatible size of coordinates and/or data : {}, ({}, {})"
                          .format(values.shape[0], rows.shape[0], cols.shape[0]))
@@ -209,7 +206,7 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
     cdef ITYPE_t x, y, maxx = 0, maxy = 0
 
     with nogil:
-        for n in xrange(nnz):
+        for n in range(nnz):
             x, y = rows[n], cols[n]
             if x < 0 or y < 0:
                 raise ValueError("Coordinates cannot be negative")
@@ -231,7 +228,7 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
     cdef DTYPE_t val
 
     with nogil:
-        for n in xrange(nnz):
+        for n in range(nnz):
             val = values[n]
             if val == val:  # val is not np.nan
                 x, y = rows[n], cols[n]
@@ -255,7 +252,7 @@ def truncate_by_count_axis1_sparse(A[:,::1] matrix, cython.integral[::1] max_cou
     cdef ITYPE_t * rank_matrix
 
     with nogil:
-        for row in xrange(nb_row):
+        for row in range(nb_row):
             indptr[row + 1] = indptr[row] + max(min(max_counts[row], length), 0)
 
     cdef ITYPE_t[::1] indices = np.zeros(indptr[nb_row], dtype=ITYPE)
@@ -271,7 +268,7 @@ def truncate_by_count_axis1_sparse(A[:,::1] matrix, cython.integral[::1] max_cou
             rank = indptr[row + 1] - indptr[row]
             partial_unordered_sort(&matrix[row, 0], rank_matrix, length, rank)
 
-            for j in xrange(rank):
+            for j in range(rank):
                 pos = j + indptr[row]
                 indices[pos] = rank_matrix[j]
                 data[pos] = matrix[row, j]
@@ -303,7 +300,7 @@ def truncate_by_count_axis1_dense(A[:,::1] matrix, cython.integral[::1] max_coun
             rank = max(min(max_counts[row], length), 0)
             partial_unordered_sort(&matrix[row, 0], rank_matrix, length, rank)
 
-            for j in xrange(rank):
+            for j in range(rank):
                 result[row, rank_matrix[j]] = matrix[row, j]
 
             inplace_reordering(&matrix[row, 0], rank_matrix, length)
@@ -331,7 +328,7 @@ cdef class KarmaSparse:
     * copy - boolean that forces the copy of entry data
     * has_sorted_indices - boolean (need for internal routine to avoid extra-check)
     * has_canonical_format - boolean (need for internal routine to avoid extra-check)
-    * aggregator - string, indicates the name of aggregate to use to reduce duplicate values
+    * aggregator - str, indicates the name of aggregate to use to reduce duplicate values
 
     Internal data structure::
 
@@ -368,50 +365,57 @@ cdef class KarmaSparse:
      * ``data = [1, 3, 4, 3]``
 
     """
-    property indices:
-        def __get__(self):
-            return np.asarray(self.indices)
+    @property
+    def indices(self):
+        return np.asarray(self.indices)
 
-    property indptr:
-        def __get__(self):
-            return np.asarray(self.indptr)
+    @property
+    def indptr(self):
+        return np.asarray(self.indptr)
 
-    property data:
-        def __get__(self):
-            return np.asarray(self.data)
+    @property
+    def data(self):
+        return np.asarray(self.data)
 
-    property dtype:
-        def __get__(self):
-            return np.asarray(self.data).dtype
+    @property
+    def dtype(self):
+        return np.asarray(self.data).dtype
 
-    property storage_dtype:
-        def __get__(self):
-            return np.asarray(self.indices).dtype
+    @property
+    def storage_dtype(self):
+        return np.asarray(self.indices).dtype
 
-    property nnz:
-        def __get__(self):
-            return self.get_nnz()
+    @property
+    def nnz(self):
+        return self.get_nnz()
 
-    property ndim:
-        def __get__(self):
-            return 2
+    @property
+    def ndim(self):
+        return 2
 
-    property T:
-        def __get__(self):
-            return self.transpose(copy=False)
+    @property
+    def T(self):
+        return self.transpose(copy=False)
 
-    property density:
-        def __get__(self):
-            if self.shape[0] > 0 and self.shape[1] > 0:
-                return 1. * self.nnz / self.shape[0] / self.shape[1]
-            else:
-                return 0.
+    @property
+    def density(self):
+        if self.shape[0] > 0 and self.shape[1] > 0:
+            return 1. * self.nnz / self.shape[0] / self.shape[1]
+        else:
+            return 0.
 
     def __cinit__(self, arg, shape=None, format=None, bool copy=True,
                   bool has_sorted_indices=False,
                   bool has_canonical_format=False,
-                  string aggregator=DEFAULT_AGG):
-        if format is not None :
+                  str aggregator=DEFAULT_AGG):
+        if format is not None:
+            # py2->py3 adapter
+            if not isinstance(format, str):
+                if PY3:
+                    format = format.decode('utf8')
+                else:
+                    format = format.encode('utf8')
+
             check_acceptable_format(format)
         if shape is not None:
             check_nonzero_shape(shape)
@@ -471,12 +475,12 @@ cdef class KarmaSparse:
         cdef LTYPE_t max_len = 2
         cdef list row = [], col = [], data = []
 
-        for i in xrange(min(max_len, self.nnz)):
+        for i in range(min(max_len, self.nnz)):
             row.append(np.searchsorted(self.indptr, i, side='right') - 1)
             col.append(self.indices[i])
             data.append(self.data[i])
 
-        for i in xrange(max(self.nnz - i - 1, max_len), self.nnz):
+        for i in range(max(self.nnz - i - 1, max_len), self.nnz):
             row.append(np.searchsorted(self.indptr, i, side='right') - 1)
             col.append(self.indices[i])
             data.append(self.data[i])
@@ -498,17 +502,11 @@ cdef class KarmaSparse:
             raise ValueError("Axis value must be in [0,1], got {}".format(axis))
         return (axis == 1 and self.format == CSR) or (axis == 0 and self.format == CSC)
 
-    cdef bool has_format(self, string my_format) except 0:
-        if self.format != my_format:
-            raise ValueError('This method accepts only format {}'.format(my_format))
-        else:
-            return 1
-
-    cdef inline string swap_format(self) nogil:
+    cdef str swap_format(self):
         return CSC if self.format == CSR else CSR
 
-    cdef bool from_flat_array(self, data, indices, indptr, tuple shape,
-                              string format=CSR, bool copy=True, string aggregator=DEFAULT_AGG) except 0:
+    cdef bool from_flat_array(self, data, indices, indptr, tuple shape, str format=CSR,
+                              bool copy=True, str aggregator=DEFAULT_AGG) except 0:
         check_nonzero_shape(shape)
         self.shape = shape
         check_acceptable_format(format)
@@ -526,7 +524,7 @@ cdef class KarmaSparse:
         self.make_canonical(aggregator=aggregator)
         return 1
 
-    cdef bool from_scipy_sparse(self, a, format=None, copy=True, string aggregator=DEFAULT_AGG) except 0:
+    cdef bool from_scipy_sparse(self, a, format=None, copy=True, str aggregator=DEFAULT_AGG) except 0:
         assert sp.issparse(a), "Argument should be scipy.sparse matrix"
         check_nonzero_shape(a.shape)
         if format is None:
@@ -547,7 +545,7 @@ cdef class KarmaSparse:
             format = CSR
         else:
             check_acceptable_format(format)
-        length = shape[0] + 1 if <string>format == CSR else shape[1] + 1
+        length = shape[0] + 1 if <str>format == CSR else shape[1] + 1
 
         data = np.zeros(0, dtype=DTYPE)  # self.dtype
         indices = np.zeros(0, dtype=ITYPE)
@@ -560,12 +558,12 @@ cdef class KarmaSparse:
     cdef bool from_dense(self, np.ndarray a, format=None) except 0:
         if a.ndim <= 1:
             a = np.atleast_2d(a)  # embedding of 1-dim vector
-        shape = tuple([a.shape[l] for l in xrange(a.ndim)])  # convert *int to tuple
+        shape = tuple([a.shape[l] for l in range(a.ndim)])  # convert *int to tuple
         check_nonzero_shape(shape)
         if format is not None:
             check_acceptable_format(format)
         self.shape = shape
-        if (format is not None and <string?>format == CSC) or \
+        if (format is not None and <str?>format == CSC) or \
            (format is None and np.isfortran(a)):
             a = a.T
             self.format = CSC
@@ -584,8 +582,8 @@ cdef class KarmaSparse:
 
         with nogil:
             n = 0
-            for i in xrange(self.nrows):
-                for j in xrange(self.ncols):
+            for i in range(self.nrows):
+                for j in range(self.ncols):
                     if aa[i, j] != 0:
                         self.data[n] = aa[i, j]
                         self.indices[n] = j
@@ -600,7 +598,7 @@ cdef class KarmaSparse:
     @cython.wraparound(False)
     @cython.boundscheck(False)
     cdef bool from_coo(self, data, ix, iy,
-                       shape=None, format=None, string aggregator=DEFAULT_AGG) except 0:
+                       shape=None, format=None, str aggregator=DEFAULT_AGG) except 0:
         if not (len(ix) == len(iy) == len(data)):
             raise ValueError("Incompatible size of coordinates and/or data : {}, ({}, {})"
                              .format(len(data), len(ix), len(iy)))
@@ -618,7 +616,7 @@ cdef class KarmaSparse:
             ITYPE_t x, y, maxx = 0, maxy = 0
 
         with nogil:
-            for n in xrange(nnz):
+            for n in range(nnz):
                 x, y = xx[n], yy[n]
                 if x < 0 or y < 0:
                     raise ValueError("Coordinates cannot be negative")
@@ -644,19 +642,19 @@ cdef class KarmaSparse:
 
         self.indptr = np.zeros(self.nrows + 1, dtype=LTYPE, order="C")
         with nogil:
-            for n in xrange(nnz):
+            for n in range(nnz):
                 val = dd[n]
                 if val == val:  # val is not np.nan
                     self.indptr[xx[n] + 1] += 1
 
-            for row in xrange(self.nrows):
+            for row in range(self.nrows):
                 self.indptr[row + 1] += self.indptr[row]
 
         self.indices = np.zeros(self.indptr[self.nrows], dtype=ITYPE, order="C")
         self.data = np.zeros(self.indptr[self.nrows], dtype=DTYPE, order="C")
 
         with nogil:
-            for n in xrange(nnz):
+            for n in range(nnz):
                 val = dd[n]
                 if val == val:  # val is not np.nan
                     row  = xx[n]
@@ -666,7 +664,7 @@ cdef class KarmaSparse:
                     self.indptr[row] += 1
 
             last = 0
-            for n in xrange(self.nrows + 1):
+            for n in range(self.nrows + 1):
                 temp = self.indptr[n]
                 self.indptr[n] = last
                 last = temp
@@ -726,7 +724,7 @@ cdef class KarmaSparse:
         cdef LTYPE_t j
 
         with nogil:
-            for j in xrange(total_nnz):
+            for j in range(total_nnz):
                 if self.data[j] < 0:
                     raise ValueError('KarmaSparse contains negative values while only positive are expected')
 
@@ -764,8 +762,8 @@ cdef class KarmaSparse:
         self.prune()
         with nogil:
             row_end = 0
-            for i in xrange(self.nrows):
-                for j in xrange(row_end, self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(row_end, self.indptr[i + 1]):
                     if not has_zero and self.data[j] == value:
                         has_zero = 1
                         nnz = j
@@ -790,8 +788,8 @@ cdef class KarmaSparse:
 
         with nogil:
             row_end, nnz = 0, 0
-            for i in xrange(self.nrows):
-                for j in xrange(row_end, self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(row_end, self.indptr[i + 1]):
                     if self.indices[j] <= i + k:
                         self.indices[nnz] = self.indices[j]
                         self.data[nnz] = self.data[j]
@@ -812,8 +810,8 @@ cdef class KarmaSparse:
 
         with nogil:
             row_end, nnz = 0, 0
-            for i in xrange(self.nrows):
-                for j in xrange(row_end, self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(row_end, self.indptr[i + 1]):
                     if self.indices[j] >= i + k:
                         self.indices[nnz] = self.indices[j]
                         self.data[nnz] = self.data[j]
@@ -859,8 +857,8 @@ cdef class KarmaSparse:
         cdef LTYPE_t jj
 
         with nogil:
-            for i in xrange(self.nrows):
-                for jj in xrange(self.indptr[i], self.indptr[i + 1] - 1):
+            for i in range(self.nrows):
+                for jj in range(self.indptr[i], self.indptr[i + 1] - 1):
                     if self.indices[jj] > self.indices[jj + 1]:
                         self.has_sorted_indices = 0
                         return 0
@@ -869,7 +867,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool sort_indices(self) except 0:
+    cdef void sort_indices(self):
         cdef ITYPE_t i, nn
 
         for i in prange(self.nrows, nogil=True):
@@ -877,7 +875,6 @@ cdef class KarmaSparse:
             partial_sort(&self.indices[self.indptr[i]], &self.data[self.indptr[i]], nn, nn, 0)
 
         self.has_sorted_indices = 1
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -886,11 +883,11 @@ cdef class KarmaSparse:
         cdef LTYPE_t jj
 
         with nogil:
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 if self.has_canonical_format == 0 or self.indptr[i + 1] < self.indptr[i]:
                     self.has_canonical_format = 0
                     return 0
-                for jj in xrange(self.indptr[i], self.indptr[i + 1] - 1):
+                for jj in range(self.indptr[i], self.indptr[i + 1] - 1):
                     if self.indices[jj] >= self.indices[jj + 1]:
                         self.has_canonical_format = 0
                         return 0
@@ -900,7 +897,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool make_canonical(self, string aggregator=DEFAULT_AGG) except 0:
+    cdef bool make_canonical(self, str aggregator=DEFAULT_AGG) except 0:
 
         cdef:
             LTYPE_t nnz, row_end, jj, temp
@@ -917,7 +914,7 @@ cdef class KarmaSparse:
             # Case 1: already sorted indices
             with nogil:
                 row_end, nnz = 0, 0
-                for i in xrange(self.nrows):
+                for i in range(self.nrows):
                     jj = row_end
                     row_end = self.indptr[i + 1]
                     while jj < row_end:
@@ -939,8 +936,8 @@ cdef class KarmaSparse:
                 memset(address, -1, self.ncols * sizeof(ITYPE_t))
 
                 row_end, nnz, temp = -1, 0, 0
-                for i in xrange(self.nrows):
-                    for jj in xrange(temp, self.indptr[i + 1]):
+                for i in range(self.nrows):
+                    for jj in range(temp, self.indptr[i + 1]):
                         j = self.indices[jj]
                         pos = address[j]
                         if pos > row_end:
@@ -987,7 +984,7 @@ cdef class KarmaSparse:
 
         self.check_internal_structure(1)
         for i in prange(self.nrows, nogil=True):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 res[i, self.indices[j]] += self.data[j]
 
         if self.format == CSR:
@@ -1012,7 +1009,7 @@ cdef class KarmaSparse:
         srand(np.random.randint(0, RAND_MAX))
         np.random.seed(None)
         with nogil:
-            for i in xrange(res.get_nnz()):
+            for i in range(res.get_nnz()):
                 if proba * RAND_MAX < rand():
                     res.data[i] = 0
         res.eliminate_zeros()
@@ -1029,8 +1026,8 @@ cdef class KarmaSparse:
             LTYPE_t j
 
         with nogil:
-            for i in xrange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     row[j] = i
 
         if self.format == CSR:
@@ -1050,7 +1047,7 @@ cdef class KarmaSparse:
 
         for i in prange(n, nogil=True, schedule='static'):
             diag = 0
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 if self.indices[j] == i:
                     diag = diag + self.data[j]
             res[i] = diag
@@ -1108,18 +1105,18 @@ cdef class KarmaSparse:
             LTYPE_t i, cumsum, temp, jj, dest, last
 
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                indptr[self.indices[i]] += 1
 
             cumsum = 0
-            for col in xrange(self.ncols):
+            for col in range(self.ncols):
                 temp = indptr[col]
                 indptr[col] = cumsum
                 cumsum += temp
             indptr[self.ncols] = cumsum
 
-            for row in xrange(self.nrows):
-                for jj in xrange(self.indptr[row], self.indptr[row + 1]):
+            for row in range(self.nrows):
+                for jj in range(self.indptr[row], self.indptr[row + 1]):
                     col = self.indices[jj]
                     dest = indptr[col]
                     indices[dest] = row
@@ -1127,7 +1124,7 @@ cdef class KarmaSparse:
                     indptr[col] += 1
 
             last = 0
-            for col in xrange(self.ncols):
+            for col in range(self.ncols):
                 temp = indptr[col]
                 indptr[col] = last
                 last = temp
@@ -1146,7 +1143,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] fw = np.asarray(factor, dtype=DTYPE, order="C")
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for jj in xrange(self.indptr[i], self.indptr[i + 1]):
+            for jj in range(self.indptr[i], self.indptr[i + 1]):
                 self.data[jj] *= fw[i]
         return 1
 
@@ -1159,7 +1156,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] fw = np.asarray(factor, dtype=DTYPE, order="C")
 
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 self.data[i] *= fw[self.indices[i]]
         return 1
 
@@ -1262,18 +1259,19 @@ cdef class KarmaSparse:
             ITYPE_t[::1] new_indices = np.zeros(self.get_nnz(), dtype=ITYPE)
             LTYPE_t[::1] new_indptr = np.zeros(self.nrows + 1, dtype=LTYPE)
 
-        for i in prange(self.nrows, nogil=True, schedule='static'):
-            size = self.indptr[i + 1] - self.indptr[i]
-            partial_unordered_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]], size, min(count[i], size))
-
         with nogil:
-            for i in xrange(self.nrows):
+            for i in prange(self.nrows, schedule='static'):
+                size = self.indptr[i + 1] - self.indptr[i]
+                partial_unordered_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]], size, min(count[i], size))
+
+            for i in range(self.nrows):
                 size = min(count[i], self.indptr[i + 1] - self.indptr[i])
                 if size > 0:
                     memcpy(&new_indices[new_indptr[i]], &self.indices[self.indptr[i]], size * sizeof(ITYPE_t))
                     memcpy(&new_data[new_indptr[i]], &self.data[self.indptr[i]], size * sizeof(DTYPE_t))
                     partial_sort(&new_indices[new_indptr[i]], &new_data[new_indptr[i]], size, size, False)
                 new_indptr[i + 1] = new_indptr[i] + size
+
         self.sort_indices()
         cdef KarmaSparse res = KarmaSparse((new_data, new_indices, new_indptr),
                                            self.shape, self.format, copy=False,
@@ -1300,11 +1298,11 @@ cdef class KarmaSparse:
                 size = self.indptr[i + 1] - self.indptr[i]
                 partial_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]], size, size)
 
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 size = self.indptr[i + 1] - self.indptr[i]
                 if size > 0:
                     vol = 0
-                    for j in xrange(size):
+                    for j in range(size):
                         vol += densi[self.indices[self.indptr[i] + j]]
                         if vol >= volume:
                             break
@@ -1344,11 +1342,11 @@ cdef class KarmaSparse:
                 partial_sort(&self.data[self.indptr[i]], &self.indices[self.indptr[i]],
                              size, size, reverse=True)
 
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 size = self.indptr[i + 1] - self.indptr[i]
                 if size > 0:
                     current_volume = 0
-                    for j in xrange(size):
+                    for j in range(size):
                         current_volume += self.data[self.indptr[i] + j]
                         if current_volume >= max_volume[i]:
                             break
@@ -1383,7 +1381,7 @@ cdef class KarmaSparse:
             DTYPE_t last, volume = 0
         with nogil:
             partial_sort(&data[0], &order[0], size, size, reverse=True)
-            for i in xrange(size):
+            for i in range(size):
                 volume += data[i]
                 if volume >= max_volume:
                     last = data[i]
@@ -1510,13 +1508,13 @@ cdef class KarmaSparse:
                 raise MemoryError()
             for i in prange(nrows, schedule='guided'):
                 memset(ires, 0, ncols * sizeof(DTYPE_t))
-                for k in xrange(self.indptr[i], self.indptr[i + 1]):
+                for k in range(self.indptr[i], self.indptr[i + 1]):
                     ind, ival = self.indices[k], self.data[k]
-                    for j in xrange(other.indptr[ind], other.indptr[ind + 1]):
+                    for j in range(other.indptr[ind], other.indptr[ind + 1]):
                         ires[other.indices[j]] += op(ival, other.data[j])
                 # set index
                 nn = 0
-                for k in xrange(ncols):
+                for k in range(ncols):
                     if ires[k] > cutoff and ires[k] != 0:
                         locind[nn] = k
                         icol[nn] = ires[k]
@@ -1533,7 +1531,7 @@ cdef class KarmaSparse:
 
         indptr = np.zeros(nrows + 1, dtype=LTYPE, order="C")
         with nogil:
-            for i in xrange(nrows):
+            for i in range(nrows):
                 indptr[i + 1] = indptr[i] + count[i]
 
         data = np.zeros(indptr[nrows], dtype=DTYPE, order="C")
@@ -1595,9 +1593,9 @@ cdef class KarmaSparse:
             memset(mask, -1, ncols * sizeof(ITYPE_t))
             for i in prange(nrows, schedule='static'):
                 row_nnz = 0
-                for jj in xrange(self.indptr[i], self.indptr[i + 1]):
+                for jj in range(self.indptr[i], self.indptr[i + 1]):
                     j = self.indices[jj]
-                    for kk in xrange(other.indptr[j], other.indptr[j + 1]):
+                    for kk in range(other.indptr[j], other.indptr[j + 1]):
                         k = other.indices[kk]
                         if mask[k] != i:
                             mask[k] = i
@@ -1605,7 +1603,7 @@ cdef class KarmaSparse:
                 count[i] = row_nnz
             free(mask)
         with nogil:
-            for i in xrange(nrows):
+            for i in range(nrows):
                 indptr[i + 1] = indptr[i] + count[i]
 
         data = np.zeros(indptr[nrows], dtype=DTYPE)
@@ -1621,17 +1619,17 @@ cdef class KarmaSparse:
                 memset(mask, -1, ncols * sizeof(ITYPE_t))
                 for i in prange(nrows, schedule='guided'):
                     head = - 2
-                    for kk in xrange(self.indptr[i], self.indptr[i + 1]):
+                    for kk in range(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
                         ival = self.data[kk]
-                        for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
+                        for jj in range(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
                             ires[j] += mult(other.data[jj], ival)
                             if mask[j] == -1:
                                 mask[j] = head
                                 head = j
                     nn = 0
-                    for k in xrange(count[i]):
+                    for k in range(count[i]):
                         if ires[head] != 0:
                             indices[indptr[i] + nn] = head
                             data[indptr[i] + nn] = ires[head]
@@ -1648,15 +1646,15 @@ cdef class KarmaSparse:
                 if ires == NULL:
                     raise MemoryError()
                 for i in prange(nrows, schedule='guided'):
-                    for kk in xrange(self.indptr[i], self.indptr[i + 1]):
+                    for kk in range(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
                         ival = self.data[kk]
-                        for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
+                        for jj in range(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
                             ires[j] += mult(other.data[jj], ival)
                     nn = 0
                     if count[i] > 0:
-                        for k in xrange(ncols):
+                        for k in range(ncols):
                             if ires[k] != 0:
                                 indices[indptr[i] + nn] = k
                                 data[indptr[i] + nn] = ires[k]
@@ -1733,12 +1731,12 @@ cdef class KarmaSparse:
         cdef DTYPE_t alpha
 
         for i in prange(self.nrows, nogil=True):
-            for j in xrange(self.indptr[i], self.indptr[i+1]):
+            for j in range(self.indptr[i], self.indptr[i+1]):
                 alpha = self.data[j]
                 ind = self.indices[j]
                 pos = j * ncols
                 ind_pos = ind * ncols
-                for k in xrange(ncols):
+                for k in range(ncols):
                     ii = pos + k
                     data[ii] = alpha * other[i, k]
                     indices[ii] = ind_pos + k
@@ -1757,7 +1755,7 @@ cdef class KarmaSparse:
         cdef DTYPE_t alpha
 
         with nogil:
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 indptr[i + 1] = indptr[i] + \
                     (self.indptr[i + 1] - self.indptr[i]) * (other.indptr[i + 1] - other.indptr[i])
 
@@ -1768,10 +1766,10 @@ cdef class KarmaSparse:
             start, stop = other.indptr[i], other.indptr[i + 1]
             size = stop - start
             pos = indptr[i]
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 alpha = self.data[j]
                 ind = self.indices[j] * ncols
-                for kk in xrange(start, stop):
+                for kk in range(start, stop):
                     data[pos] = alpha * other.data[kk]
                     indices[pos] = ind + other.indices[kk]
                     pos = pos + 1
@@ -1792,7 +1790,7 @@ cdef class KarmaSparse:
         for i in prange(self.nrows, nogil=True, schedule='static'):
             if self.indptr[i] < self.indptr[i + 1]:
                 mx = self.data[self.indptr[i]]
-                for j in xrange(self.indptr[i] + 1, self.indptr[i + 1]):
+                for j in range(self.indptr[i] + 1, self.indptr[i + 1]):
                     mx = fn(mx, self.data[j])
                 if not only_nonzero and (self.indptr[i + 1] - self.indptr[i] < self.ncols):
                     res[i] = fn(mx, 0)
@@ -1814,7 +1812,7 @@ cdef class KarmaSparse:
 
         with nogil:
             memset(first, 1, self.ncols * sizeof(BOOL_t))
-            for j in xrange(self.get_nnz()):
+            for j in range(self.get_nnz()):
                 i = self.indices[j]
                 if first[i]:
                     res[i] = self.data[j]
@@ -1824,13 +1822,13 @@ cdef class KarmaSparse:
                 if not only_nonzero:
                     count[i] += 1
             if not only_nonzero:
-                for i in xrange(self.ncols):
+                for i in range(self.ncols):
                     if count[i] < self.nrows:
                         res[i] = fn(res[i], 0)
             free(first)
         return res
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, string name, int axis, bool only_nonzero=False):
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, str name, int axis, bool only_nonzero=False):
         if self.aligned_axis(axis):
             return self.aligned_axis_reduce(get_reducer(name), only_nonzero)
         else:
@@ -1847,7 +1845,7 @@ cdef class KarmaSparse:
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
             mx = 0
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + self.data[j]
             res[i] = mx
         return np.asarray(res)
@@ -1863,7 +1861,7 @@ cdef class KarmaSparse:
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
             mx = 0
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + fabs(self.data[j])
             res[i] = mx
         return np.asarray(res)
@@ -1879,7 +1877,7 @@ cdef class KarmaSparse:
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
             mx = 0
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 mx = max(mx, fabs(self.data[j]))
             res[i] = mx
         return np.asarray(res)
@@ -1891,7 +1889,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 res[self.indices[i]] = max(fabs(self.data[i]), res[self.indices[i]])
         return np.asarray(res)
 
@@ -1902,7 +1900,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 res[self.indices[i]] += self.data[i]
         return np.asarray(res)
 
@@ -1913,7 +1911,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 res[self.indices[i]] += fabs(self.data[i])
         return np.asarray(res)
 
@@ -1928,7 +1926,7 @@ cdef class KarmaSparse:
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
             mx = 0
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 mx = mx + cpow(self.data[j], p)
             res[i] = mx
         return np.asarray(res)
@@ -1940,7 +1938,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
             LTYPE_t i
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 res[self.indices[i]] += cpow(self.data[i], p)
         return np.asarray(res)
 
@@ -1965,7 +1963,7 @@ cdef class KarmaSparse:
 
         self.eliminate_zeros()
         with nogil:
-            for i in xrange(self.get_nnz()):
+            for i in range(self.get_nnz()):
                 res[self.indices[i]] += 1
         return np.asarray(res)
 
@@ -2070,8 +2068,7 @@ cdef class KarmaSparse:
     def quantile(self, DTYPE_t q, axis, bool only_nonzero=False):
         cdef LTYPE_t dim, size
         if not 0 <= q <= 1:
-            raise ValueError("quantile should be in [0,1] interval, got {}"
-                             .format(q))
+            raise ValueError("quantile should be in [0,1] interval, got {}".format(q))
         self.eliminate_zeros()
         if axis is None:
             size = self.get_nnz()
@@ -2100,8 +2097,7 @@ cdef class KarmaSparse:
 
     def mean(self, axis=None):
         if axis is None:
-            return 1. * np.sum(np.asarray(self.data)) \
-                      / max(self.shape[0], 1) / max(self.shape[1], 1)
+            return 1. * np.sum(np.asarray(self.data)) / max(self.shape[0], 1) / max(self.shape[1], 1)
         else:
             return 1. * self.sum(axis) / max(self.shape[axis], 1)
 
@@ -2196,7 +2192,7 @@ cdef class KarmaSparse:
             LTYPE_t j
             KarmaSparse res = self.copy()
         for i in prange(res.nrows, nogil=True, schedule='static'):
-            for j in xrange(res.indptr[i], res.indptr[i + 1]):
+            for j in range(res.indptr[i], res.indptr[i + 1]):
                 if row_gender[i] == column_gender[self.indices[j]]:
                     res.data[j] *= homo_factor
                 else:
@@ -2252,7 +2248,7 @@ cdef class KarmaSparse:
                 # ordering by data
                 partial_sort(&self.data[self.indptr[i]],
                              &self.indices[self.indptr[i]], size, size)
-                for k in xrange(self.indptr[i], self.indptr[i + 1]):
+                for k in range(self.indptr[i], self.indptr[i + 1]):
                     cat = group[self.indices[k]]
                     if cat != -1:
                         if  cat_count[cat] >= nb_keep:
@@ -2299,12 +2295,12 @@ cdef class KarmaSparse:
 
         with nogil:
             row = -1
-            for i in xrange(self.nrows):
+            for i in range(self.nrows):
                 if row == -1 and self.indptr[i + 1] > self.indptr[i]:
                     row = i
                     col = self.indices[self.indptr[i]]
                     tampon = self.data[self.indptr[i]]
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     if (reverse and tampon < self.data[j]) \
                         or (not reverse and tampon > self.data[j]):
                         tampon = self.data[j]
@@ -2312,12 +2308,12 @@ cdef class KarmaSparse:
                         col = self.indices[j]
             if not only_nonzero and \
                 ((reverse and tampon < 0) or (not reverse and tampon > 0)):
-                for i in xrange(self.nrows):
+                for i in range(self.nrows):
                     if self.indptr[i + 1] - self.indptr[i] >= self.ncols:
                         continue
                     row = i
                     col = 0
-                    for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                    for j in range(self.indptr[i], self.indptr[i + 1]):
                         if self.indices[j] > col:
                             break
                         else:
@@ -2339,7 +2335,7 @@ cdef class KarmaSparse:
                 if self.indptr[i] < self.indptr[i + 1]:
                     value[i] = self.data[self.indptr[i]]
                     out[i] = self.indices[self.indptr[i]]
-                    for j in xrange(self.indptr[i] + 1, self.indptr[i + 1]):
+                    for j in range(self.indptr[i] + 1, self.indptr[i + 1]):
                         if (reverse and (value[i] < self.data[j])) or \
                            (not reverse and value[i] > self.data[j]):
                             value[i] = self.data[j]
@@ -2350,7 +2346,7 @@ cdef class KarmaSparse:
                         ((reverse and value[i] < 0) or (not reverse and value[i] > 0))) \
                        or out[i] == -1:
                         out[i] = 0
-                        for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                        for j in range(self.indptr[i], self.indptr[i + 1]):
                             if self.indices[j] > out[i]:
                                 break
                             else:
@@ -2370,8 +2366,8 @@ cdef class KarmaSparse:
         if not only_nonzero:
             count = np.zeros(self.ncols, dtype=ITYPE)
         with nogil:
-            for i in xrange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     axis_ind = self.indices[j]
                     if (out[axis_ind] == -1) or \
                        (reverse and value[axis_ind] < self.data[j]) or \
@@ -2393,22 +2389,22 @@ cdef class KarmaSparse:
                     else:
                         count[i] = 0
                 tot_count = 0
-                for i in xrange(self.nrows):
+                for i in range(self.nrows):
                     if self.indptr[i + 1] == self.indptr[i]:
-                        for j in xrange(self.ncols):
+                        for j in range(self.ncols):
                             if count[j] == 1:
                                 out[j] = i
                         break
                     else:
                         prev_j = 0
-                        for j in xrange(self.indptr[i], self.indptr[i + 1]):
-                            for k in xrange(prev_j, self.indices[j]):
+                        for j in range(self.indptr[i], self.indptr[i + 1]):
+                            for k in range(prev_j, self.indices[j]):
                                 if count[k] == 1:
                                     count[k] = 0
                                     tot_count += 1
                                     out[k] = i
                             prev_j = self.indices[j] + 1
-                        for k in xrange(prev_j, self.ncols):
+                        for k in range(prev_j, self.ncols):
                                 if count[k] == 1:
                                     count[k] = 0
                                     tot_count += 1
@@ -2504,9 +2500,9 @@ cdef class KarmaSparse:
             memset(mask, -1, ncols * sizeof(ITYPE_t))
             for i in prange(nrows, schedule='static'):
                 row_nnz = 0
-                for jj in xrange(self.indptr[i], self.indptr[i + 1]):
+                for jj in range(self.indptr[i], self.indptr[i + 1]):
                     j = self.indices[jj]
-                    for kk in xrange(other.indptr[j], other.indptr[j + 1]):
+                    for kk in range(other.indptr[j], other.indptr[j + 1]):
                         k = other.indices[kk]
                         if mask[k] != i:
                             mask[k] = i
@@ -2514,7 +2510,7 @@ cdef class KarmaSparse:
                 count[i] = row_nnz
             free(mask)
         with nogil:
-            for i in xrange(nrows):
+            for i in range(nrows):
                 indptr[i + 1] = indptr[i] + count[i]
 
         data = np.zeros(indptr[nrows], dtype=DTYPE)
@@ -2530,17 +2526,17 @@ cdef class KarmaSparse:
                 memset(mask, -1, ncols * sizeof(ITYPE_t))
                 for i in prange(nrows, schedule='guided'):
                     head = - 2
-                    for kk in xrange(self.indptr[i], self.indptr[i + 1]):
+                    for kk in range(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
                         ival = self.data[kk]
-                        for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
+                        for jj in range(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
                             ires[j] = mmax(ires[j], mult(other.data[jj], ival))
                             if mask[j] == -1:
                                 mask[j] = head
                                 head = j
                     nn = 0
-                    for k in xrange(count[i]):
+                    for k in range(count[i]):
                         if ires[head] != 0:
                             indices[indptr[i] + nn] = head
                             data[indptr[i] + nn] = ires[head]
@@ -2557,15 +2553,15 @@ cdef class KarmaSparse:
                 if ires == NULL:
                     raise MemoryError()
                 for i in prange(nrows, schedule='guided'):
-                    for kk in xrange(self.indptr[i], self.indptr[i + 1]):
+                    for kk in range(self.indptr[i], self.indptr[i + 1]):
                         ind = self.indices[kk]
                         ival = self.data[kk]
-                        for jj in xrange(other.indptr[ind], other.indptr[ind + 1]):
+                        for jj in range(other.indptr[ind], other.indptr[ind + 1]):
                             j = other.indices[jj]
                             ires[j] = mmax(ires[j], mult(other.data[jj], ival))
                     nn = 0
                     if count[i] > 0:
-                        for k in xrange(ncols):
+                        for k in range(ncols):
                             if ires[k] != 0:
                                 indices[indptr[i] + nn] = k
                                 data[indptr[i] + nn] = ires[k]
@@ -2587,7 +2583,7 @@ cdef class KarmaSparse:
             ITYPE_t i
 
         for i in prange(self.nrows, nogil=True):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 mmax_loop(n_cols, &out[i, 0], &matrix[self.indices[j], 0], self.data[j])
 
         return np.asarray(out)
@@ -2605,8 +2601,8 @@ cdef class KarmaSparse:
         # TODO : to make misaligned_dense_shadow parallel as for misaligned_dense_dot
         # TODO : to unify code between shadow and dot routines
         with nogil:
-            for i in xrange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for i in range(self.nrows):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     mmax_loop(n_cols, &out[self.indices[j], 0], &matrix[i, 0], self.data[j])
         return np.asarray(out)
 
@@ -2669,7 +2665,7 @@ cdef class KarmaSparse:
             max_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
 
             for i in prange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     mmax_loop(n_cols, max_res, &matrix[self.indices[j], 0], self.data[j])
                 out[i] = _scalar_product(n_cols, max_res, &vector[0])
                 memset(max_res, 0, n_cols * sizeof(DTYPE_t))
@@ -2691,7 +2687,7 @@ cdef class KarmaSparse:
             max_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
 
             for i in prange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     mmax_loop(n_cols, max_res, &matrix[self.indices[j], 0], self.data[j])
                 out[i] = _scalar_product_left_squared(n_cols, max_res, &vector[0])
                 memset(max_res, 0, n_cols * sizeof(DTYPE_t))
@@ -2770,7 +2766,7 @@ cdef class KarmaSparse:
             DTYPE_t[:,::1] out = np.zeros((self.nrows, n_cols), dtype=DTYPE, order='C')
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 axpy(n_cols, self.data[j], &matrix[self.indices[j], 0], &out[i, 0])
         return np.asarray(out)
 
@@ -2787,7 +2783,7 @@ cdef class KarmaSparse:
 
         n_th = min(omp_get_max_threads(), 8)
 
-        cdef int size = self.nrows / n_th, start, stop
+        cdef int size = self.nrows // n_th, start, stop
         cdef DTYPE_t[:,:,::1] out_tmp = np.zeros((n_th, self.ncols, n_cols), dtype=DTYPE, order='C')
 
         if self.nnz:
@@ -2795,8 +2791,8 @@ cdef class KarmaSparse:
                 ti = threadid()
                 start = size * ti
                 stop = self.nrows if ti + 1 == n_th else size * (ti + 1)
-                for i in xrange(start, stop):
-                    for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for i in range(start, stop):
+                    for j in range(self.indptr[i], self.indptr[i + 1]):
                         axpy(n_cols, self.data[j], &matrix[i, 0], &out_tmp[ti, self.indices[j], 0])
 
         if n_th == 1:
@@ -2815,7 +2811,7 @@ cdef class KarmaSparse:
 
         n_th = omp_get_max_threads()
 
-        cdef int size = self.nrows / n_th, start, stop
+        cdef int size = self.nrows // n_th, start, stop
 
         if self.nnz:
             with nogil, parallel(num_threads=n_th):
@@ -2836,7 +2832,7 @@ cdef class KarmaSparse:
 
         n_th = min(omp_get_max_threads(), 8)
 
-        cdef int size = self.nrows / n_th, start, stop
+        cdef int size = self.nrows // n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.ncols), dtype=DTYPE)
 
         if self.nnz:
@@ -2893,7 +2889,7 @@ cdef class KarmaSparse:
             dot_res = <DTYPE_t *>calloc(n_cols, sizeof(DTYPE_t))
 
             for i in prange(self.nrows):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     axpy(n_cols, self.data[j], &matrix[self.indices[j], 0], dot_res)
                 out[i] = _scalar_product_left_squared(n_cols, dot_res, &vector[0])
                 memset(dot_res, 0, n_cols * sizeof(DTYPE_t))
@@ -2961,7 +2957,7 @@ cdef class KarmaSparse:
             DTYPE_t[::1] data = np.zeros(self.get_nnz(), dtype=DTYPE)
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 ii = self.indices[j]
                 mx = scalar_product(inner_dim, &aa[i, 0], &bb[ii, 0])
                 data[j] = op(self.data[j], mx)
@@ -2993,7 +2989,7 @@ cdef class KarmaSparse:
             DTYPE_t mx, fac
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for jj in xrange(self.indptr[i], self.indptr[i + 1]):
+            for jj in range(self.indptr[i], self.indptr[i + 1]):
                 j = self.indices[jj]
                 mx = 0
                 pos_a = other_a.indptr[i]
@@ -3038,10 +3034,10 @@ cdef class KarmaSparse:
             DTYPE_t[::1] data = np.zeros(self.get_nnz(), dtype=DTYPE)
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 ii = self.indices[j]
                 mx = 0
-                for k in xrange(other.indptr[i], other.indptr[i + 1]):
+                for k in range(other.indptr[i], other.indptr[i + 1]):
                     mx = mx + other.data[k] * bb[other.indices[k], ii]
                 data[j] = op(self.data[j], mx)
         res = KarmaSparse((data,
@@ -3052,7 +3048,7 @@ cdef class KarmaSparse:
                            has_canonical_format=1)
         return res
 
-    def mask_dot(self, a, b, string mask_mode="last"):
+    def mask_dot(self, a, b, str mask_mode="last"):
         cdef DTYPE_t_binary_func op = get_reducer(mask_mode)
         check_shape_comptibility(a.shape[1], b.shape[0])
         check_shape_comptibility(a.shape[0], self.shape[0])
@@ -3104,7 +3100,7 @@ cdef class KarmaSparse:
             LTYPE_t j
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
-            for j in xrange(self.indptr[i], self.indptr[i + 1]):
+            for j in range(self.indptr[i], self.indptr[i + 1]):
                 data[j] = fn(self.data[j], other[i, self.indices[j]])
 
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
@@ -3126,12 +3122,12 @@ cdef class KarmaSparse:
 
         if self.format == CSR:
             for i in prange(self.nrows, nogil=True, schedule='static'):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     ind = self.indices[j]
                     result[i, ind] = fn(self.data[j], result[i, ind])
         else:
             for i in prange(self.nrows, nogil=True, schedule='static'):
-                for j in xrange(self.indptr[i], self.indptr[i + 1]):
+                for j in range(self.indptr[i], self.indptr[i + 1]):
                     ind = self.indices[j]
                     result[ind, i] = fn(self.data[j], result[ind, i])
 
@@ -3325,8 +3321,6 @@ cdef class KarmaSparse:
         else:
             raise NotImplementedError()
 
-    __iadd__ = __add__
-
     def __mul__(self, other):
         if np.isscalar(other) and is_karmasparse(self):
             return (<KarmaSparse?>self).scalar_multiply(other)
@@ -3373,6 +3367,19 @@ cdef class KarmaSparse:
         else:
             raise NotImplementedError()
 
+    def __truediv__(self, other):  # code duplication for py2->py3
+        if np.isscalar(other) and is_karmasparse(self):
+            return (<KarmaSparse?>self).scalar_divide(other)
+        elif np.isscalar(self) and is_karmasparse(other):
+            return (<KarmaSparse?>other).power(-1).scalar_multiply(self)
+        elif is_karmasparse(other) and is_karmasparse(self):
+            return (<KarmaSparse?>self).divide(other)
+        elif is_karmasparse(self) and isinstance(other, np.ndarray):
+            factor = 1. / other
+            return self.__mul__(factor)
+        else:
+            raise NotImplementedError()
+
     def __div__(self, other):
         if np.isscalar(other) and is_karmasparse(self):
             return (<KarmaSparse?>self).scalar_divide(other)
@@ -3387,7 +3394,22 @@ cdef class KarmaSparse:
             raise NotImplementedError()
 
     def __idiv__(self, other):
-        return self.__div__(other)
+        if np.isscalar(other) and is_karmasparse(self):
+            return (<KarmaSparse?>self).scalar_divide(other)
+        elif np.isscalar(self) and is_karmasparse(other):
+            return (<KarmaSparse?>other).power(-1).scalar_multiply(self)
+        elif is_karmasparse(other) and is_karmasparse(self):
+            return (<KarmaSparse?>self).divide(other)
+        elif is_karmasparse(self) and isinstance(other, np.ndarray):
+            factor = 1. / other
+            return self.__mul__(factor)
+        else:
+            raise NotImplementedError()
+
+    __itruediv__ = __truediv__
+    __iadd__ = __add__
+    __isub__ = __sub__
+    __ipow__ = __pow__
 
     def __abs__(self):
         return self.abs()
@@ -3401,15 +3423,11 @@ cdef class KarmaSparse:
     def __sub__(self, other):
         return self + (- other)
 
-    __isub__ = __sub__
-
     def __pow__(self, p, _):
         if is_karmasparse(self):
             return self.power(p)
         else:
             raise NotImplementedError()
-
-    __ipow__ = __pow__
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -3419,7 +3437,7 @@ cdef class KarmaSparse:
         """
         cdef DTYPE_t mx = 0
         cdef LTYPE_t j
-        for j in xrange(self.indptr[row], self.indptr[row + 1]):
+        for j in range(self.indptr[row], self.indptr[row + 1]):
             if self.indices[j] == col:
                 mx += self.data[j]
         return mx
@@ -3498,11 +3516,11 @@ cdef class KarmaSparse:
             Shape_t shape
 
         for i in prange(nrows, nogil=True, schedule="static"):
-            for jj in xrange(self.indptr[i + row0], self.indptr[i + row0  + 1]):
+            for jj in range(self.indptr[i + row0], self.indptr[i + row0  + 1]):
                 j = self.indices[jj]
                 if col0 <= j < col1:
                     indptr[i + 1] = indptr[i + 1] + 1
-        for i in xrange(nrows):
+        for i in range(nrows):
             indptr[i + 1] += indptr[i]
 
         indices = np.zeros(indptr[nrows], dtype=ITYPE)
@@ -3510,7 +3528,7 @@ cdef class KarmaSparse:
 
         for i in prange(nrows, nogil=True, schedule="static"):
             k = 0
-            for jj in xrange(self.indptr[i + row0], self.indptr[i + row0  + 1]):
+            for jj in range(self.indptr[i + row0], self.indptr[i + row0  + 1]):
                 j = self.indices[jj]
                 if col0 <= j < col1:
                     indices[indptr[i] + k] = j - col0
@@ -3540,7 +3558,7 @@ cdef class KarmaSparse:
             ITYPE_t i, size
             Shape_t sparse
 
-        for i in xrange(nrows):
+        for i in range(nrows):
             indptr[i + 1] = indptr[i] + self.indptr[i + row0 + 1] - self.indptr[i + row0]
 
         indices = np.zeros(indptr[nrows], dtype=ITYPE)
@@ -3562,7 +3580,7 @@ cdef class KarmaSparse:
     cdef KarmaSparse extractor(self, my_indices, axis):
         """
         produces a KS matrix M such that
-        M[i, my_indices[i]] = 1 for all i in xrange(len(my_indices))
+        M[i, my_indices[i]] = 1 for all i in range(len(my_indices))
                             = 0 otherwise
         """
         cdef ITYPE_t dim, i, row, size
@@ -3585,7 +3603,7 @@ cdef class KarmaSparse:
         if self.aligned_axis(axis):
             indptr = np.zeros(length + 1, dtype=LTYPE)
             with nogil:
-                for i in xrange(length):
+                for i in range(length):
                     row = indices[i]
                     indptr[i + 1] = indptr[i] + self.indptr[row + 1] - self.indptr[row]
             new_indices = np.zeros(indptr[length], dtype=ITYPE)
@@ -3780,7 +3798,7 @@ cdef class KarmaSparse:
 
         n_th = min(omp_get_max_threads(), 8)
 
-        cdef int batch_size = self.nrows / n_th, start, stop
+        cdef int batch_size = self.nrows // n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * matrix.shape[1]), dtype=DTYPE)
 
         if self.nnz > 0:
@@ -3811,7 +3829,7 @@ cdef class KarmaSparse:
 
         n_th = min(omp_get_max_threads(), 8)
 
-        cdef int batch_size = self.nrows / n_th, start, stop
+        cdef int batch_size = self.nrows // n_th, start, stop
         cdef DTYPE_t[:, ::1] out_tmp = np.zeros((n_th, self.shape[1] * other.shape[1]), dtype=DTYPE)
 
         if self.nnz > 0 and other.nnz > 0:
@@ -3953,18 +3971,18 @@ cdef class KarmaSparse:
 
                 # to get argsort we need to make a copy of data slice self.indptr[i]:self.indptr[i+1]
                 memcpy(&data_slice[0], &self.data[start_idx], size * sizeof(DTYPE_t))
-                for j in xrange(size):
+                for j in range(size):
                     argsort_indices[j] = <ITYPE_t>j
 
                 partial_sort(&data_slice[0], &argsort_indices[0], size, size, False)
 
                 effective_nb = min(nb, size + 1)
                 step = <float>size / effective_nb
-                for j in xrange(1, effective_nb):
+                for j in range(1, effective_nb):
                     q_idx = <long>(j * step + 0.5) - 1
                     boundaries[i, j - 1] = self.data[start_idx + argsort_indices[q_idx]]
                 if effective_nb < nb:
-                    for j in xrange(effective_nb - 1, nb - 1):
+                    for j in range(effective_nb - 1, nb - 1):
                         boundaries[i][j] = self.data[start_idx + argsort_indices[size - 1]]
 
             free(data_slice)

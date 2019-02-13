@@ -4,9 +4,7 @@
 
 cdef class TailTree:
 
-    def __cinit__(self, X not None, weights=None, ITYPE_t n_clusters=1,
-                  string metric="sqeuclidean"):
-
+    def __cinit__(self, X not None, weights=None, ITYPE_t n_clusters=1, str metric="sqeuclidean"):
         self.X = np.asarray(X, dtype=DTYPE, order='C')  # copy
         self.n = self.X.shape[0]
         self.dim = self.X.shape[1]
@@ -47,7 +45,7 @@ cdef class TailTree:
         cdef DTYPE_t wi = self.weights[i0] / (self.weights[i0] + self.weights[j0])
         cdef DTYPE_t wj = self.weights[j0] / (self.weights[i0] + self.weights[j0])
 
-        for k in xrange(self.dim):
+        for k in range(self.dim):
             self.X[i0, k] = wi * self.X[i0, k] + wj * self.X[j0, k]
         self.weights[i0] = self.weights[i0] + self.weights[j0]
         self.active_indices.remove(j0)

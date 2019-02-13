@@ -9,6 +9,7 @@ from cpython.sequence cimport PySequence_Check
 from cpython.string cimport PyString_Check
 from cpython.number cimport PyNumber_Check
 from cpython.tuple cimport PyTuple_Check
+from cpython.bytes cimport PyBytes_Check
 from cpython.list cimport PyList_Check
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject, PyUnicode_AsUTF8String
 from cyperf.tools.sort_tools cimport partial_sort_decreasing_quick, partial_sort_increasing_quick
@@ -23,17 +24,6 @@ from cyperf.where.indices_where_long import Vector
 from cython.parallel import prange
 from collections import defaultdict
 
-
-ctypedef fused ITERbis:
-    list
-    tuple
-    np.ndarray[dtype=int, ndim=1]
-    np.ndarray[dtype=long, ndim=1]
-    np.ndarray[dtype=float, ndim=1]
-    np.ndarray[dtype=double, ndim=1]
-    np.ndarray[dtype=object, ndim=1]
-    object
-
 ctypedef fused SET_FRSET:
     frozenset
     set
@@ -42,7 +32,7 @@ ctypedef fused SET_FRSET:
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.cdivision(True)
-cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITERbis x):
+cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITER_BIS x):
     """Return the index where to insert item x in list a, assuming a is sorted.
 
     The return value i is such that all e in a[:i] have e < x, and all e in
@@ -52,7 +42,7 @@ cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITERbis x):
     cdef long lo, hi, mid, nb = len(x), i
     cdef int[::1] out = np.zeros(nb, dtype=np.int32)
 
-    for i in xrange(nb):
+    for i in range(nb):
         o = x[i]
         lo = 0
         hi = len(a)
@@ -91,14 +81,16 @@ cpdef object TRANSLATION_TABLE = defaultdict(lambda :63,
                                              244: 111, 245: 111, 246: 111, 249: 117, 250: 117, 251: 117,
                                              252: 117, 253: 121, 255: 121, 65533: 63, 3333333333: 63})
 
-
-cpdef str cy_safe_slug(object x, unify=True):
+from six import PY2
+cdef BOOL_t cpy2 = PY2
+# TODO : add switch for py3
+def cy_safe_slug(object x, unify=True):
     if PyUnicode_Check(x):
         x_u = x
     else:
         x_u = PyUnicode_FromEncodedObject(x, 'utf-8', 'replace')
     slug = PyUnicode_AsUTF8String(x_u.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE))
-    if unify:
+    if cpy2 and unify:
         slug = intern(slug)
     return slug
 
@@ -127,7 +119,7 @@ def batch_contains_mask(ITER values, SET_FRSET kt):
         BOOL_t[:] result = np.zeros(nb, dtype=BOOL)
         object x
 
-    for i in xrange(nb):
+    for i in range(nb):
         x = values[i]
         try:
             if PySet_Contains(kt, x) == 1:
@@ -147,7 +139,7 @@ cpdef char cy_is_exceptional(object x, SET_FRSET exceptional_set, str exceptiona
         l = len(x)
         if l == 0:
             return 0
-        for k in xrange(l):  # all should be exception to get 1
+        for k in range(l):  # all should be exception to get 1
             if not cy_is_exceptional(x[k], exceptional_set, exceptional_char):
                 return 0
         return 1
@@ -177,7 +169,7 @@ def batch_is_exceptional_mask(ITER values, SET_FRSET exceptional_set, str except
         long i, k, nb = len(values)
         BOOL_t[:] result = np.zeros(nb, dtype=BOOL)
         object x
-    for i in xrange(nb):
+    for i in range(nb):
         result[i] = cy_is_exceptional(values[i], exceptional_set, exceptional_char)
 
     return np.asarray(result).view(np.bool_)
@@ -190,7 +182,7 @@ def idiv_2d(A[:,:] a, B[:,:] b, const double eps=10**-9):
     cdef double res = 0
 
     for i in prange(a.shape[0], nogil=True, schedule='static'):
-        for j in xrange(a.shape[1]):
+        for j in range(a.shape[1]):
             res += idiv_pointwise(max(a[i, j], eps), max(b[i, j], eps))
     return res
 
@@ -245,7 +237,7 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
     cdef LTYPE_t[::1] source_dates_one_user = np.zeros(source_max_nb_matches_one_user, dtype=LTYPE)
 
     with nogil:
-        for i in xrange(nrows):
+        for i in range(nrows):
             truncated_indptr[i] = truncated_indices.size()
 
             p = target_users_position_in_source_index[i]
@@ -259,7 +251,7 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
             uu = dd + upper
             ll = dd + lower
             count = 0
-            for j in xrange(source_index_indptr[p], source_index_indptr[p + 1]):
+            for j in range(source_index_indptr[p], source_index_indptr[p + 1]):
                 ind = source_index_indices[j]
                 date = source_dates[ind]
                 if date == NAT:
@@ -275,7 +267,7 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
                 partial_sort_increasing_quick(&source_dates_one_user[0], &source_indices_one_user[0], count, -nb)
                 count = min(count, -nb)
 
-            for j in xrange(count):
+            for j in range(count):
                 truncated_indices.append(source_indices_one_user[j])
                 truncated_deltas.append(source_dates_one_user[j] - dd)
 

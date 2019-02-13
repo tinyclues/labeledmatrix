@@ -1,5 +1,6 @@
 
-from karma_sparse import np, is_karmasparse, linear_error_dense, DTYPE
+
+from cyperf.matrix.karma_sparse import np, is_karmasparse, linear_error_dense, DTYPE
 
 
 def linear_error(matrix, regressor, intercept, target):

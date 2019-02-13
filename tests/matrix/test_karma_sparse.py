@@ -2,22 +2,27 @@ import unittest
 import itertools
 import random
 from numpy import allclose as eq
+from pickle import dumps, loads
 from numpy.testing import assert_array_almost_equal as _np_almost_equal
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
 from cyperf.matrix.karma_sparse import sp, np, ks_diag
 from cyperf.matrix.karma_sparse import truncate_by_count_axis1_sparse, truncate_by_count_axis1_dense
 from cyperf.matrix.karma_sparse import dense_pivot
 from cyperf.matrix import linear_error
-# from sklearn.preprocessing import normalize as sk_normalize
-# from karma.learning.matrix_utils import normalize
-# from karma.learning.matrix_utils import truncate_by_count
-from cPickle import dumps, loads
-# from karma.core.utils import run_in_subprocess, Parallel
-# from karma.thread_setter import open_mp_threads
 
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
+from six.moves import range
+from six.moves import zip
+from six import PY3
 warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
+
+
+# from sklearn.preprocessing import normalize as sk_normalize
+# from karma.learning.matrix_utils import normalize
+# from karma.learning.matrix_utils import truncate_by_count
+# from karma.core.utils import run_in_subprocess, Parallel
+# from karma.thread_setter import open_mp_threads
 
 
 def np_almost_equal(x, y, decimal=5):
@@ -59,7 +64,7 @@ class MatrixFabric(object):
 
     def with_few_zeros(self, nb=10):
         res = self.random_negative()
-        for _ in xrange(nb):
+        for _ in range(nb):
             i = np.random.randint(self.shape[0])
             j = np.random.randint(self.shape[1])
             res[i, j] = 0
@@ -79,7 +84,7 @@ class MatrixFabric(object):
 
     def with_few_nonzero(self, nb=3):
         res = self.zero()
-        for _ in xrange(nb):
+        for _ in range(nb):
             i = np.random.randint(self.shape[0])
             j = np.random.randint(self.shape[1])
             res[i, j] = np.random.randn()
@@ -205,22 +210,22 @@ class TestKarmaSparse(unittest.TestCase):
         self.assertEqual(ks.sum(), 4)
         np_almost_equal(ks.toarray(), np.array([[2, 0], [1, 1]]))
 
-        ks = KarmaSparse((x, y), shape=(2, 2), aggregator="max")
+        ks = KarmaSparse((x, y), shape=(2, 2), aggregator='max')
         self.assertEqual(ks.nnz, 3)
         self.assertEqual(ks.sum(), 3)
         np_almost_equal(ks.toarray(), np.array([[1, 0], [1, 1]]))
 
-        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator="max")
+        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator='max')
         self.assertEqual(ks.nnz, 3)
         self.assertEqual(ks.sum(), 3)
         np_almost_equal(ks.toarray(), np.array([[2, 0], [-1, 2]]))
 
-        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator="min")
+        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator='min')
         self.assertEqual(ks.nnz, 3)
         self.assertEqual(ks.sum(), -9)
         np_almost_equal(ks.toarray(), np.array([[-10, 0], [-1, 2]]))
 
-        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator="multiply")
+        ks = KarmaSparse((values, (x, y)), shape=(2, 2), aggregator='multiply')
         self.assertEqual(ks.nnz, 3)
         self.assertEqual(ks.sum(), -19)
         np_almost_equal(ks.toarray(), np.array([[-20, 0], [-1, 2]]))
@@ -381,7 +386,7 @@ class TestKarmaSparse(unittest.TestCase):
                 np_almost_equal(b.toarray(), new_mat)
                 # check data is really copied
                 init_data = mat.data.copy()
-                for i in xrange(len(mat.data)):
+                for i in range(len(mat.data)):
                     mat.data[i] = np.random.random()
                 np.testing.assert_array_equal(b.data, init_data)
                 self.assertRaises(AssertionError, mat.extend, (mat.shape[0] - 1, mat.shape[1]))
@@ -392,9 +397,9 @@ class TestKarmaSparse(unittest.TestCase):
         b = a.toarray()
         ks = KarmaSparse(a)
 
-        self.assertEqual((b.argmax() / m, b.argmax() % m), ks.argmax(only_nonzero=False))
+        self.assertEqual((b.argmax() // m, b.argmax() % m), ks.argmax(only_nonzero=False))
         self.assertEqual(ks.argmax(only_nonzero=False), ks.argmax(only_nonzero=True))
-        self.assertEqual((b.argmin() / m, b.argmin() % m), ks.argmin(only_nonzero=False))
+        self.assertEqual((b.argmin() // m, b.argmin() % m), ks.argmin(only_nonzero=False))
         self.assertNotEqual(ks.argmin(only_nonzero=False), ks.argmin(only_nonzero=True))
 
     def test_axis_argmaxmin(self):
@@ -498,7 +503,7 @@ class TestKarmaSparse(unittest.TestCase):
                         np_almost_equal(expected_trunc, trunc_row)
 
     def test_dot(self):
-        for _ in xrange(10):
+        for _ in range(10):
             n, m, r = np.random.randint(1, 80, size=3)
             mf1 = MatrixFabric(shape=(n, r), density=np.random.rand())
             mf2 = MatrixFabric(shape=(r, m), density=np.random.rand())
@@ -638,7 +643,7 @@ class TestKarmaSparse(unittest.TestCase):
             np_almost_equal(KarmaSparse(matrix).max(axis=ax), matrix.max(axis=ax))
 
     def test_dense_dot_right(self):
-        for _ in xrange(3):
+        for _ in range(3):
             n, m, r = np.random.randint(1, 80, size=3)
             mf1 = MatrixFabric(shape=(n, r), density=0.6)
             y = np.random.randn(r, m)
@@ -649,7 +654,7 @@ class TestKarmaSparse(unittest.TestCase):
                 np_almost_equal(ks1.dense_dot_right(y), x.dot(y))
 
     def test_dense_dot_left(self):
-        for _ in xrange(3):
+        for _ in range(3):
             n, m, r = np.random.randint(1, 80, size=3)
             mf1 = MatrixFabric(shape=(r, n), density=0.6)
             y = np.random.randn(m, r)
@@ -680,7 +685,7 @@ class TestKarmaSparse(unittest.TestCase):
             ks = KarmaSparse(a)
             b = sp.csr_matrix(a)
             # single element
-            for _ in xrange(10):
+            for _ in range(10):
                 i = random.randint(-a.shape[0], a.shape[0] - 1)
                 j = random.randint(-a.shape[1], a.shape[1] - 1)
                 np_almost_equal(ks[i, j], a[i, j])
@@ -688,7 +693,7 @@ class TestKarmaSparse(unittest.TestCase):
                 np_almost_equal(ks.tocsc()[i, j], a[i, j])
                 np_almost_equal(ks.T[j, i], a[i, j])
             # row slice
-            for _ in xrange(15):
+            for _ in range(15):
                 i = random.randint(0, a.shape[0] - 1)
                 j = random.randint(0, a.shape[0] - 1)
                 k = random.choice([None, 1, 2, 3])
@@ -702,7 +707,7 @@ class TestKarmaSparse(unittest.TestCase):
                 else:
                     self.assertRaisesRegexp(IndexError, "", lambda: ks[i:j])
             # single row
-            for _ in xrange(10):
+            for _ in range(10):
                 i = random.randint(-a.shape[0] - 10, a.shape[0] + 10)
                 if -a.shape[0] <= i < a.shape[0]:
                     np_almost_equal(ks[i].toarray(), b[i].toarray())
@@ -710,7 +715,7 @@ class TestKarmaSparse(unittest.TestCase):
                 else:
                     self.assertRaisesRegexp(IndexError, "", lambda: ks[i])
             # single col
-            for _ in xrange(10):
+            for _ in range(10):
                 i = random.randint(-a.shape[1] - 10, a.shape[1] + 10)
                 if -a.shape[1] <= i < a.shape[1]:
                     np_almost_equal(ks[:, i].toarray(), b[:, i].toarray())
@@ -719,14 +724,14 @@ class TestKarmaSparse(unittest.TestCase):
                     self.assertRaisesRegexp(IndexError, "", lambda: ks[:, i])
 
             # col indices
-            for _ in xrange(10):
+            for _ in range(10):
                 ind = [random.randint(-a.shape[1], a.shape[1] - 1) for o in range(20)]
                 np_almost_equal(ks[:, ind].toarray(), b[:, ind].toarray())
                 np_almost_equal(ks.tocsc()[:, ind].toarray(), b[:, ind].toarray())
                 np_almost_equal(ks.T[ind].toarray(), b.T[ind].toarray())
 
             # col indices
-            for _ in xrange(10):
+            for _ in range(10):
                 ind = [random.randint(-a.shape[0], a.shape[0] - 1) for o in range(20)]
                 np_almost_equal(ks[ind].toarray(), b[ind].toarray())
                 np_almost_equal(ks.tocsc()[ind].toarray(), b[ind].toarray())
@@ -742,7 +747,7 @@ class TestKarmaSparse(unittest.TestCase):
                                 'quantile should be in',
                                 lambda: ks.quantile(axis=0, q=2))
         self.assertRaisesRegexp(TypeError,
-                                'a float is required',
+                                '',
                                 lambda: ks.quantile(axis=0, q="csr"))
         self.assertRaisesRegexp(TypeError,
                                 'Axis should be of integer type, got',
@@ -752,7 +757,7 @@ class TestKarmaSparse(unittest.TestCase):
         for a in self.mf.iterator(dense=True):
             ks = KarmaSparse(a)
             # an element
-            for _ in xrange(20):
+            for _ in range(20):
                 x = np.random.randint(ks.shape[0] - 1)
                 y = np.random.randint(ks.shape[1] - 1)
                 res = ks.complement(([x], [y]))
@@ -760,7 +765,7 @@ class TestKarmaSparse(unittest.TestCase):
                 self.assertEqual(res[x - 1, y - 1], ks[x - 1, y - 1])
             # whole line
             rows = np.repeat(1, ks.shape[1])
-            cols = range(ks.shape[1])
+            cols = list(range(ks.shape[1]))
             res = ks.complement((rows, cols))
             self.assertTrue(all(elem == 0 for elem
                                 in res.toarray()[rows, cols]))
@@ -790,10 +795,34 @@ class TestKarmaSparse(unittest.TestCase):
         """
         ks32 = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
         path = './tests/matrix/karma_sparse_64.pickle'
-        with open(path, "r") as _f:
-            ks64 = loads(_f.read())
+
+        if PY3:
+            with open(path, "rb") as _f:
+                ks64 = loads(_f.read(), encoding='bytes')
+        else:
+            with open(path, "r") as _f:
+                ks64 = loads(_f.read())
+
         self.assertEqual(ks32.dtype, ks64.dtype)
         np_almost_equal(ks32, ks64)
+
+    def test_load_py3_pickle(self):
+        """
+            The matrix in karma_sparse_64.pickle was saved from an environment where they were all in 64bit
+            we just want to make sure we can still load them
+        """
+        ks_expected = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
+        path = './tests/matrix/karma_sparse_py3.pickle'
+
+        if PY3:
+            with open(path, "rb") as _f:
+                ks_got = loads(_f.read())
+        else:
+            with open(path, "r") as _f:
+                ks_got = loads(_f.read())
+        np_almost_equal(ks_got, ks_expected)
+
+    # TODO : we need to reanimate those test
 
     # def test_run_in_subprocess(self):
     #     a = KarmaSparse(sp.rand(100, 100, 0.9, format="csr", random_state=100))
@@ -808,11 +837,11 @@ class TestKarmaSparse(unittest.TestCase):
     #         return a.sum()
 
     #     _ = a.dot(a)
-    #     for _ in xrange(15):
+    #     for _ in range(15):
     #         self.assertAlmostEqual(a.sum(), ks_from_subprocess())
 
     #     with open_mp_threads(2):
-    #         for _ in xrange(15):
+    #         for _ in range(15):
     #             self.assertAlmostEqual(a.sum(), ks_from_subprocess())
 
     # def test_run_in_parallel(self):
@@ -837,7 +866,7 @@ class TestKarmaSparse(unittest.TestCase):
     #     a = KarmaSparse(sp.rand(10**2, 10**2, 0.01))
     #     a.toarray().shape
     #     a.toarray().sum()
-    #     for _ in xrange(5):
+    #     for _ in range(5):
     #         with open_mp_threads(2):
     #             a.toarray().shape
     #             a.toarray().sum()
@@ -864,7 +893,7 @@ class TestKarmaSparse(unittest.TestCase):
         self.assertTrue(np.all(2 * x == xx))
 
     def test_truncate_by_axis(self):
-        for _ in xrange(10):
+        for _ in range(10):
             a = np.random.rand(5, 100)
             aa = a.copy()
             rank = np.array([3, 1, 0, 6, 10])
@@ -878,7 +907,7 @@ class TestKarmaSparse(unittest.TestCase):
             np_almost_equal(a[b != 0], b[b != 0])
             np_almost_equal(a.max(axis=1)[rank != 0], b.max(axis=1)[rank != 0])
             arg_sort = a.argsort(axis=1)[:, ::-1]
-            for i in xrange(len(a)):
+            for i in range(len(a)):
                 ind = arg_sort[i, :rank[i]]
                 np_almost_equal(a[i, ind], b[i, ind])
 
@@ -914,7 +943,7 @@ class TestKarmaSparse(unittest.TestCase):
         np_almost_equal(res5, expected5)
 
     def test_dense_pivot2(self):
-        for _ in xrange(50):
+        for _ in range(50):
             size = np.random.randint(0, 10 ** 3)
             shape = (np.random.randint(1, 100), np.random.randint(1, 100))
             x = np.random.randint(0, shape[0], size).astype(np.int32)
@@ -1086,7 +1115,7 @@ class TestKarmaSparse(unittest.TestCase):
     def test_scale_along_axis(self):
         for a in self.mf.iterator(dense=False):
             a = KarmaSparse(a)
-            for _ in xrange(10):
+            for _ in range(10):
                 w1 = np.random.rand(a.shape[0])
                 w2 = np.random.randint(-2, 3, size=a.shape[1])
                 expected = w2 * (w1 * a.toarray().T).T
@@ -1186,7 +1215,7 @@ class TestKarmaSparse(unittest.TestCase):
     def test_quantile_boundaries(self):
         data = np.tile([0.78, 0.78, 0.2, 0.87, 0.87, 0.87, 0.5, 0.6, 0.9, 0.9], 5)
         indptr = np.arange(6) * 10
-        indices = np.hstack([np.random.choice(100, 10, replace=False) for _ in xrange(5)])
+        indices = np.hstack([np.random.choice(100, 10, replace=False) for _ in range(5)])
         matrix1 = KarmaSparse((data, indices, indptr), shape=(100, 5), format='csc')
 
         for m in [matrix1, matrix1.tocsr()]:

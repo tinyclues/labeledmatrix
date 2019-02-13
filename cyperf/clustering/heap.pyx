@@ -32,7 +32,7 @@ cdef class MinHeap:
 
     cdef void heapify(self) nogil:
         cdef ITYPE_t idx
-        for idx in xrange(self.n_nbrs // 2 - 1, -1, -1):
+        for idx in range(self.n_nbrs // 2 - 1, -1, -1):
             self.update_geq_(idx)
 
     cdef ITYPE_t pop(self) nogil:
@@ -121,7 +121,7 @@ cdef class ActiveList:
         self.start = 0
         self.size = size
         self.nb = size
-        for i in xrange(size):
+        for i in range(size):
             self.pred[i+1] = i
             self.succ[i] = i + 1
 
@@ -143,7 +143,7 @@ cdef class ActiveList:
         cdef np.ndarray[ITYPE_t, ndim=1, mode="c"] d = np.zeros(self.size, dtype=ITYPE)
         cdef ITYPE_t* dptr = &d[0]
         with nogil:
-            for k in xrange(self.size):
+            for k in range(self.size):
                 dptr[k] = i
                 i = self.succ[i]
         return d

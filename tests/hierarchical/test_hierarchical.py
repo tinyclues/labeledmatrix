@@ -14,7 +14,7 @@ import operator
 
 from cyperf.clustering.hierarchical import WardTree, traversal, huffman_encoding, huffman_encoding_reordering
 from cyperf.clustering.space_tools import (pairwise_flat, vector_distance, METRIC_LIST,
-                                         pairwise_square, fast_buddies)
+                                           pairwise_square, fast_buddies)
 
 
 class testHierarchical(unittest.TestCase):
@@ -52,8 +52,8 @@ class testHierarchical(unittest.TestCase):
         d = pairwise_flat(X)
         hc1 = huffman_encoding_reordering(link_chain, d)
         hc2 = huffman_encoding_reordering(link, d)
-        ll1 = sorted(hc1.iteritems(), key=operator.itemgetter(1))
-        ll2 = sorted(hc2.iteritems(), key=operator.itemgetter(1))
+        ll1 = sorted(hc1.items(), key=operator.itemgetter(1))
+        ll2 = sorted(hc2.items(), key=operator.itemgetter(1))
         ord1 = np.array([x for x, v in ll1])
         ord2 = np.array([x for x, v in ll2])
         self.assertTrue(np.all(ord1 == ord2) or np.all(ord1 == ord2[::-1]))
@@ -111,8 +111,7 @@ class testHierarchical(unittest.TestCase):
 
         # Test ordering exactness
         Y = np.random.rand(20, 1)  # one dim vectors with natural order
-        ll = sorted(WardTree(Y).build_huffman_ordering().iteritems(),
-                    key=operator.itemgetter(1))
+        ll = sorted(WardTree(Y).build_huffman_ordering().items(), key=operator.itemgetter(1))
         ord1 = np.array([x for x, v in ll])
         ord2 = np.argsort(Y.T, axis=1)[0]
         self.assertTrue(np.all(ord1 == ord2) or np.all(ord1 == ord2[::-1]))
@@ -146,7 +145,7 @@ class testHierarchical(unittest.TestCase):
             assert_array_almost_equal(b1, b2)
 
         b1 = fast_buddies(a, 'idiv')
-        for i in xrange(10):
+        for i in range(10):
             x = np.sum(a[i] * np.log(a[i] / a), axis=1)
             x[i] = np.inf
             self.assertEqual(b1[i], np.argmin(x))

@@ -46,8 +46,8 @@ cpdef KarmaSparse matrix_rank_dispatch(np.ndarray[A, ndim=2] raw_matrix,
             partial_sort_decreasing_quick(&matrix[topic, 0], &rank_matrix[topic, 0],
                                           length, min(max_rank[topic], length))
 
-        for rank in xrange(length):
-            for topic in xrange(nb_topic):
+        for rank in range(length):
+            for topic in range(nb_topic):
                 if full[topic]:
                     continue
                 candidate = rank_matrix[topic, rank]
@@ -65,7 +65,7 @@ cpdef KarmaSparse matrix_rank_dispatch(np.ndarray[A, ndim=2] raw_matrix,
     # convert to KarmaSparse
     cdef LTYPE_t[::1] indptr = np.zeros(nb_topic + 1, dtype=LTYPE)
 
-    for topic in xrange(nb_topic):
+    for topic in range(nb_topic):
         indptr[topic + 1] = indptr[topic] + choice[topic].size()
 
     cdef ITYPE_t[::1] indices = np.zeros(indptr[nb_topic], dtype=ITYPE)
@@ -78,7 +78,7 @@ cpdef KarmaSparse matrix_rank_dispatch(np.ndarray[A, ndim=2] raw_matrix,
 
     # copy data
     for topic in prange(nb_topic, nogil=True):
-        for candidate in xrange(indptr[topic], indptr[topic+1]):
+        for candidate in range(indptr[topic], indptr[topic+1]):
             data[candidate] = raw_matrix[indices[candidate], topic]
 
     # free memory

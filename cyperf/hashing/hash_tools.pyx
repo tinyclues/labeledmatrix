@@ -1,9 +1,76 @@
-#cython: boundscheck=False, wraparound=False, unraisable_tracebacks=True
+# cython: boundscheck=False, wraparound=False, unraisable_tracebacks=True
+# distutils: include_dirs = cyperf/hashing/include
 
-import numpy as np
-from cython.parallel import prange
+
 cimport cython
+from cython.parallel cimport prange
+
+cimport numpy as np
+import numpy as np
+
 from cyperf.tools.types cimport A, ITER
+from libc.string cimport strlen
+from cpython.string cimport PyString_Check
+from cpython.bytes cimport PyBytes_Check, PyBytes_AsString
+from cpython.object cimport PyObject
+
+
+# https://cython.readthedocs.io/en/latest/src/userguide/external_C_code.html#including-verbatim-c-code
+cdef extern from * nogil:
+    """
+    // returns ASCII or UTF8 (py3) view on python str
+    // python object owns memory, should not be freed
+    static const char* get_c_string(PyObject* obj) {
+    #if PY_VERSION_HEX >= 0x03000000
+        return PyUnicode_AsUTF8(obj);
+    #else
+        return PyString_AsString(obj);
+    #endif
+    }
+    """
+    const char *get_c_string(object) except NULL
+
+
+
+cdef inline const char* char_array_from_python_object(object x) except NULL:
+    if PyBytes_Check(x):
+        return PyBytes_AsString(x)
+
+    if PyString_Check(x):
+        return get_c_string(x)
+
+    try:
+        x = str(x)
+    except:
+        x = ""
+    return get_c_string(x)
+
+
+cdef extern from "city.cc" nogil:
+    # our current usage makes the downcast to uint32
+    cdef unsigned long CityHash64WithSeed(char *buff, size_t len, unsigned long seed)
+
+
+cdef inline long python_string_length(const char* ch, long size) nogil:
+    cdef long i = size - 1
+
+    while ch[i] == 0 and i >= 0:
+        i -= 1
+    return i + 1
+
+
+cdef inline unsigned int composition_part(int residue, const np.uint32_t* composition) nogil:
+    """
+    nb_group = len(composition) > 0
+    total = sum(composition)
+    """
+    # cdef int residue = x % total
+    cdef unsigned int i = 0
+    residue -= composition[0]
+    while residue >= 0:
+        i += 1
+        residue -= composition[i]
+    return i
 
 
 cdef np.ndarray[char, ndim=2, mode="c"] safe_convertor(np.ndarray keys):
@@ -18,9 +85,9 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_numpy_string(np.ndarray key
     cdef const char* ch
 
     with nogil:
-        for k in xrange(n):
+        for k in range(n):
             ch = &keys_str[k, 0]
-            result[k] = Hash32WithSeed(ch, python_string_length(ch, size), seed)
+            result[k] = CityHash64WithSeed(ch, python_string_length(ch, size), seed)
     return np.asarray(result)
 
 
@@ -28,19 +95,10 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hash_generic_string(ITER keys, u
     cdef long k, n = len(keys)
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
     cdef const char* ch
-    cdef object x
 
-    for k in xrange(n):
-        x = keys[k]
-        if not PyString_Check(x):
-            try:
-                x = str(x)
-            except:
-                x = ""
-
-        ch = PyString_AsString(x)
-        size = len(x)
-        result[k] = Hash32WithSeed(ch, size, seed)
+    for k in range(n):
+        ch = char_array_from_python_object(keys[k])
+        result[k] = CityHash64WithSeed(ch, strlen(ch), seed)
     return np.asarray(result)
 
 
@@ -52,10 +110,10 @@ cpdef np.ndarray[np.uint32_t, ndim=2, mode="c"] hash_numpy_string_with_many_seed
     cdef np.uint32_t[:,::1] result = np.zeros((n, s), dtype=np.uint32)
 
     with nogil:
-        for k in xrange(n):
+        for k in range(n):
             ch = &keys_str[k, 0]
-            for i in xrange(s):
-                result[k, i] = Hash32WithSeed(ch, size, seed[i])
+            for i in range(s):
+                result[k, i] = CityHash64WithSeed(ch, size, seed[i])
     return np.asarray(result)
 
 
@@ -67,8 +125,8 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] hasher_numpy_string(np.ndarray k
     cdef np.uint32_t[::1] result = np.zeros(n, dtype=np.uint32)
 
     with nogil:
-        for k in xrange(n):
-            result[k] = Hash32WithSeed(&keys_str[k, 0], size, seed) % nb_feature
+        for k in range(n):
+            result[k] = CityHash64WithSeed(&keys_str[k, 0], size, seed) % nb_feature
     return np.asarray(result)
 
 
@@ -82,7 +140,8 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_numpy_string(np.ndarr
 
     with nogil:
         for k in prange(n):
-            result[k] = composition_part(Hash32WithSeed(&keys_str[k, 0], size, seed) % total, &composition[0])
+            result[k] = composition_part(<unsigned int>CityHash64WithSeed(&keys_str[k, 0], size, seed) % total,
+                                         &composition[0])
     return np.asarray(result)
 
 
@@ -95,17 +154,9 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list ke
     cdef const char* ch
     cdef object x
 
-    for k in xrange(n):
-        x = keys[k]
-        if not PyString_Check(x):
-            try:
-                x = str(x)
-            except:
-                x = ""
-
-        ch = PyString_AsString(x)
-        size = len(x)
-        result[k] = composition_part(Hash32WithSeed(ch, size, seed) % total, &composition[0])
+    for k in range(n):
+        ch = char_array_from_python_object(keys[k])
+        result[k] = composition_part(<unsigned int>CityHash64WithSeed(ch, strlen(ch), seed) % total, &composition[0])
     return np.asarray(result)
 
 
@@ -132,11 +183,12 @@ def increment_over_numpy_string(np.ndarray keys,
 
 
     with nogil:
-        for k in xrange(n):
+        for k in range(n):
             seg = segments[k]
-            for i in xrange(nb_seeds):
-                group = composition_part(Hash32WithSeed(&keys_str[k, 0], size, seeds[i]) % total, &composition[0])
-                for j in xrange(d):
+            for i in range(nb_seeds):
+                group = composition_part(<unsigned int>CityHash64WithSeed(&keys_str[k, 0], size, seeds[i]) % total,
+                                         &composition[0])
+                for j in range(d):
                     val = values[k, j]
                     if group:
                         increment[seg, i, j] -= val * ratio * extrapolate

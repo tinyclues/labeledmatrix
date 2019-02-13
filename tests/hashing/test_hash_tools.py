@@ -1,3 +1,4 @@
+
 import unittest
 
 import numpy as np
@@ -13,7 +14,7 @@ class HashToolsTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         np.random.seed(1234567)
-        cls.string_array = np.random.randint(97, 123, size=(10, 8)).astype('uint8').view('S8')[:, 0]
+        cls.string_array = np.random.randint(97, 123, size=(10, 8)).astype('uint8').view('S8').flatten()
 
     @classmethod
     def tearDownClass(cls):
@@ -95,7 +96,7 @@ class HashToolsTestCase(unittest.TestCase):
                                [[-17.5, -20., -22.5, ],
                                 [-17.5, -20., -22.5, ],
                                 [26.25, 30., 33.75],
-                                [-36.25, -38.75,  -41.25]],
+                                [-36.25, -38.75, -41.25]],
 
                                [[60., 63.75, 67.5, ],
                                 [-40., -42.5, -45., ],

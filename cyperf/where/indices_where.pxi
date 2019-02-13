@@ -72,7 +72,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where(ITER column, object value=
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i]:
             result.append(i)
     return result.asarray()
@@ -83,7 +83,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not(ITER column, object va
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if not column[i]:
             result.append(i)
     return result.asarray()
@@ -100,7 +100,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_in(ITER column, object val
         except:
             pass
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] in value:
             result.append(i)
     return result.asarray()
@@ -117,7 +117,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_in(ITER column, object
         except:
             pass
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] not in value:
             result.append(i)
     return result.asarray()
@@ -128,7 +128,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_eq(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] == value:
             result.append(i)
     return result.asarray()
@@ -139,7 +139,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_ne(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] != value:
             result.append(i)
     return result.asarray()
@@ -150,7 +150,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_lt(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] < value:
             result.append(i)
     return result.asarray()
@@ -161,7 +161,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_le(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] <= value:
             result.append(i)
     return result.asarray()
@@ -172,7 +172,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_gt(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] > value:
             result.append(i)
     return result.asarray()
@@ -183,7 +183,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_ge(ITER column, VAL_T valu
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column[i] >= value:
             result.append(i)
     return result.asarray()
@@ -195,7 +195,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_between(ITER column, objec
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if down <= column[i] < up:
             result.append(i)
     return result.asarray()
@@ -207,7 +207,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_contains(ITER column, obje
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         x = column[i]
         if has_contains_attr(x) and value in x:
             result.append(i)
@@ -220,7 +220,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_contains(ITER column, 
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         x = column[i]
         if has_contains_attr(x) and value not in x:
             result.append(i)
@@ -234,7 +234,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_operator(ITER column,
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if operator_function(column[i], value):
             result.append(i)
     return result.asarray()
@@ -245,7 +245,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_callable(ITER column, obje
     cdef ITYPE_t i, size = len(column)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if fn(column[i]):
             result.append(i)
     return result.asarray()
@@ -258,7 +258,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_same(ITER column1, ITER_BI
     cdef ITYPE_t i, size = len(column1)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column1[i] == column2[i]:
             result.append(i)
     return result.asarray()
@@ -271,7 +271,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] indices_where_not_same(ITER column1, ITE
     cdef ITYPE_t i, size = len(column1)
     cdef Vector result = Vector(size)
 
-    for i in xrange(size):
+    for i in range(size):
         if column1[i] != column2[i]:
             result.append(i)
     return result.asarray()

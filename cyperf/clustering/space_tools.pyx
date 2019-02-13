@@ -3,32 +3,31 @@
 #cython: overflowcheck=True
 #cython: unraisable_tracebacks=True
 
+cimport cython
 import numpy as np
 from cython.parallel import prange
-cimport cython
+
 from cyperf.tools.types import ITYPE, LTYPE, FTYPE as DTYPE
 cdef DTYPE_t INF = np.inf
 
+
 METRIC_LIST = ['euclidean', 'sqeuclidean', 'cityblock', 'chebychev']
 
-METRIC_DICT['euclidean'] = euclidean_distance
-METRIC_DICT['sqeuclidean'] = sqeuclidean_distance
-METRIC_DICT['cityblock'] = manhattan_distance
-METRIC_DICT['chebychev'] = chebychev_distance
-METRIC_DICT['idiv'] = idiv_distance
-METRIC_DICT['scalar_product'] = scalar_product
 
+cdef metric_func_type get_distance(str metric) except *:
+    if metric == 'euclidean': return euclidean_distance
+    if metric == 'sqeuclidean': return sqeuclidean_distance
+    if metric == 'cityblock': return manhattan_distance
+    if metric == 'chebychev': return chebychev_distance
+    if metric == 'idiv': return idiv_distance
+    if metric == 'scalar_product': return scalar_product
 
-cdef metric_func_type get_distance(string metric) except *:
-    if METRIC_DICT.count(metric):
-        return METRIC_DICT[metric]
-    else:
-        raise ValueError("unrecognized metric")
+    raise ValueError("unrecognized metric", metric)
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclidean'):
+cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, str metric='euclidean'):
     """
     >>> pairwise_flat([[1, 2], [1, 2], [1, 3]])
     array([0., 1., 1.], dtype=float32)
@@ -41,7 +40,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclid
 
     for i in prange(n_samples, nogil=True, schedule="dynamic"):
         it = i * (n_samples - 1) - i * (i + 1) // 2 - 1
-        for j in xrange(i+1, n_samples):
+        for j in range(i+1, n_samples):
             D[it + j] = dist_func(&X[i, 0], &X[j, 0], n_dim)
     out = np.asarray(D)
     return out
@@ -49,7 +48,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_flat(mat, string metric='euclid
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_square(mat, string metric='euclidean'):
+cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_square(mat, str metric='euclidean'):
     """
     >>> pairwise_square([[1, 2], [1, 2], [1, 3]])
     array([[0., 0., 1.],
@@ -63,7 +62,7 @@ cpdef np.ndarray[dtype=DTYPE_t, ndim=1] pairwise_square(mat, string metric='eucl
     cdef metric_func_type dist_func = get_distance(metric)
 
     for i in prange(n_samples, nogil=True, schedule="dynamic"):
-        for j in xrange(i+1, n_samples):
+        for j in range(i+1, n_samples):
             tmp = dist_func(&X[i, 0], &X[j, 0], n_dim)
             D[i, j] = tmp
             D[j, i] = tmp
@@ -90,7 +89,7 @@ cdef DTYPE_t[::1] _ward_pairwise_flat(np.ndarray mat, np.ndarray weight):
 
     for i in prange(n_samples, nogil=True, schedule="dynamic"):
         it = i * (n_samples - 1) - i * (i + 1) // 2 - 1
-        for j in xrange(i+1, n_samples):
+        for j in range(i+1, n_samples):
             tmp = sqeuclidean_distance(&X[i, 0], &X[j, 0], n_dim)
             D[it + j] = tmp * 2. * W[i] * W[j] / (W[i] + W[j])
     return np.asarray(D)
@@ -98,7 +97,7 @@ cdef DTYPE_t[::1] _ward_pairwise_flat(np.ndarray mat, np.ndarray weight):
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=ITYPE_t, ndim=1] fast_buddies(np.ndarray mat, string metric="sqeuclidean"):
+cpdef np.ndarray[dtype=ITYPE_t, ndim=1] fast_buddies(np.ndarray mat, str metric="sqeuclidean"):
     """
     >>> fast_buddies(np.array([[1, 2], [1, 2], [1, 3], [2, 2]]))
     array([1, 0, 0, 0], dtype=int32)
@@ -115,7 +114,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] fast_buddies(np.ndarray mat, string metr
     for i in prange(n_samples, nogil=True, schedule="dynamic"):
         val = INF
         ind = -1
-        for j in xrange(n_samples):
+        for j in range(n_samples):
             if j != i:
                 val_dist = dist_func(&X[i, 0], &X[j, 0], n_dim)
                 if val_dist < val:
@@ -127,9 +126,7 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] fast_buddies(np.ndarray mat, string metr
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=DTYPE_t, ndim=1] vector_distance(np.ndarray vector,
-                                                        np.ndarray mat,
-                                                        string metric="sqeuclidean"):
+cpdef np.ndarray[dtype=DTYPE_t, ndim=1] vector_distance(np.ndarray vector, np.ndarray mat, str metric="sqeuclidean"):
     """
     >>> vector_distance(np.array([1, 2]), np.array([[1, 2], [1, 2], [1, 3], [2, 2]]))
     array([0., 0., 1., 1.], dtype=float32)

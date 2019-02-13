@@ -1,3 +1,4 @@
+from six import PY3
 import numpy as np
 from cyperf.tools import take_indices
 
@@ -14,6 +15,7 @@ from cyperf.indexing.column_index import (positions_select_inplace, count_select
 
 from cyperf.indexing.column_index import (get_positions_multiindex, key_indices_multiindex,
                                           compact_multiindex, dispatch_tupled_values)
+from six.moves import range
 
 
 def get_index_dtype(size):
@@ -309,8 +311,8 @@ class ColumnIndex(object):
     def count(self):
         """
         >>> my_index = ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd'])
-        >>> my_index.count()
-        {'a': 2, 'c': 1, 'b': 2, 'd': 1}
+        >>> my_index.count() == {'a': 2, 'c': 1, 'b': 2, 'd': 1}
+        True
         """
         keys_indices = get_keys_indices(self.indptr, self.indices)
         return count(self._values(keys_indices), self.indptr, self.indices)
@@ -347,10 +349,10 @@ class ColumnIndex(object):
 
     def keys(self):
         """
-        >>> ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd']).keys()
-        ['a', 'c', 'b', 'd']
+        >>> sorted(ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd']).keys())
+        ['a', 'b', 'c', 'd']
         """
-        return self.position.keys()
+        return list(self.position.keys()) if PY3 else self.position.keys()
 
     def sorted_indices(self):
         """
@@ -480,8 +482,8 @@ class SelectIndex(ColumnIndex):
         >>> selection = [3, 5, 6]
         >>> select_col = take_indices(col, selection)
         >>> index_select = index.select(selection, select_col)
-        >>> index_select.count()
-        {'a': 1, 'b': 2}
+        >>> index_select.count() == {'a': 1, 'b': 2}
+        True
         """
         keys_indices = get_keys_indices_select(self.indptr, self.indices, self.reversed_indices,
                                                self.parent_indices, self.parent_indptr, self.length)
@@ -504,18 +506,18 @@ class SelectIndex(ColumnIndex):
         Returns: list of keys and np.array of reversed indices.
         Order of keys is that of parent ColumnIndex
 
-        >>> col = np.array(['b', 'a', 'c', 'a', 'c', 'b', 'b'])
+        >>> col = np.array(['b', 'a', 'c', 'a', 'c', 'b', 'b'], dtype='|S1')
         >>> index = ColumnIndex(col.__getitem__)
         >>> selection = [3, 5, 6]
         >>> select_col = take_indices(col, selection)
         >>> index_select = index.select(selection, select_col)
         >>> u, ind = index_select.reversed_index()
-        >>> u
-        array(['b', 'a'], dtype='|S1')
+        >>> np.all(u == np.array(['b', 'a'], dtype='|S1'))
+        True
         >>> ind
         array([1, 0, 0], dtype=int32)
-        >>> [u[x] for x in ind]
-        ['a', 'b', 'b']
+        >>> [u[x] for x in ind] == [b'a', b'b', b'b']
+        True
         """
         keys_positions, reversed_indices = \
             reversed_index_select(self.indptr, self.indices, self.reversed_indices,
@@ -582,7 +584,7 @@ class MultiIndex(ColumnIndex):
     >>> col_1 = ['toto', 'toto', 'tutu', 'toto', 'tutu', 'toto', 'toto']
     >>> index_0 = ColumnIndex(col_0)
     >>> index_1 = ColumnIndex(col_1)
-    >>> mi = MultiIndex(index_0, index_1, zip(col_0, col_1).__getitem__)
+    >>> mi = MultiIndex(index_0, index_1, list(zip(col_0, col_1)).__getitem__)
     >>> mi[('c', 'tutu')]
     array([], dtype=int32)
     >>> mi[('bobo', 'tutuu')]
@@ -654,7 +656,7 @@ class MultiIndex(ColumnIndex):
         for v in [None, False, np.nan, 3.1415, -1, 'a', ('t',), ('t', None)]:
             if self.get_positions_0([v])[0] == -1 and self.get_positions_1([v])[0] == -1:
                 return v
-        for _ in xrange(10 ** 7):
+        for _ in range(10 ** 7):
             v = np.random.rand()
             if self.get_positions_0([v])[0] == -1 and self.get_positions_1([v])[0] == -1:
                 return v

@@ -10,9 +10,10 @@ from cpython.dict cimport PyDict_GetItem
 from cpython.number cimport PyNumber_Check, PyNumber_Float, PyNumber_Long
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_AsEncodedString, PyUnicode_FromEncodedObject
 from cpython.string cimport PyString_Check, PyString_CheckExact
+from cpython.bytes cimport PyBytes_Check
 
 import numpy as np
-from types import DTYPE, LTYPE
+from cyperf.tools.types import DTYPE, LTYPE
 
 
 cdef bool check_values(ITER values, dtype=np.int32) except? False:
@@ -30,7 +31,7 @@ cpdef list take_indices_on_iterable(ITER iterable, INDICE_t indices):
     cdef long i, j, nb = len(indices)
     cdef list result = PyList_New(nb)
 
-    for i in xrange(nb):
+    for i in range(nb):
         with cython.wraparound(False), cython.boundscheck(False):
             j = indices[i]
         x = iterable[j]
@@ -44,7 +45,7 @@ cpdef ITER_NP take_indices_on_numpy(ITER_NP ar, INDICE_t indices):
     cdef long i, j, nb = len(indices)
     cdef ITER_NP result = np.empty(nb, dtype=ar.dtype)
 
-    for i in xrange(nb):
+    for i in range(nb):
         with cython.wraparound(False), cython.boundscheck(False):
             j = indices[i]
         result[i] = ar[j]
@@ -75,7 +76,7 @@ cpdef list apply_python_dict(dict mapping, ITER indices, object default, bool ke
     cdef object x, ind
     cdef list result = PyList_New(nb)
 
-    for i in xrange(nb):
+    for i in range(nb):
         ind = indices[i]
         obj = PyDict_GetItem(mapping, ind)
         if obj is not NULL:
@@ -113,7 +114,7 @@ def apply_python_dict_int(dict mapping, ITER indices, long default):
     cdef long nb = len(indices), i
     cdef long[::1] result = np.empty(nb, dtype=np.long)
 
-    for i in xrange(nb):
+    for i in range(nb):
         obj = PyDict_GetItem(mapping, indices[i])
         if obj is not NULL:
             result[i] = <long>(<object>obj)
@@ -134,7 +135,7 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
     >>> cast_to_float_array(x, 'safe') #doctest: +ELLIPSIS
     Traceback (most recent call last):
     ...
-    TypeError: a float is required
+    TypeError: ...
 
     >>> cast_to_float_array(x, 'same_kind')
     array([ 4.,  3., nan])
@@ -154,7 +155,7 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] result = np.empty(size, dtype=DTYPE)
 
     if casting == 'unsafe':
-        for i in xrange(size):
+        for i in range(size):
             if PyNumber_Check(values[i]):
                 result[i] = <DTYPE_t>values[i]
             else:
@@ -163,13 +164,13 @@ def cast_to_float_array(ITER values, str casting="unsafe", DTYPE_t default=np.na
                 except:
                     result[i] = default
     elif casting == 'same_kind':
-        for i in xrange(size):
+        for i in range(size):
             try:
                 result[i] = <DTYPE_t>values[i]
             except:
                 result[i] = default
     elif casting == 'safe':
-        for i in xrange(size):
+        for i in range(size):
             result[i] = <DTYPE_t>values[i]
     else:
         raise ValueError('casting should be one of {"unsafe", "safe", "same_kind"}')
@@ -205,7 +206,7 @@ def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iin
     cdef np.ndarray[dtype=LTYPE_t, ndim=1] result = np.empty(size, dtype=LTYPE)
 
     if casting == 'unsafe':
-        for i in xrange(size):
+        for i in range(size):
             if PyNumber_Check(values[i]):
                 if values[i] != values[i]:
                     result[i] = default
@@ -217,13 +218,13 @@ def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iin
                 except:
                     result[i] = default
     elif casting == 'same_kind':
-        for i in xrange(size):
+        for i in range(size):
             try:
                 result[i] = <LTYPE_t>values[i]
             except:
                 result[i] = default
     elif casting == 'safe':
-        for i in xrange(size):
+        for i in range(size):
             result[i] =  <LTYPE_t>values[i]
     else:
         raise ValueError('casting should be one of {"unsafe", "safe", "same_kind"}')
@@ -231,6 +232,7 @@ def cast_to_long_array(ITER values, str casting="unsafe", LTYPE_t default=np.iin
     return result
 
 
+# TO remove in PY3
 @cython.wraparound(False)
 @cython.boundscheck(False)
 def cast_to_ascii(ITER values, str default='`!#CoercerError'):
@@ -244,15 +246,14 @@ def cast_to_ascii(ITER values, str default='`!#CoercerError'):
     """
     cdef:
         long i, nb = len(values)
-        object x
-        str sx
+        object x, sx
         list result = []
 
-    for i in xrange(nb):
+    for i in range(nb):
         x = values[i]
         if PyUnicode_Check(x):
             sx = PyUnicode_AsEncodedString(x, 'ascii', 'ignore')
-        elif PyString_Check(x):
+        elif PyString_Check(x) or PyBytes_Check(x):
             sx = str(PyUnicode_FromEncodedObject(x, 'ascii', 'ignore'))
         else:
             try:
@@ -264,9 +265,10 @@ def cast_to_ascii(ITER values, str default='`!#CoercerError'):
     return result
 
 
+# TO remove in PY3
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def cast_to_unicode(ITER values, input_encoding='utf-8', unicode default=u'`!#CoercerError'):
+def cast_to_unicode(ITER values, char * input_encoding=b'utf-8', unicode default=u'`!#CoercerError'):
     """
     Equivalent (up to default value in case of error) to
     (unicode(string, self.input_encoding, errors='ignore') if isinstance(string, str) else string)\
@@ -277,15 +279,13 @@ def cast_to_unicode(ITER values, input_encoding='utf-8', unicode default=u'`!#Co
         long i, nb = len(values)
         object x, sx
         list result = []
-        char * ie = input_encoding
 
-    for i in xrange(nb):
+    for i in range(nb):
         x = values[i]
-        if PyString_Check(x):
-            sx = PyUnicode_AsEncodedString(PyUnicode_FromEncodedObject(x, ie, 'ignore'),
-                                           'utf-8', 'ignore')
-        elif PyUnicode_Check(x):
+        if PyUnicode_Check(x):
             sx = PyUnicode_AsEncodedString(x, 'utf-8', 'ignore')
+        elif PyString_Check(x) or PyBytes_Check(x):
+            sx = PyUnicode_AsEncodedString(PyUnicode_FromEncodedObject(x, input_encoding, 'ignore'), 'utf-8', 'ignore')
         else:
             try:
                 sx = unicode(x)
@@ -294,36 +294,6 @@ def cast_to_unicode(ITER values, input_encoding='utf-8', unicode default=u'`!#Co
         result.append(sx)
 
     return result
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-cpdef np.ndarray[dtype=np.int32_t, ndim=1] python_feature_hasher(ITER inp, int nb_feature):
-    """
-       Returns an index corresponding to the hash function of any kind of object modulo nb_features.
-       The hash function employed is the python hash function.
-
-        Parameters
-        ----------
-        inp : list of any kind of object (except list)
-        nb_feature : number of features (max: np.iinfo(np.int32).max)
-
-        Returns
-        -------
-        out : ndarray of indices (ndim=1)
-
-        Examples
-        --------
-        python_feature_hasher([1, 'toto', (1, 4), Error], 2**10)
-        array([1, 684, 846, 687], dtype=int32)
-
-    """
-    cdef long i, nb = len(inp)
-    cdef int[::1] result = np.empty(nb, dtype=np.int32)
-
-    for i in xrange(nb):
-        result[i] = <long>(hash(inp[i])) % nb_feature
-    return np.asarray(result)
 
 
 @cython.wraparound(False)
@@ -345,7 +315,7 @@ cpdef list inplace_default_setter(list inp,
     cdef:
         long i, nb = len(inp)
 
-    for i in xrange(nb):
+    for i in range(nb):
         if mask[i]:
             inp[i] = default
 
@@ -357,7 +327,7 @@ def build_safe_decorator(default, exceptions=(Exception, )):
     Pure python function but x2 faster when used from cython space
 
     >>> safe_int = build_safe_decorator(default=0)(int)
-    >>> map(safe_int, ['4', '4.1', 'RRRR', 5.4])
+    >>> list(map(safe_int, ['4', '4.1', 'RRRR', 5.4]))
     [4, 0, 0, 5]
     """
     def decorator(func):
@@ -521,7 +491,7 @@ cdef class Unifier(dict):
         cdef object x, out
         cdef dict unifier = <dict>self
 
-        for i in xrange(nb):
+        for i in range(nb):
             x = seq[i]
             obj = PyDict_GetItem(unifier, x)
             if obj is not NULL:

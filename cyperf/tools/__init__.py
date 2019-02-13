@@ -1,11 +1,11 @@
-
 import numpy as np
 from itertools import islice
 from scipy.special import expit
 
 from cyperf.tools.sort_tools import cython_argsort, parallel_sort
 from cyperf.tools.getter import (take_indices_on_numpy, take_indices_on_iterable,
-                                 apply_python_dict, cast_to_float_array, python_feature_hasher)
+                                 apply_python_dict, cast_to_float_array)
+from six.moves import map
 
 
 def parallel_unique(a):
@@ -142,7 +142,7 @@ def take_indices(iterable, indices, length=None):
         """
             Pure python analogue
         """
-        return map(iterable.__getitem__, indices)
+        return list(map(iterable.__getitem__, indices))
     if indices is None:
         return iterable  # without copy
     elif np.isscalar(indices):

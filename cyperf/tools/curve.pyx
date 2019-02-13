@@ -42,7 +42,7 @@ def round_up(const double[:] x, const double[:] y, int precision=2):
     cdef double old_xxi = -1, old_yyi = -1, xxi, yyi, displayed_xxi, displayed_yyi
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             xxi = my_round(x[i], scale)
             yyi = my_round(y[i], scale)
             if xxi != old_xxi or yyi != old_yyi:
@@ -64,7 +64,7 @@ def make_more_concave(const double[:] x, const double[:] y):
         long i, n = x.shape[0]
 
     with nogil:
-        for i in xrange(1, n - 1):
+        for i in range(1, n - 1):
             if (y[i] - y[i-1]) * (x[i+1] - x[i-1]) <= \
                (x[i] - x[i-1]) * (y[i+1] - y[i-1]):
                 mask[i] = 0

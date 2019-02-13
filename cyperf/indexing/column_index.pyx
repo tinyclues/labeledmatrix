@@ -53,7 +53,7 @@ cpdef INDICES_NP get_unique_indices(INDICES_NP_BIS positions, INDICES_NP indptr,
     cdef BOOL_t[::1] mask
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 size = indptr[pos + 1] - indptr[pos]
@@ -65,15 +65,15 @@ cpdef INDICES_NP get_unique_indices(INDICES_NP_BIS positions, INDICES_NP indptr,
     if count > 5 + len(indices) / (1 + total_size):  # constant 5 is arbitrary, but works well for uniform distribution
         mask = np.zeros(len(indices), dtype=BOOL)
         with nogil:
-            for i in xrange(nb):  # this can be done in parallel
+            for i in range(nb):  # this can be done in parallel
                 pos = positions[i]
                 if pos != -1:
-                    for k in xrange(indptr[pos], indptr[pos + 1]):
+                    for k in range(indptr[pos], indptr[pos + 1]):
                         mask[indices[k]] = 1
         return np.where(mask)[0]
     else:  # merge sort for small number of values (scales quadratically)
         result = np.zeros(0, dtype=indices.dtype)
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 # TODO: we can merge different slices following the binary tree
@@ -88,14 +88,14 @@ cpdef long unique_indices_inplace(ITER values, bool reverse, INDICES_NP position
     cdef object value
 
     if reverse:
-        for i in xrange(nb):
+        for i in range(nb):
             value = values[i]
             if PySet_Contains(seen, value) != 1:
                 PySet_Add(seen, value)
                 position[n_keys] = i
                 n_keys += 1
     else:
-        for i in xrange(nb-1, -1, -1):
+        for i in range(nb-1, -1, -1):
             value = values[i]
             if PySet_Contains(seen, value) != 1:
                 PySet_Add(seen, value)
@@ -113,7 +113,7 @@ cpdef dict factorize_inplace(ITER values, INDICES_NP reversed_indices):
     cdef PyObject *obj
     cdef object val
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = values[i]
         obj = PyDict_GetItem(key_position, val)
         if obj is not NULL:
@@ -147,18 +147,18 @@ cpdef tuple groupsort_indexer(INDICES_NP indptr, INDICES_NP_BIS reversed_indices
     cdef INDICES_NP indices = np.empty(nb, dtype=indptr.dtype)
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             ind = reversed_indices[i] + 1
             indptr[ind] += 1
 
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             if indptr[i + 1] > 0:
                 length += 1
             indptr[i + 1] += indptr[i]
 
 
         # while filling in indices array we increment indptrs
-        for i in xrange(nb):
+        for i in range(nb):
             ind = reversed_indices[i]
             indices[indptr[ind]] = i
             indptr[ind] += 1
@@ -166,7 +166,7 @@ cpdef tuple groupsort_indexer(INDICES_NP indptr, INDICES_NP_BIS reversed_indices
         # at the end instead of array [0, a, a+b, a+b+c, ...] we have [a, a+b, a+b+c, ...]
         # we move indptr array one step right
         pos = 0
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             ind = indptr[i]
             indptr[i] = pos
             pos = ind
@@ -181,7 +181,7 @@ cpdef INDICES_NP get_positions(dict position, ITER values, INDICES_NP reversed_i
     cdef long i, nb = len(values), pos
     cdef INDICES_NP positions = np.empty(nb, dtype=reversed_indices.dtype)
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = values[i]
         obj = PyDict_GetItem(position, val)
         if obj is not NULL:
@@ -200,7 +200,7 @@ cpdef INDICES_NP positions_select_inplace(INDICES_NP positions, INDICES_NP_BIS i
     cdef long i, nb = positions.shape[0], pos
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 if indptr[pos + 1] - indptr[pos] == 0:
@@ -220,7 +220,7 @@ cpdef INDICES_NP get_positions_multiindex(dict position, INDICES_NP reversed_ind
     cdef INDICES_NP positions = np.empty(nb, dtype=reversed_indices.dtype)
     cdef PyObject *obj
 
-    for i in xrange(nb):
+    for i in range(nb):
         pos_0 = positions_0[i]
         pos_1 = positions_1[i]
 
@@ -244,7 +244,7 @@ cpdef INDICES_NP get_size_batch(INDICES_NP_BIS positions, INDICES_NP indptr):
     cdef INDICES_NP result = np.zeros(nb, dtype=indptr.dtype)
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 result[i] = indptr[pos + 1] - indptr[pos]
@@ -258,7 +258,7 @@ cpdef tuple get_batch_indices(INDICES_NP_BIS positions, INDICES_NP indptr, INDIC
     cdef INDICES_NP result
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 size = indptr[pos + 1] - indptr[pos]
@@ -269,7 +269,7 @@ cpdef tuple get_batch_indices(INDICES_NP_BIS positions, INDICES_NP indptr, INDIC
     result = np.zeros(res_indptr[nb], dtype=indices.dtype)
     # TODO if we use Vector instead of an result array we can do everything in only one loop
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 memcpy(&result[res_indptr[i]], &indices[indptr[pos]], (res_indptr[i + 1] - res_indptr[i]) * itemsize)
@@ -282,7 +282,7 @@ cpdef INDICES_NP get_first_batch(INDICES_NP_BIS positions, INDICES_NP indptr, IN
     cdef INDICES_NP result = np.empty(nb, dtype=indptr.dtype)
 
     with nogil:
-        for i in xrange(nb):
+        for i in range(nb):
             pos = positions[i]
             if pos != -1:
                 result[i] = indices[indptr[pos]]
@@ -297,7 +297,7 @@ cpdef INDICES_NP sorted_indices(INDICES_NP_BIS sorted_keys_positions, INDICES_NP
     cdef int itemsize = indices.dtype.itemsize
 
     with nogil:
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             pos = sorted_keys_positions[i]
             size = indptr[pos + 1] - indptr[pos]
             memcpy(&result[count], &indices[indptr[pos]], size * itemsize)
@@ -326,7 +326,7 @@ cpdef INDICES_NP quantiles_indices(INDICES_NP_BIS sorted_keys_positions, INDICES
     cdef INDICES_NP boundary_indices = np.zeros(nb_of_quantiles - 1, dtype=actual_indices.dtype)
 
     with nogil:
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             pos = sorted_keys_positions[i]
             if pos != -1:
                 size = indptr[pos + 1] - indptr[pos]
@@ -349,7 +349,7 @@ cpdef tuple quantiles_indices_with_first(INDICES_NP_BIS sorted_keys_positions, I
     cdef INDICES_NP labels_indices = np.zeros(nb_of_quantiles, dtype=actual_indices.dtype)
 
     with nogil:
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             pos = sorted_keys_positions[i]
             if pos != -1:
                 size = indptr[pos + 1] - indptr[pos]
@@ -381,7 +381,7 @@ cpdef tuple quantiles_indices_with_most_common(INDICES_NP_BIS sorted_keys_positi
     cdef INDICES_NP labels_indices = np.zeros(nb_of_quantiles, dtype=actual_indices.dtype)
 
     with nogil:
-        for i in xrange(n_keys):
+        for i in range(n_keys):
             pos = sorted_keys_positions[i]
             if pos != -1:
                 size = indptr[pos + 1] - indptr[pos]
@@ -415,7 +415,7 @@ cpdef dict count(ITER keys, INDICES_NP indptr, INDICES_NP indices):
     cdef dict result = {}
     cdef long n_keys = len(keys), pos, start
 
-    for pos in xrange(n_keys):
+    for pos in range(n_keys):
         start = indptr[pos]
         result[keys[pos]] = indptr[pos + 1] - start
 
@@ -427,7 +427,7 @@ cpdef INDICES_NP key_indices_multiindex(INDICES_NP indptr, INDICES_NP indices):
     cdef INDICES_NP result = np.empty(nb, dtype=indices.dtype)
 
     with nogil:
-        for pos in xrange(nb):
+        for pos in range(nb):
             result[pos] = indices[indptr[pos]]
 
     return result
@@ -468,10 +468,10 @@ cpdef INDICES_NP deduplicate_indices(INDICES_NP indptr, INDICES_NP indices, str 
         raise ValueError('"take" must be either "first" or "last"')
 
     if take == 'first':
-        for i in xrange(nb):
+        for i in range(nb):
             unique_indices[i] = indices[indptr[i]]
     else:
-        for i in xrange(nb):
+        for i in range(nb):
             unique_indices[i] = indices[indptr[i + 1] - 1]
         inplace_parallel_sort(unique_indices)
     return unique_indices
@@ -501,7 +501,7 @@ cpdef INDICES_NP get_keys_indices(INDICES_NP indptr, INDICES_NP indices):
     cdef long pos, nb = indptr.shape[0] - 1
     cdef INDICES_NP keys_indices = np.zeros(nb, dtype=indices.dtype)
     with nogil:
-        for pos in xrange(nb):
+        for pos in range(nb):
             keys_indices[pos] = indices[indptr[pos]]
     return keys_indices
 
@@ -516,7 +516,7 @@ cpdef tuple reversed_index_select(INDICES_NP indptr, INDICES_NP indices, INDICES
         while i < nb:
             pos = reversed_indices[indices[i]]
             keys_positions[count] = parent_indices[parent_indptr[pos]]
-            for j in xrange(indptr[pos], indptr[pos + 1]):
+            for j in range(indptr[pos], indptr[pos + 1]):
                 ind = indices[j]
                 new_reversed_indices[ind] = count
             i = indptr[pos + 1]
@@ -553,11 +553,11 @@ cpdef tuple compact_select(ITER values, INDICES_NP indptr, INDICES_NP indices, I
     new_indices = np.zeros(indices.shape[0], dtype=indices.dtype)
     new_indptr = np.zeros(nb + 1, dtype=indptr.dtype)
 
-    for i in xrange(nb):
+    for i in range(nb):
         if new_reversed_indices[i] == -1:
             pos = reversed_indices[i]
             new_position[values[i]] = count
-            for j in xrange(indptr[pos], indptr[pos + 1]):
+            for j in range(indptr[pos], indptr[pos + 1]):
                 ind = indices[j]
                 new_reversed_indices[ind] = count
             size = indptr[pos + 1] - indptr[pos]
@@ -573,7 +573,7 @@ cpdef dict compact_multiindex(ITER values, INDICES_NP indptr, INDICES_NP indices
     cdef dict new_position = {}
     cdef long nb = indptr.shape[0] - 1, i, j
 
-    for i in xrange(nb):
+    for i in range(nb):
         j = indices[indptr[i]]
         new_position[values[j]] = reversed_indices[j]
 
@@ -585,7 +585,7 @@ cpdef tuple dispatch_tupled_values(list values, object default_value):
     cdef list result0 = [], result1 = []
     cdef object x, y, val
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = values[i]
         if PyTuple_CheckExact(val) and len(val) == 2:
             x, y = val

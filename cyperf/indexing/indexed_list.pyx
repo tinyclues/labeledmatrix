@@ -4,7 +4,6 @@
 # cython: unraisable_tracebacks=True
 # cython: infer_types=True
 
-from cytoolz import complement
 import numpy as np
 from cyperf.tools.types import ITYPE
 from cyperf.tools import parallel_unique
@@ -36,7 +35,7 @@ cpdef void inplace_reversed_index(ITER values, np.ndarray[ndim=1, dtype=INT1, mo
 
     assert len(indices) >= nb
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = values[i]
         obj = PyDict_GetItem(position, val)
         if obj is not NULL:
@@ -57,7 +56,7 @@ cpdef tuple reversed_index(ITER values):
     ([4, 'r', 2], array([0, 0, 1, 1, 2], dtype=int32))
     >>> reversed_index(range(4))
     ([0, 1, 2, 3], array([0, 1, 2, 3], dtype=int32))
-    >>> reversed_index(IndexedList(range(4)))
+    >>> reversed_index(IndexedList(list(range(4))))
     ([0, 1, 2, 3], array([0, 1, 2, 3], dtype=int32))
     """
     if isinstance(values, IndexedList):
@@ -72,7 +71,7 @@ cpdef tuple reversed_index(ITER values):
     cdef PyObject *obj
     cdef object val
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = values[i]
         obj = PyDict_GetItem(new_values, val)
         if obj is not NULL:
@@ -105,7 +104,7 @@ cpdef bool is_strictly_increasing(ITER x) except? 0:
         return x.size == 0 or np.all(x[1:] > x[:x.size - 1])
 
     cdef ITYPE_t i, nb = len(x)
-    for i in xrange(nb - 1):
+    for i in range(nb - 1):
         if x[i] >= x[i+1]:
             return 0
     return 1
@@ -130,7 +129,7 @@ cpdef bool is_increasing(ITER x) except? 0:
         return x.size == 0 or np.all(x[1:] >= x[:x.size - 1])
 
     cdef ITYPE_t i, nb = len(x)
-    for i in xrange(nb - 1):
+    for i in range(nb - 1):
         if x[i] > x[i+1]:
             return 0
     return 1
@@ -143,7 +142,7 @@ cpdef dict unique_index(ITER ll):
     cdef ITYPE_t i, nb = len(ll)
     cdef object val
 
-    for i in xrange(nb):
+    for i in range(nb):
         val = ll[i]
         if PyDict_Contains(result, val) == 1:
             raise ValueError('List should have unique values')
@@ -179,8 +178,8 @@ cdef class IndexedList:
         """
         >>> a = ['a', 'b', 'd', 'c']
         >>> aa = IndexedList(a)
-        >>> aa._index
-        {'a': 0, 'c': 3, 'b': 1, 'd': 2}
+        >>> aa._index == {'a': 0, 'c': 3, 'b': 1, 'd': 2}
+        True
         >>> aa.list
         ['a', 'b', 'd', 'c']
         >>> aa
@@ -289,7 +288,7 @@ cdef class IndexedList:
         if np.min(ind) < 0 or np.max(ind) >= len(self):
             raise IndexError('Indices out of bound')
         # feeding new variables
-        for i in xrange(nb):
+        for i in range(nb):
             val = my_list[ind[i]]
             result.append(val)
             index[val] = i
@@ -359,7 +358,7 @@ cdef class IndexedList:
                                                                 np.zeros(n2, dtype=ITYPE)])
         cdef object val
 
-        for i in xrange(n2):
+        for i in range(n2):
             val = ll[i]
             obj = PyDict_GetItem(self_index, val)
             if obj is not NULL:
@@ -426,7 +425,7 @@ cdef class IndexedList:
         cdef PyObject *obj
         cdef object val
 
-        for i in xrange(nb):
+        for i in range(nb):
             val = self_list[i]
             obj = PyDict_GetItem(other_index, val)
             if obj is not NULL:
@@ -464,7 +463,7 @@ cdef class IndexedList:
         if nb2 <= nb1:
             tmp_index = self._index
             tmp_list = other.list
-            for i in xrange(nb2):
+            for i in range(nb2):
                 val = tmp_list[i]
                 obj = PyDict_GetItem(tmp_index, val)
                 if obj is not NULL:
@@ -473,7 +472,7 @@ cdef class IndexedList:
         else:
             tmp_index = other._index
             tmp_list = self.list
-            for i in xrange(nb1):
+            for i in range(nb1):
                 val = tmp_list[i]
                 obj = PyDict_GetItem(tmp_index, val)
                 if obj is not NULL:
@@ -507,5 +506,5 @@ cdef class IndexedList:
             return IndexedList([]), []
         if not isinstance(other, IndexedList):
             other = IndexedList(other)
-        diff = IndexedList(filter(complement(other._index.has_key), self))
-        return diff, map(self._index.__getitem__, diff)
+        diff = IndexedList([x for x in self.list if x not in other._index])
+        return diff, list(map(self._index.__getitem__, diff))

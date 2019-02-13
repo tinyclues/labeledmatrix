@@ -11,7 +11,7 @@ from cython cimport floating
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.string cimport memcpy
 from libc.math cimport pow as _cpow
-from cyperf.tools.types cimport ITYPE_t, LTYPE_t, BOOL_t, bool, string, A, B, cmap
+from cyperf.tools.types cimport ITYPE_t, LTYPE_t, BOOL_t, bool, A, B
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
 
 ctypedef np.float32_t DTYPE_t
@@ -22,7 +22,7 @@ ctypedef tuple Shape_t
 cdef Shape_t pair_swap(Shape_t x)
 cpdef bool is_karmasparse(mat) except? 0
 cdef bool is_shape(tuple shape) except? 0
-cdef bool check_acceptable_format(string format) except 0
+cdef bool check_acceptable_format(str format) except 0
 cdef bool check_nonzero_shape(shape) except 0
 cdef bool check_bounds(ITYPE_t row, ITYPE_t upper_bound) except 0
 cdef bool check_ordered(ITYPE_t row0, ITYPE_t row1, bool strict) except 0
@@ -66,7 +66,7 @@ cdef inline double cpow(double x, double y) nogil:
 @cython.boundscheck(False)
 cdef inline void axpy(ITYPE_t n, DTYPE_t a, A * x, DTYPE_t * y) nogil:
     cdef int i
-    for i in xrange(n):
+    for i in range(n):
         y[i] += a * x[i]
     # daxpy(<int*>&n, &a, <double*>x, &m, <double*>y, &m)
     # saxpy(<int*>&n, &a, <float*>x, &m, <float*>y, &m)
@@ -77,7 +77,7 @@ cdef inline void axpy(ITYPE_t n, DTYPE_t a, A * x, DTYPE_t * y) nogil:
 cdef inline DTYPE_t _scalar_product(ITYPE_t n, A* x, B* y) nogil:
     cdef ITYPE_t k
     cdef DTYPE_t res = 0
-    for k in xrange(n):
+    for k in range(n):
         res += x[k] * y[k]
     return res
 
@@ -87,7 +87,7 @@ cdef inline DTYPE_t _scalar_product(ITYPE_t n, A* x, B* y) nogil:
 cdef inline DTYPE_t _scalar_product_left_squared(ITYPE_t n, A* x, B* y) nogil:
     cdef ITYPE_t k
     cdef DTYPE_t res = 0
-    for k in xrange(n):
+    for k in range(n):
         res += x[k] * x[k] * y[k]
     return res
 
@@ -118,13 +118,13 @@ cdef inline void _linear_error_dense(floating[:,::1] inp, DTYPE_t[:,::1] matrix,
             LTYPE_t i, k, j
             DTYPE_t mx, val, alpha
 
-        for i in xrange(n_rows):
+        for i in range(n_rows):
             mx = row[i]
-            for j in xrange(n_inter):
+            for j in range(n_inter):
                 alpha = inp[i, j]
                 if alpha != 0:
                     axpy(n_cols, alpha, &matrix[j, 0], tmp)
-            for k in xrange(n_cols):
+            for k in range(n_cols):
                 val = tmp[k] + mx
                 tmp[k] = column[k]
                 out[k] += val * val
@@ -140,11 +140,11 @@ cdef inline void _linear_error(LTYPE_t nrows, LTYPE_t n_cols,
             LTYPE_t i, k, l, j
             DTYPE_t mx, val, alpha
 
-        for i in xrange(nrows):
+        for i in range(nrows):
             mx = row[i]
-            for j in xrange(indptr[i], indptr[i + 1]):
+            for j in range(indptr[i], indptr[i + 1]):
                 axpy(n_cols, data[j], &matrix[indices[j], 0], tmp)
-            for k in xrange(n_cols):
+            for k in range(n_cols):
                 val = tmp[k] + mx
                 tmp[k] = column[k]
                 out[k] += val * val
@@ -161,10 +161,10 @@ cdef inline void kronii_dot(ITYPE_t nrows, LTYPE_t size, LTYPE_t* indptr, ITYPE_
     with nogil:
         for i in prange(nrows, schedule='guided'):
             out = 0
-            for j in xrange(indptr[i], indptr[i + 1]):
+            for j in range(indptr[i], indptr[i + 1]):
                 ind = indices[j]
                 dd = cpow(data[j], power)
-                for k in xrange(size):
+                for k in range(size):
                     out = out + dd * cpow(matrix[i * size + k], power) * factor[ind * size + k]
             result[i] = out
 
@@ -178,14 +178,14 @@ cdef inline void kronii_dot_transpose(LTYPE_t start, LTYPE_t stop, LTYPE_t size,
     cdef ITYPE_t ind
     cdef DTYPE_t dd, f
 
-    for i in xrange(start, stop):
+    for i in range(start, stop):
         f = factor[i]
         if f == 0:
             continue
-        for j in xrange(indptr[i], indptr[i + 1]):
+        for j in range(indptr[i], indptr[i + 1]):
             ind = indices[j]
             dd = cpow(data[j], power)
-            for k in xrange(size):
+            for k in range(size):
                 result[ind * size + k] += dd * cpow(matrix[i * size + k], power) * f
 
 
@@ -199,15 +199,15 @@ cdef inline void kronii_sparse_dot_transpose(LTYPE_t start, LTYPE_t stop, ITYPE_
     cdef LTYPE_t i, j, ind, begin, end, kk
     cdef DTYPE_t alpha, f
 
-    for i in xrange(start, stop):
+    for i in range(start, stop):
         begin, end = other_indptr[i], other_indptr[i + 1]
         f = factor[i]
         if f == 0:
             continue
-        for j in xrange(self_indptr[i], self_indptr[i + 1]):
+        for j in range(self_indptr[i], self_indptr[i + 1]):
             alpha = cpow(self_data[j], power)
             ind = self_indices[j] * other_ncols
-            for kk in xrange(begin, end):
+            for kk in range(begin, end):
                 result[ind + other_indices[kk]] += alpha * cpow(other_data[kk], power) * f
 
 
@@ -224,10 +224,10 @@ cdef inline void kronii_sparse_dot(ITYPE_t nrows, ITYPE_t other_ncols,
     for i in prange(nrows, nogil=True):
         start, stop = other_indptr[i], other_indptr[i + 1]
         out = 0
-        for j in xrange(self_indptr[i], self_indptr[i + 1]):
+        for j in range(self_indptr[i], self_indptr[i + 1]):
             alpha = cpow(self_data[j], power)
             ind = self_indices[j] * other_ncols
-            for kk in xrange(start, stop):
+            for kk in range(start, stop):
                 out = out + alpha * cpow(other_data[kk], power) * factor[ind + other_indices[kk]]
 
         result[i] = out
@@ -242,10 +242,10 @@ cdef inline void _misaligned_dense_vector_dot(ITYPE_t start, ITYPE_t end, LTYPE_
         LTYPE_t j
         A val
 
-    for i in xrange(start, end):
+    for i in range(start, end):
         val = vector[i]
         if val != 0:
-            for j in xrange(indptr[i], indptr[i + 1]):
+            for j in range(indptr[i], indptr[i + 1]):
                 out[indices[j]] += val * data[j]
 
 
@@ -257,8 +257,8 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t*
         ITYPE_t i
         LTYPE_t j
 
-    for i in xrange(start, stop):
-        for j in xrange(indptr[i], indptr[i + 1]):
+    for i in range(start, stop):
+        for j in range(indptr[i], indptr[i + 1]):
             out[i] = out[i] + data[j] * vector[indices[j]]
 
 
@@ -266,14 +266,14 @@ cdef inline void _aligned_dense_vector_dot(ITYPE_t start, ITYPE_t stop, LTYPE_t*
 @cython.boundscheck(False)
 cdef inline void mmax_loop(int n_cols, DTYPE_t* a,  A* b, DTYPE_t alpha) nogil:
     cdef int k
-    for k in xrange(n_cols):
+    for k in range(n_cols):
         a[k] = mmax(a[k], alpha * b[k])
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef inline void inplace_arange(ITYPE_t * x, int size) nogil:
-    for j in xrange(size): x[j] = j
+    for j in range(size): x[j] = j
 
 
 @cython.wraparound(False)
@@ -290,7 +290,7 @@ cdef inline DTYPE_t computed_quantile(DTYPE_t* data, DTYPE_t quantile, LTYPE_t s
     partial_sort(sorted_data, temp, size, size, False)
 
     # find where is the first zero
-    for j in xrange(size):
+    for j in range(size):
         if sorted_data[j] > 0:
             last_negative_indice = j - 1
             break
@@ -364,19 +364,15 @@ cdef inline DTYPE_t complement(DTYPE_t a, DTYPE_t b) nogil:
         return 0
 
 
-cdef cmap[string, DTYPE_t_binary_func] REDUCERLIST
-cdef DTYPE_t_binary_func get_reducer(string x) nogil except *
-
-
 cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
                                                      floating[::1] values, shape=*,
-                                                     string aggregator=*, DTYPE_t default=*)
+                                                     str aggregator=*, DTYPE_t default=*)
 
 
 cdef class KarmaSparse:
     cdef:
         readonly Shape_t shape
-        readonly string format
+        readonly str format
         bool has_sorted_indices
         bool has_canonical_format
         ITYPE_t[::1] indices
@@ -387,20 +383,18 @@ cdef class KarmaSparse:
 
     cdef bool aligned_axis(self, axis) except? 0
 
-    cdef bool has_format(self, string my_format) except 0
+    cdef str swap_format(self)
 
-    cdef inline string swap_format(self) nogil
+    cdef bool from_flat_array(self, data, indices, indptr, tuple shape, str format=*, bool copy=*,
+                              str aggregator=*) except 0
 
-    cdef bool from_flat_array(self, data, indices, indptr, tuple shape, string format=*, bool copy=*,
-                              string aggregator=*) except 0
-
-    cdef bool from_scipy_sparse(self, a, format=*, copy=*, string aggregator=*) except 0
+    cdef bool from_scipy_sparse(self, a, format=*, copy=*, str aggregator=*) except 0
 
     cdef bool from_zeros(self, tuple shape, format=*) except 0
 
     cdef bool from_dense(self, np.ndarray a, format=*) except 0
 
-    cdef bool from_coo(self, data, ix, iy, shape=*, format=*, string aggregator=*) except 0
+    cdef bool from_coo(self, data, ix, iy, shape=*, format=*, str aggregator=*) except 0
 
     cdef bool check_internal_structure(self, bool full=*) except 0
 
@@ -422,11 +416,11 @@ cdef class KarmaSparse:
 
     cdef bool _has_sorted_indices(self)
 
-    cdef bool sort_indices(self) except 0
+    cdef void sort_indices(self)
 
     cdef bool _has_canonical_format(self)
 
-    cdef bool make_canonical(self, string aggregator=*) except 0
+    cdef bool make_canonical(self, str aggregator=*) except 0
 
     cpdef KarmaSparse copy(self)
 
@@ -512,7 +506,7 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_axis_reduce(self, DTYPE_t_binary_func fn, bool only_nonzero)
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, string name, int axis, bool only_nonzero=*)
+    cdef np.ndarray[dtype=DTYPE_t, ndim=1] reducer(self, str name, int axis, bool only_nonzero=*)
 
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_sum(self)
 

@@ -1,19 +1,23 @@
+
 from itertools import product
 import numpy as np
 import unittest
 
 from cyperf.tools import slice_length, compose_slices, take_indices, parallel_unique
-from cyperf.tools.getter import (apply_python_dict, python_feature_hasher, cy_safe_intern,
+from cyperf.tools.getter import (apply_python_dict, cy_safe_intern,
                                  cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
                                  coalesce_is_not_none, coalesce_generic, Unifier)
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort,
                                      inplace_parallel_sort, parallel_sort)
+import six
+from six.moves import map
+from six.moves import range
 
 
 class GetterTestCase(unittest.TestCase):
 
     def test_argpartition(self):
-        for _ in xrange(100):
+        for _ in range(100):
             x = np.random.rand(np.random.randint(2, 1000))
             size = np.random.randint(1, len(x))
             res = cython_argpartition(x, size, False)
@@ -27,9 +31,9 @@ class GetterTestCase(unittest.TestCase):
                              size)
 
     def test_unique_parallel(self):
-        for _ in xrange(20):
+        for _ in range(20):
             x = np.random.randint(-np.random.randint(100), np.random.randint(100), np.random.randint(1000))
-            x /= 7
+            x //= 7
             for dtype in [np.int32, np.int64, np.float32, np.float64]:
                 y = x.astype(dtype)
                 np.testing.assert_equal(parallel_unique(y), np.unique(y))
@@ -41,7 +45,7 @@ class GetterTestCase(unittest.TestCase):
         np.testing.assert_equal(parallel_unique(x), np.unique(x))  # it should fall back on numpy implem
 
     def test_inplace_permutation(self):
-        for _ in xrange(1000):
+        for _ in range(1000):
             a = np.random.rand(np.random.randint(1, 1000))
             aa = a.copy()
             b = np.arange(len(a))
@@ -73,13 +77,8 @@ class GetterTestCase(unittest.TestCase):
         s2_array = np.array(['1', '2', '4'], dtype='S2')
         self.assertEqual(cy_safe_intern(s2_array), s2_array.tolist())
 
-    def test_python_feature_hasher(self):
-        features = [1, 'toto', (1, 4), 4.55]
-        result = python_feature_hasher(features, 2**10)
-        self.assertEqual(result.tolist(), [1, 684, 846, 716])
-
     def test_argsort(self):
-        for _ in xrange(10):
+        for _ in range(10):
             x = np.random.randn(50)
             y = np.argsort(x)
             np.testing.assert_equal(y, cython_argsort(x, x.shape[0], False))
@@ -101,7 +100,7 @@ class GetterTestCase(unittest.TestCase):
             np.testing.assert_equal(x[cython_argsort(x, x.shape[0], False)], np.sort(x))
             np.testing.assert_equal(x[cython_argsort(x, x.shape[0], True)], np.sort(x)[::-1])
 
-        for _ in xrange(1000):
+        for _ in range(1000):
             x = np.random.randint(0, 6, size=np.random.randint(4, 20))
             np.testing.assert_equal(x[cython_argsort(x, x.shape[0], False)], np.sort(x))
             np.testing.assert_equal(x[cython_argsort(x, x.shape[0], True)], np.sort(x)[::-1])
@@ -113,7 +112,7 @@ class GetterTestCase(unittest.TestCase):
         np.testing.assert_equal(x[cython_argsort(x, x.shape[0], False)], y)
 
     def test_parallel_sort(self):
-        for _ in xrange(100):
+        for _ in range(100):
             a = np.random.randn(np.random.randint(1000) + 1)
             a *= 1000
             for dtype in [np.float64, np.float32, np.int64, np.int32]:
@@ -208,27 +207,27 @@ class GetterTestCase(unittest.TestCase):
         np.testing.assert_equal(cast_to_long_array(np.array([[3, np.nan, 5.4]])), [[3, -9223372036854775808, 5]])
 
     def test_coerse_ascii(self):
-        arr = ['camelCase', '\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan, (), str]
-        self.assertEqual(cast_to_ascii(arr), ['camelCase', 'copge', 'copge', '1', 'nan', '()', "<type 'str'>"])
+        arr = [b'camelCase', b'\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan, ()]
+        self.assertEqual(cast_to_ascii(arr), ['camelCase', 'copge', b'copge', '1', 'nan', '()'])
 
         def py_ascii(x):
             return x.encode('ascii', errors='ignore') \
-                if isinstance(x, unicode) \
-                else str(unicode(x, 'ascii', errors='ignore')) \
-                if isinstance(x, basestring) else str(x)
-        self.assertEqual(cast_to_ascii(arr), map(py_ascii, arr))
+                if isinstance(x, six.text_type) \
+                else str(six.text_type(x, 'ascii', errors='ignore')) \
+                if isinstance(x, (str, bytes)) else str(x)
+        self.assertEqual(cast_to_ascii(arr), list(map(py_ascii, arr)))
 
     def test_coerse_unicode(self):
-        arr = ['camelCase', '\xe8cO\xa8e\xc3\xa9', '\xc3\xa90e', 1, np.nan, (), str]
+        arr = [b'camelCase', b'\xe8cO\xa8e\xc3\xa9', b'\xc3\xa90e', 1, np.nan, ()]
         self.assertEqual(cast_to_unicode(arr),
-                         ['camelCase', 'cOe\xc3\xa9', '\xc3\xa90e', u'1', 'nan', '()', "<type 'str'>"])
-        self.assertEqual(type(cast_to_unicode([1])[0]), unicode)
+                         [b'camelCase', b'cOe\xc3\xa9', b'\xc3\xa90e', u'1', 'nan', '()'])
+        self.assertEqual(type(cast_to_unicode([1])[0]), six.text_type)
 
         def py_uni(x):
-            return (unicode(x, 'utf-8', errors='ignore') if isinstance(x, str) else x)\
-                    .encode('utf-8', errors='ignore') if isinstance(x, basestring) else unicode(x)
+            return (six.text_type(x, 'utf-8', errors='ignore') if isinstance(x, bytes) else x)\
+                    .encode('utf-8', errors='ignore') if isinstance(x, bytes) else six.text_type(x)
 
-        self.assertEqual(cast_to_unicode(arr), map(py_uni, arr))
+        self.assertEqual(cast_to_unicode(arr), list(map(py_uni, arr)))
 
     def test_coalesce_is_not_none(self):
         self.assertEqual(coalesce_is_not_none(None, 0, None, 3, default=-1), 0)
@@ -250,7 +249,7 @@ class UnifierTestCase(unittest.TestCase):
         seq = [s1, s2, 4, [4, 2], (2, 4), (2, 4)]
 
         unified_seq = u.map(seq)
-        self.assertEquals(unified_seq, map(u.unify, seq))
+        self.assertEquals(unified_seq, list(map(u.unify, seq)))
         self.assertEquals(seq, unified_seq)
         self.assertEquals(u, {s1: s1, 4: 4, (2, 4): (2, 4)})
         self.assertIs(unified_seq[0], unified_seq[1])

@@ -15,7 +15,7 @@ from cyperf.tools import take_indices
 
 class TestDeduplication(unittest.TestCase):
     def test_two_integer_array_deduplication(self):
-        for _ in xrange(100):
+        for _ in range(100):
             a1 = np.random.randint(-100, np.random.randint(100) + 1, size=10**4)
             a2 = np.random.randint(-200, np.random.randint(100) + 1, size=10**4)
             ind, (u1, u2) = two_integer_array_deduplication(a1, a2)
@@ -64,9 +64,9 @@ class TestSortedDateIndex(unittest.TestCase):
         self.assertEqual(ii.get_window_indices('2017-03-28', lower=-6, upper=4), (1, 4))
         self.assertEqual(ii.get_window_indices('2017-03-28', lower=-100, upper=100), (0, 6))
 
-        self.assertEqual(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-6, upper=3)),
+        self.assertEqual(list(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-6, upper=3))),
                          [(1, 3), (3, 4)])
-        self.assertEqual(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-7, upper=4)),
+        self.assertEqual(list(zip(*ii.get_window_indices(['2017-03-28', '2017-03-29'], lower=-7, upper=4))),
                          [(1, 4), (1, 6)])
 
 
@@ -114,7 +114,7 @@ class TruncatedIndexUnsortedTestCase(unittest.TestCase):
         self.assertEqual(len(target_indices), 6)
         self.assertEqual(ks.nnz, 8)
         np.testing.assert_array_almost_equal(ks.toarray()[2],
-                                             [0.,  0.933033,  0.,  0.466516,  0.,  0.933033])
+                                             [0., 0.933033, 0., 0.466516,  0., 0.933033])
 
     def test_get_first_batch_window_indices_with_intensity(self):
         u, d = ['u1', 'u1', 'u2'], ['2017-03-13', '2017-03-23', '2017-04-02']
@@ -248,7 +248,9 @@ class TruncatedJoinNbTestCase(unittest.TestCase):
         d = np.random.randint(-30, 20, size=1000)
         ud = sorted(set(zip(u, d)))
         np.random.shuffle(ud)
-        u, d = zip(*ud)
+        u, d = list(zip(*ud))
+        # workaround for https://github.com/numpy/numpy/issues/10004
+        d = list(map(int, d))
         self.ref_date = np.asarray('2017-09-28', dtype='datetime64')
         self.ii_lookup = create_truncated_index(ColumnIndex(u), self.ref_date + np.array(d, dtype='timedelta64'))
 

@@ -7,7 +7,7 @@
 
 
 import numpy as np
-from types import ITYPE, DTYPE, LTYPE
+from cyperf.tools.types import ITYPE, DTYPE, LTYPE
 
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] cython_argpartition(A[:] xx, ITYPE_t nb,  bool reverse):
     """
@@ -143,7 +143,7 @@ cdef void partial_sort_decreasing_quick(A* dist, B* idx, LTYPE_t size, LTYPE_t m
             if dist[0] < dist[1]:
                 dual_swap(dist, idx, 0, 1)
     else:
-        left = size / 2
+        left = size // 2
         if dist[0] < dist[left]:
             dual_swap(dist, idx, 0, left)
         if dist[left] < dist[size - 1]:
@@ -188,7 +188,7 @@ cdef void partial_sort_increasing_quick(A* dist, B* idx, LTYPE_t size, LTYPE_t m
             if dist[0] > dist[1]:
                 dual_swap(dist, idx, 0, 1)
     else:
-        left = size / 2
+        left = size // 2
         if dist[0] > dist[left]:
             dual_swap(dist, idx, 0, left)
         if dist[left] > dist[size - 1]:

@@ -52,7 +52,7 @@ def sparse_argmax_dispatch(KarmaSparse matrix, int maximum_pressure, INT1[:] max
     user, topic = matrix.nonzero()
 
     with nogil:
-        for i in xrange(nnz):
+        for i in range(nnz):
             ind = sorted_indices[i]
             u, t = user[ind], topic[ind]
             if topic_user_rank[t] >= max_rank[t] or topic_volume[t] >= max_volume[t]:
@@ -64,7 +64,7 @@ def sparse_argmax_dispatch(KarmaSparse matrix, int maximum_pressure, INT1[:] max
                     topic_volume[t] += 1
             topic_user_rank[t] += 1
 
-            for j in xrange(nb_topic):
+            for j in range(nb_topic):
                 if is_active_topic[j]:
                     break
             else:
