@@ -63,7 +63,7 @@ requirements = ["numpy>=1.16",
                 "pandas>=0.22"]
 
 VERSION = "1"
-NB_COMPILE_JOBS = 1
+NB_COMPILE_JOBS = multiprocessing.cpu_count()
 
 
 def setup_given_extensions(extensions):
