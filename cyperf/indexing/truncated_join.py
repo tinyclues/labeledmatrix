@@ -5,7 +5,7 @@ from cyperf.tools import parallel_unique
 from cyperf.indexing.indexed_list import is_increasing
 
 from cyperf.matrix.routine import indices_truncation_lookup
-from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE
+from cyperf.matrix.karma_sparse import KarmaSparse
 
 from pandas.core.algorithms import htable
 from pandas import to_datetime
@@ -174,23 +174,6 @@ class SortedDateIndex(object):
         return self.interval_indices[d_lower]
 
 
-def _date_deltas_to_intensities(deltas, half_life):
-    """
-    Given deltas between dates and a half-life, returns 2 ** (deltas / half_life)
-
-    :param deltas: numeric array, difference between `source` and `target` dates on the relevant indices
-    :param half_life: numeric
-
-    :return: array
-    """
-    intensities = deltas.astype(DTYPE, copy=True)
-    intensities /= half_life
-    intensities.clip(-16, 16, out=intensities)
-    intensities *= np.log(2.)
-    np.exp(intensities, out=intensities)
-    return intensities
-
-
 class LookUpTruncatedIndex(object):
     def __init__(self, user_index, source_dates):
         """
@@ -232,6 +215,7 @@ class LookUpTruncatedIndex(object):
         assert len(target_dates) == len(target_users)
         assert lower < upper
         nb = nb or 0
+        half_life = half_life or 0
 
         target_users_position_in_source_index = self.user_index._get_positions(target_users)
         source_dates = self.source_dates.view(np.int)
@@ -249,24 +233,18 @@ class LookUpTruncatedIndex(object):
         def partial_ks(slice_):
             return indices_truncation_lookup(target_users_position_in_source_index[slice_], target_dates[slice_],
                                              self.user_index.indices, self.user_index.indptr, source_dates,
-                                             lower, upper, nb)
+                                             lower, upper, half_life, nb)
 
         nb_threads = get_open_mp_num_thread()
         if len(target_users_position_in_source_index) >= nb_threads:  # Parallel partition + merge
             pp = ThreadPool(nb_threads)
-            deltas, indices, indptr = _merge_ks_struct(pp.map(partial_ks,
+            data, indices, indptr = _merge_ks_struct(pp.map(partial_ks,
                                                               _slice_batches(len(target_users_position_in_source_index),
                                                                              nb_threads)))
             pp.close()
             pp.terminate()
         else:
-            deltas, indices, indptr = partial_ks(slice(None))
-
-        if half_life is not None:
-            data = _date_deltas_to_intensities(deltas, half_life)
-        else:
-            data = np.ones(len(deltas), dtype=DTYPE)
-        del deltas
+            data, indices, indptr = partial_ks(slice(None))
 
         ks = KarmaSparse((data, indices, indptr), format="csr",
                          shape=(len(indptr) - 1, self.user_index.indptr[-1]),

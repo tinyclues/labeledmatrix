@@ -1,5 +1,5 @@
 cimport cython
-from cyperf.tools.types cimport ITYPE_t, LTYPE_t, cmap, string, bool, A, B, INT1, INT2, INT3, ITER, ITER_BIS, BOOL_t
+from cyperf.tools.types cimport ITYPE_t, LTYPE_t, FTYPE_t, cmap, string, bool, A, B, INT1, INT2, INT3, ITER, ITER_BIS, BOOL_t
 from libc.math cimport log
 
 

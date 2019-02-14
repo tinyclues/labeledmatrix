@@ -4,7 +4,7 @@ from bisect import bisect_left as bisect_left_old
 
 import numpy as np
 from cyperf.matrix.routine import (bisect_left, batch_contains_mask, batch_is_exceptional_mask,
-                                   cy_safe_slug, cy_domain_from_email_lambda)
+                                   cy_safe_slug, cy_domain_from_email_lambda, indices_lookup)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 import six
 from six.moves import range
@@ -138,3 +138,47 @@ class RoutineTestCase(unittest.TestCase):
 
         np.testing.assert_array_equal(bisect_left(np.array(['1', '2', '77']), ['1', '12', '3']), [0, 1, 2])
         np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [1, 3, 12, 14]), [0, 2, 3, 4])
+
+
+class IndexLookupTestCase(unittest.TestCase):
+    def test_basic(self):
+        source_indices = np.array([2, 3,
+                                   1,
+                                   0, 4, 5])
+        source_indptr = np.array([0, 2, 3, 6])
+        positions = np.array([1, -1, 2])
+        data, indices, indptr = indices_lookup(positions, source_indices, source_indptr, 0)
+
+        ks = KarmaSparse((data, indices, indptr), (len(indptr) - 1, source_indptr[-1]), 'csr')
+        np.testing.assert_array_equal(ks.toarray(),
+                                      np.array([[0., 1., 0., 0., 0., 0.],
+                                                [0., 0., 0., 0., 0., 0.],
+                                                [1., 0., 0., 0., 1., 1.]]))
+
+    def test_last(self):
+        source_indices = np.array([2, 3,
+                                   1,
+                                   0, 4, 5])
+        source_indptr = np.array([0, 2, 3, 6])
+        positions = np.array([1, -1, 2])
+        data, indices, indptr = indices_lookup(positions, source_indices, source_indptr, 1)
+
+        ks = KarmaSparse((data, indices, indptr), (len(indptr) - 1, source_indptr[-1]), 'csr')
+        np.testing.assert_array_equal(ks.toarray(),
+                                      np.array([[0., 1., 0., 0., 0., 0.],
+                                                [0., 0., 0., 0., 0., 0.],
+                                                [0., 0., 0., 0., 0., 1.]]))
+
+    def test_first_2(self):
+        source_indices = np.array([2, 3,
+                                   1,
+                                   0, 4, 5])
+        source_indptr = np.array([0, 2, 3, 6])
+        positions = np.array([1, -1, 2])
+        data, indices, indptr = indices_lookup(positions, source_indices, source_indptr, -2)
+
+        ks = KarmaSparse((data, indices, indptr), (len(indptr) - 1, source_indptr[-1]), 'csr')
+        np.testing.assert_array_equal(ks.toarray(),
+                                      np.array([[0., 1., 0., 0., 0., 0.],
+                                                [0., 0., 0., 0., 0., 0.],
+                                                [1., 0., 0., 0., 1., 0.]]))

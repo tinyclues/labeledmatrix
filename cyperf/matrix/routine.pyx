@@ -13,13 +13,18 @@ from cpython.bytes cimport PyBytes_Check
 from cpython.list cimport PyList_Check
 from cpython.unicode cimport PyUnicode_Check, PyUnicode_FromEncodedObject, PyUnicode_AsUTF8String
 from cyperf.tools.sort_tools cimport partial_sort_decreasing_quick, partial_sort_increasing_quick
+from libc.math cimport fmin, fmax
 
 import numpy as np
 cimport numpy as np
-from cyperf.tools.types import LTYPE, BOOL
+from cyperf.tools.types import LTYPE, BOOL, FTYPE
 
 from cyperf.where.indices_where_long cimport Vector
 from cyperf.where.indices_where_long import Vector
+
+from cyperf.where.indices_where_float cimport Vector as FVector
+from cyperf.where.indices_where_float import Vector as FVector
+
 
 from cython.parallel import prange
 from collections import defaultdict
@@ -198,12 +203,20 @@ def idiv_flat(A[:] a, B[:] b, const double eps=10**-9):
     return res
 
 
+@cython.cdivision(True)
+cdef inline FTYPE_t time_delta_to_intensity(LTYPE_t delta, FTYPE_t half_life) nogil:
+    if half_life != 0.:
+        return 2. ** fmax(fmin(delta / half_life, 16.), -16.)
+    else:
+        return 1.
+
+
 # That can be viewed as new KarmaSparse operation
 @cython.wraparound(False)
 @cython.boundscheck(False)
 def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, LTYPE_t[::1] target_dates,
                               INT1[::1] source_index_indices, INT2[::1] source_index_indptr, LTYPE_t[::1] source_dates,
-                              LTYPE_t lower, LTYPE_t upper, INT1 nb):
+                              LTYPE_t lower, LTYPE_t upper, FTYPE_t half_life, INT1 nb):
     """
     :param target_users_position_in_source_index: array, position of the `target` user keys in the `source` user index
     :param target_dates: array, `target` dates
@@ -212,12 +225,13 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
     :param source_dates: array, `source` dates
     :param lower: int, relative lower bound of the date window
     :param upper: int, relative upper bound of the date window
+    :param half_life: float, decay to be applied to the time deltas in order to get the intensity
     :param nb: int, number of elements to keep
         if > 0: keeps only the most recent ones (closer to upper)
         if < 0: keeps only the most ancient ones (closer to lower)
         if 0: keeps all of them
 
-    :return: (truncated_deltas, truncated_indices, truncated_indptr) to create the ks_intensity
+    :return: (intensity, truncated_indices, truncated_indptr) to create the ks_intensity
     """
     assert len(target_users_position_in_source_index) == len(target_dates)
     assert source_index_indptr[len(source_index_indptr) - 1] == len(source_index_indices)
@@ -226,7 +240,7 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
     cdef LTYPE_t nrows = len(target_users_position_in_source_index)
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
-    cdef Vector truncated_deltas = Vector(2 * nrows)
+    cdef FVector truncated_intensity = FVector(2 * nrows)
     cdef Vector truncated_indices = Vector(2 * nrows)
     cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
@@ -269,8 +283,59 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
 
             for j in range(count):
                 truncated_indices.append(source_indices_one_user[j])
-                truncated_deltas.append(source_dates_one_user[j] - dd)
+                truncated_intensity.append(time_delta_to_intensity(source_dates_one_user[j] - dd, half_life))
 
         truncated_indptr[nrows] = truncated_indices.size()
 
-    return np.asarray(truncated_deltas), np.asarray(truncated_indices), np.asarray(truncated_indptr)
+    return np.asarray(truncated_intensity), np.asarray(truncated_indices), np.asarray(truncated_indptr)
+
+
+# That can be viewed as new KarmaSparse operation
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def indices_lookup(INT3[::1] target_users_position_in_source_index,
+                   INT1[::1] source_index_indices, INT2[::1] source_index_indptr,
+                   INT1 nb):
+    """
+    :param target_users_position_in_source_index: array, position of the `target` user keys in the `source` user index
+    :param source_index_indices: representation of the `source` user index
+    :param source_index_indptr: representation of the `source` user index
+    :param nb: int, number of elements to keep
+        if > 0: keeps only the most recent ones (assuming the source index is ordered)
+        if < 0: keeps only the most ancient ones (assuming the source index is ordered)
+        if 0: keeps all of them
+
+    :return: (intensity, indices, indptr) to create the ks_intensity
+    """
+    assert source_index_indptr[len(source_index_indptr) - 1] == len(source_index_indices)
+
+    cdef LTYPE_t nrows = len(target_users_position_in_source_index)
+
+    cdef Vector indices = Vector(2 * nrows)
+    cdef LTYPE_t[::1] indptr = np.zeros(nrows + 1, dtype=LTYPE)
+
+    cdef LTYPE_t j, p, start, stop, count
+
+    with nogil:
+        for i in range(nrows):
+            indptr[i] = indices.size()
+
+            p = target_users_position_in_source_index[i]
+            if p == -1:
+                continue
+
+            start = source_index_indptr[p]
+            stop = source_index_indptr[p + 1]
+            if nb < 0:
+                count = min(stop - start, - nb)
+                stop = start + count
+            elif nb > 0:
+                count = min(stop - start, nb)
+                start = stop - count
+
+            for j in range(start, stop):
+                indices.append(source_index_indices[j])
+
+        indptr[nrows] = indices.size()
+
+    return np.ones(len(indices), dtype=FTYPE), np.asarray(indices), np.asarray(indptr)

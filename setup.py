@@ -31,6 +31,7 @@ SOURCE_FILE = [
     'indexing/indexed_list.pyx',
     'where/indices_where_int.pyx',
     'where/indices_where_long.pyx',
+    'where/indices_where_float.pyx',
     'hashing/hash_tools.pyx']
 
 cargs = ['-O3', '-std=c++11', '-ffast-math', '-fopenmp', '-lgomp', '-msse4.2',
