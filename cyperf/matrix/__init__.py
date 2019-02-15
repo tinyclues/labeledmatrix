@@ -1,5 +1,4 @@
-
-
+from __future__ import absolute_import
 from cyperf.matrix.karma_sparse import np, is_karmasparse, linear_error_dense, DTYPE
 
 

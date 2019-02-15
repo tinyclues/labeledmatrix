@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import division   # see https://www.python.org/dev/peps/pep-0238/#abstract
 import numpy as np
 from itertools import islice
 from scipy.special import expit
