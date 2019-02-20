@@ -269,6 +269,23 @@ class TestKarmaSparse(unittest.TestCase):
         self.assertEqual(KarmaSparse(a.shape, format="csr").format, 'csr')
         self.assertEqual(KarmaSparse(a.shape, format="csc").format, 'csc')
 
+    def test_unique_indices_format(self):
+        for a in self.mf.iterator(dense=True):
+            ks = KarmaSparse(a).tocsr().nonzero_mask()
+            ks_copy = ks.copy()
+
+            # shuffle indices
+            for i in range(ks.shape[0]):
+                np.random.shuffle(ks.indices[ks.indptr[i]:ks.indptr[i + 1]])
+
+            ks_new = KarmaSparse((ks.data, ks.indices, ks.indptr), shape=ks.shape,
+                                 has_unique_indices=True, format=ks.format, copy=False)
+
+            ks_new.check_format()
+            self.assertEqual(id(ks_new.indices), id(ks.indices))
+            np_almost_equal(ks_copy, ks_new)
+            np_almost_equal(ks_copy.indices, ks_new.indices)
+
     def test_tocsr_tocsc(self):
         for a in self.mf.iterator(dense=True):
             ks = KarmaSparse(a)

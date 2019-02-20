@@ -240,8 +240,8 @@ class LookUpTruncatedIndex(object):
         if len(target_users_position_in_source_index) >= nb_threads:  # Parallel partition + merge
             pp = ThreadPool(nb_threads)
             data, indices, indptr = _merge_ks_struct(pp.map(partial_ks,
-                                                              _slice_batches(len(target_users_position_in_source_index),
-                                                                             nb_threads)))
+                                                            _slice_batches(len(target_users_position_in_source_index),
+                                                                           nb_threads)))
             pp.close()
             pp.terminate()
         else:
@@ -249,7 +249,7 @@ class LookUpTruncatedIndex(object):
 
         ks = KarmaSparse((data, indices, indptr), format="csr",
                          shape=(len(indptr) - 1, self.user_index.indptr[-1]),
-                         copy=False, has_sorted_indices=False, has_canonical_format=False)
+                         copy=False, has_unique_indice=True)
         source_indices, ks_compact = compactify_on_right(ks)
 
         # we may want to make a switch based on the compression rate

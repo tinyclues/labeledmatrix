@@ -104,7 +104,7 @@ cpdef KarmaSparse ks_diag(np.ndarray data, format="csr"):
     shape = data.shape[0]
     return KarmaSparse((data.copy(), np.arange(shape, dtype=ITYPE),
                         np.arange(shape + 1, dtype=LTYPE)),
-                       shape=(shape, shape), format=format, copy=False)
+                       shape=(shape, shape), format=format, copy=False, has_canonical_format=True)
 
 
 cpdef KarmaSparse new_karmasparse(arg, shape, format):
@@ -165,14 +165,14 @@ cdef bool check_nonzero_shape(shape) except 0:
     elif min(shape) < 0:
         raise ValueError('Shape values should be > 0, got {}'.format(shape))
     else:
-        return 1
+        return True
 
 
 cdef bool check_bounds(ITYPE_t row, ITYPE_t upper_bound) except 0:
     if not (0 <= row < upper_bound):
         raise IndexError("index out of bounds, 0 <= {} < {}".format(row, upper_bound))
     else:
-        return 1
+        return True
 
 
 cdef bool check_ordered(ITYPE_t row0, ITYPE_t row1, bool strict) except 0:
@@ -187,7 +187,7 @@ cdef bool check_shape_comptibility(x1, x2) except 0:
     if x1 != x2:
         raise ValueError('Incompatible shape, {} != {}'.format(x1, x2))
     else:
-        return 1
+        return True
 
 
 @cython.wraparound(False)
@@ -337,8 +337,10 @@ cdef class KarmaSparse:
      * ``indices``: Element positions in the matrix
      * ``indptr``: Element column (if CSC) or row (if CSR)
      * ``data``: Element data
-     * ``has_sorted_indices``: Are indices sorted (in an increasing order)
-     * ``has_canonical_format``: has_sorted_indices and there're no duplicate
+     * ``**format_info`` kwarg accepting
+        - ``has_sorted_indices``: Are indices sorted (in an increasing order)
+        - ``has_unique_indices``: Are indices unique (by row/column)
+        - ``has_canonical_format``: has_sorted_indices and there're no duplicate
 
     A valid KarmaSparse always assumed both attributes
     ``has_sorted_indices`` and ``has_canonical_format`` being ``True``.
@@ -405,9 +407,7 @@ cdef class KarmaSparse:
             return 0.
 
     def __cinit__(self, arg, shape=None, format=None, bool copy=True,
-                  bool has_sorted_indices=False,
-                  bool has_canonical_format=False,
-                  str aggregator=DEFAULT_AGG):
+                  str aggregator=DEFAULT_AGG, **format_info):
         if format is not None:
             # py2->py3 adapter
             if not isinstance(format, str):
@@ -420,9 +420,10 @@ cdef class KarmaSparse:
         if shape is not None:
             check_nonzero_shape(shape)
 
-        # those settings are useful only for from_flat_array input
-        self.has_sorted_indices = has_sorted_indices
-        self.has_canonical_format = has_canonical_format
+        # `optim_info` are useful only for `.from_flat_array` cases below
+        self.set_canonical_flag(format_info.pop('has_canonical_format', False),
+                                format_info.pop('has_sorted_indices', False),
+                                format_info.pop('has_unique_indices', False))
 
         if sp.issparse(arg):  # ScipySparse matrix
             self.from_scipy_sparse(arg, format, copy=copy, aggregator=aggregator)
@@ -432,8 +433,7 @@ cdef class KarmaSparse:
             if format is not None and arg.format != format:
                 arg = (<KarmaSparse?>arg).swap_slicing()
                 copy = False
-            self.has_sorted_indices = True
-            self.has_canonical_format = True
+            self.set_canonical_flag(True, True, True)
             self.from_flat_array(arg.data, arg.indices, arg.indptr, arg.shape, arg.format,
                                  copy=copy, aggregator=aggregator)
         elif isinstance(arg, tuple):
@@ -505,8 +505,13 @@ cdef class KarmaSparse:
     cdef str swap_format(self):
         return CSC if self.format == CSR else CSR
 
-    cdef bool from_flat_array(self, data, indices, indptr, tuple shape, str format=CSR,
-                              bool copy=True, str aggregator=DEFAULT_AGG) except 0:
+    cdef void set_canonical_flag(self, bool has_canonical_format, bool has_sorted_indices, bool has_unique_indices) nogil:
+        self.has_canonical_format = has_canonical_format or (has_sorted_indices and has_unique_indices)
+        self.has_sorted_indices = self.has_canonical_format or has_sorted_indices
+        self.has_unique_indices = self.has_canonical_format or has_unique_indices
+
+    cdef void from_flat_array(self, data, indices, indptr, tuple shape, str format=CSR,
+                              bool copy=True, str aggregator=DEFAULT_AGG) except *:
         check_nonzero_shape(shape)
         self.shape = shape
         check_acceptable_format(format)
@@ -522,9 +527,8 @@ cdef class KarmaSparse:
 
         self.check_internal_structure()
         self.make_canonical(aggregator=aggregator)
-        return 1
 
-    cdef bool from_scipy_sparse(self, a, format=None, copy=True, str aggregator=DEFAULT_AGG) except 0:
+    cdef void from_scipy_sparse(self, a, format=None, copy=True, str aggregator=DEFAULT_AGG) except *:
         assert sp.issparse(a), "Argument should be scipy.sparse matrix"
         check_nonzero_shape(a.shape)
         if format is None:
@@ -534,12 +538,10 @@ cdef class KarmaSparse:
                 format = CSR
         if format != a.format:
             a = getattr(sp, format + "_matrix")(a)
-        self.has_sorted_indices = a.has_sorted_indices
-        self.has_canonical_format = a.has_canonical_format
+        self.set_canonical_flag(a.has_canonical_format, a.has_sorted_indices, a.has_canonical_format)
         self.from_flat_array(a.data, a.indices, a.indptr, a.shape, a.format, copy, aggregator)
-        return 1
 
-    cdef bool from_zeros(self, tuple shape, format=None) except 0:  # dtype as argument
+    cdef void from_zeros(self, tuple shape, format=None) except *:  # dtype as argument
         check_nonzero_shape(shape)
         if format is None:
             format = CSR
@@ -551,11 +553,10 @@ cdef class KarmaSparse:
         indices = np.zeros(0, dtype=ITYPE)
         indptr = np.zeros(length, dtype=LTYPE)
         self.from_flat_array(data, indices, indptr, shape, format, copy=False)
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool from_dense(self, np.ndarray a, format=None) except 0:
+    cdef void from_dense(self, np.ndarray a, format=None) except *:
         if a.ndim <= 1:
             a = np.atleast_2d(a)  # embedding of 1-dim vector
         shape = tuple([a.shape[l] for l in range(a.ndim)])  # convert *int to tuple
@@ -591,14 +592,12 @@ cdef class KarmaSparse:
                 self.indptr[i + 1] = n
         self.prune()
         self.check_internal_structure()
-        self.has_sorted_indices = True
-        self.has_canonical_format = True
-        return 1
+        self.set_canonical_flag(True, True, True)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool from_coo(self, data, ix, iy,
-                       shape=None, format=None, str aggregator=DEFAULT_AGG) except 0:
+    cdef void from_coo(self, data, ix, iy,
+                       shape=None, format=None, str aggregator=DEFAULT_AGG) except *:
         if not (len(ix) == len(iy) == len(data)):
             raise ValueError("Incompatible size of coordinates and/or data : {}, ({}, {})"
                              .format(len(data), len(ix), len(iy)))
@@ -671,9 +670,8 @@ cdef class KarmaSparse:
 
         self.check_internal_structure()
         self.make_canonical(aggregator=aggregator)
-        return 1
 
-    cdef bool check_internal_structure(self, bool full=False) except 0:
+    cdef void check_internal_structure(self, bool full=False) except *:
         cdef Shape_t shape
 
         check_acceptable_format(self.format)
@@ -710,16 +708,15 @@ cdef class KarmaSparse:
                 raise ValueError('indices should be sorted.')
             if not self._has_canonical_format():
                 raise ValueError('indices have duplicate values.')
-        return 1
 
     def check_format(self):
-        if not (self.has_canonical_format and self.has_sorted_indices):
+        if not (self.has_canonical_format and self.has_sorted_indices and self.has_unique_indices):
             raise ValueError("KarmaSparse should have canonical format")
         self.check_internal_structure(1)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cpdef bool check_positive(self) except 0:
+    cpdef void check_positive(self) except *:
         cdef LTYPE_t total_nnz = self.data.shape[0]
         cdef LTYPE_t j
 
@@ -728,15 +725,12 @@ cdef class KarmaSparse:
                 if self.data[j] < 0:
                     raise ValueError('KarmaSparse contains negative values while only positive are expected')
 
-        return 1
-
     def repair_format(self):
-        self.has_sorted_indices = 0
-        self.has_canonical_format = 0
+        self.set_canonical_flag(False, False, False)
         self.make_canonical()
         self.check_format()
 
-    cdef bool prune(self) except 0:
+    cdef void prune(self) except *:
         self.check_internal_structure()
         # TODO : resize inplace if possible
         if max(self.data.shape[0], self.indices.shape[0]) >= 2 * self.get_nnz():
@@ -747,14 +741,13 @@ cdef class KarmaSparse:
             # without coping
             self.data = np.asarray(self.data)[:self.get_nnz()]
             self.indices = np.asarray(self.indices)[:self.get_nnz()]
-        return 1
 
     cdef LTYPE_t get_nnz(self) nogil except -1:
         return self.indptr[self.nrows]
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cpdef bool eliminate_zeros(self, DTYPE_t value=0.) except 0:
+    cpdef void eliminate_zeros(self, DTYPE_t value=0.) except *:
         cdef LTYPE_t nnz, row_end, j
         cdef ITYPE_t i
         cdef bool has_zero = 0
@@ -775,11 +768,10 @@ cdef class KarmaSparse:
                 if has_zero:
                     self.indptr[i + 1] = nnz
         self.prune()
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool keep_tril(self, ITYPE_t k=0) except 0:
+    cdef void keep_tril(self, ITYPE_t k=0) except *:
         """
         Inplace method for CSR format
         """
@@ -797,11 +789,10 @@ cdef class KarmaSparse:
                 row_end = self.indptr[i + 1]
                 self.indptr[i + 1] = nnz
         self.prune()
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool keep_triu(self, ITYPE_t k=0) except 0:
+    cdef void keep_triu(self, ITYPE_t k=0) except *:
         """
         Inplace method for CSR format
         """
@@ -819,7 +810,6 @@ cdef class KarmaSparse:
                 row_end = self.indptr[i + 1]
                 self.indptr[i + 1] = nnz
         self.prune()
-        return 1
 
     cpdef KarmaSparse tril(self, ITYPE_t k=0):
         """
@@ -874,7 +864,7 @@ cdef class KarmaSparse:
             nn = self.indptr[i + 1] - self.indptr[i]
             partial_sort(&self.indices[self.indptr[i]], &self.data[self.indptr[i]], nn, nn, 0)
 
-        self.has_sorted_indices = 1
+        self.has_sorted_indices = True
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -891,13 +881,12 @@ cdef class KarmaSparse:
                     if self.indices[jj] >= self.indices[jj + 1]:
                         self.has_canonical_format = 0
                         return 0
-            self.has_canonical_format = 1
-            self.has_sorted_indices = 1
+            self.set_canonical_flag(True, True, True)
             return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool make_canonical(self, str aggregator=DEFAULT_AGG) except 0:
+    cdef void make_canonical(self, str aggregator=DEFAULT_AGG) except *:
 
         cdef:
             LTYPE_t nnz, row_end, jj, temp
@@ -908,9 +897,12 @@ cdef class KarmaSparse:
 
         self.prune()
         if self.has_canonical_format or self._has_canonical_format():
-            return 1
+            # already ok
+            return
 
-        if self.has_sorted_indices or self._has_sorted_indices():
+        if self.has_unique_indices and not self.has_sorted_indices:
+            self.sort_indices()
+        elif self.has_sorted_indices or self._has_sorted_indices():
             # Case 1: already sorted indices
             with nogil:
                 row_end, nnz = 0, 0
@@ -956,8 +948,7 @@ cdef class KarmaSparse:
             self.sort_indices()
 
         self.prune()
-        self.has_canonical_format = 1
-        return 1
+        self.set_canonical_flag(True, True, True)
 
     def to_scipy_sparse(self, dtype=None, copy=True):
         return getattr(sp, self.format + "_matrix")((np.array(self.data, dtype=dtype, copy=copy),
@@ -967,8 +958,7 @@ cdef class KarmaSparse:
 
     cpdef KarmaSparse copy(self):
         cdef KarmaSparse res = KarmaSparse((self.data, self.indices, self.indptr),
-                                           self.shape, self.format, copy=True,
-                                           has_sorted_indices=1, has_canonical_format=1)
+                                           self.shape, self.format, copy=True, has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -1056,8 +1046,7 @@ cdef class KarmaSparse:
     cpdef KarmaSparse transpose(self, bool copy=True):
         cdef KarmaSparse res = KarmaSparse((self.data, self.indices, self.indptr),
                                            pair_swap(self.shape), self.swap_format(),
-                                           copy=copy,
-                                           has_sorted_indices=1, has_canonical_format=1)
+                                           copy=copy, has_canonical_format=True)
         return res
 
     cpdef KarmaSparse tocsr(self):
@@ -1090,8 +1079,7 @@ cdef class KarmaSparse:
                                             np.hstack([np.asarray(self.indptr),
                                                        self.get_nnz() * np.ones(nb_new_rows,
                                                                                 dtype=LTYPE)])),
-                                            shape, self.format, copy=copy,
-                                            has_sorted_indices=1, has_canonical_format=1)
+                                            shape, self.format, copy=copy, has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -1129,13 +1117,12 @@ cdef class KarmaSparse:
                 indptr[col] = last
                 last = temp
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr), self.shape,
-                                           self.swap_format(), copy=False,
-                                           has_sorted_indices=1, has_canonical_format=1)
+                                           self.swap_format(), copy=False, has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool scale_rows(self, np.ndarray factor) except 0:
+    cdef void scale_rows(self, np.ndarray factor) except *:
         check_shape_comptibility(factor.shape[0], self.nrows)
         cdef:
             ITYPE_t i
@@ -1145,11 +1132,10 @@ cdef class KarmaSparse:
         for i in prange(self.nrows, nogil=True, schedule='static'):
             for jj in range(self.indptr[i], self.indptr[i + 1]):
                 self.data[jj] *= fw[i]
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool scale_columns(self, np.ndarray factor) except 0:
+    cdef void scale_columns(self, np.ndarray factor) except *:
         check_shape_comptibility(factor.shape[0], self.ncols)
         cdef:
             LTYPE_t i
@@ -1158,7 +1144,6 @@ cdef class KarmaSparse:
         with nogil:
             for i in range(self.get_nnz()):
                 self.data[i] *= fw[self.indices[i]]
-        return 1
 
     cpdef KarmaSparse scale_along_axis(self, np.ndarray factor, axis):
         cdef KarmaSparse res = self.copy()
@@ -1181,8 +1166,7 @@ cdef class KarmaSparse:
         cdef KarmaSparse res = KarmaSparse((function(np.asarray(self.data), *function_args, **function_kwargs),
                                             np.array(self.indices, copy=True),
                                             np.array(self.indptr, copy=True)),
-                                           self.shape, self.format, copy=False,
-                                           has_sorted_indices=1, has_canonical_format=1)
+                                           self.shape, self.format, copy=False, has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -1236,8 +1220,7 @@ cdef class KarmaSparse:
         cdef KarmaSparse res = KarmaSparse((data, np.array(self.indices, copy=True),
                                            np.array(self.indptr, copy=True)),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -1275,8 +1258,7 @@ cdef class KarmaSparse:
         self.sort_indices()
         cdef KarmaSparse res = KarmaSparse((new_data, new_indices, new_indptr),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -1319,8 +1301,7 @@ cdef class KarmaSparse:
 
         cdef KarmaSparse res = KarmaSparse((new_data, new_indices, new_indptr),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -1364,8 +1345,7 @@ cdef class KarmaSparse:
         cdef KarmaSparse res = KarmaSparse((new_data, new_indices, new_indptr),
                                            shape=self.shape, format=self.format,
                                            copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -1393,8 +1373,7 @@ cdef class KarmaSparse:
         cdef KarmaSparse res = KarmaSparse((new_data, np.array(self.indices, copy=True),
                                             np.array(self.indptr, copy=True)),
                                            shape=self.shape, format=self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -1542,8 +1521,7 @@ cdef class KarmaSparse:
             memcpy(&indices[indptr[i]], &sort_index[i, 0], count[i] * sizeof(ITYPE_t))
             partial_sort(&indices[indptr[i]], &data[indptr[i]], count[i], count[i], 0)
         return KarmaSparse((data, indices, indptr),
-                           (nrows, ncols), self.format, copy=False,
-                           has_sorted_indices=1, has_canonical_format=1)
+                           (nrows, ncols), self.format, copy=False, has_canonical_format=True)
 
     cdef KarmaSparse generic_dot_top(self, KarmaSparse other,
                                      ITYPE_t nb_keep, DTYPE_t cutoff, DTYPE_t_binary_func op):
@@ -1742,8 +1720,7 @@ cdef class KarmaSparse:
                     indices[ii] = ind_pos + k
 
         shape = (self.nrows, self.ncols * ncols)
-        ks = KarmaSparse((data, indices, indptr), shape=shape, format="csr",
-                           copy=False, has_sorted_indices=True, has_canonical_format=True)
+        ks = KarmaSparse((data, indices, indptr), shape=shape, format="csr", copy=False, has_canonical_format=True)
         ks.eliminate_zeros()
         return ks
 
@@ -1775,8 +1752,7 @@ cdef class KarmaSparse:
                     pos = pos + 1
 
         shape = (self.nrows, self.ncols * other.ncols)
-        return KarmaSparse((data, indices, indptr), shape=shape, format="csr",
-                           copy=False, has_sorted_indices=True, has_canonical_format=True)
+        return KarmaSparse((data, indices, indptr), shape=shape, format="csr", copy=False, has_canonical_format=True)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -1949,7 +1925,6 @@ cdef class KarmaSparse:
             np.ndarray[dtype=ITYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=ITYPE)
             ITYPE_t i
 
-        self.make_canonical()
         for i in prange(self.nrows, nogil=True, schedule='static'):
             res[i] = self.indptr[i + 1] - self.indptr[i]
         return np.asarray(res)
@@ -2000,9 +1975,7 @@ cdef class KarmaSparse:
             partial_sort(&order[0], &rank[0], nn, nn, reverse=False)
         cdef KarmaSparse res = KarmaSparse((rank, np.array(self.indices, copy=True),
                                             np.array(self.indptr, copy=True)),
-                                           shape=self.shape, format=self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           shape=self.shape, format=self.format, copy=False, has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -2039,8 +2012,7 @@ cdef class KarmaSparse:
         cdef KarmaSparse res = KarmaSparse((rank, np.array(self.indices, copy=True),
                                             np.array(self.indptr, copy=True)),
                                            shape=self.shape, format=self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     cpdef KarmaSparse rank(self, axis, bool reverse=False):
@@ -2223,7 +2195,7 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef bool aligned_truncate_by_count_by_group(self, raw_group, ITYPE_t nb_keep) except 0:
+    cdef void aligned_truncate_by_count_by_group(self, raw_group, ITYPE_t nb_keep) except *:
         """
         Inplace method
         """
@@ -2259,7 +2231,6 @@ cdef class KarmaSparse:
 
         self.sort_indices()
         self.eliminate_zeros()
-        return 1
 
     cpdef KarmaSparse truncate_by_count_by_groups(self, group, ITYPE_t nb, axis=1):
         """
@@ -2966,7 +2937,7 @@ cdef class KarmaSparse:
                            np.array(self.indices, copy=True),
                            np.array(self.indptr, copy=True)),
                           self.shape, self.format, copy=False,
-                          has_sorted_indices=1, has_canonical_format=1)
+                          has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -3012,8 +2983,7 @@ cdef class KarmaSparse:
                           np.array(self.indices, copy=True),
                           np.array(self.indptr, copy=True)),
                           self.shape, self.format, copy=False,
-                          has_sorted_indices=1,
-                          has_canonical_format=1)
+                          has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -3044,8 +3014,7 @@ cdef class KarmaSparse:
                            np.array(self.indices, copy=True),
                            np.array(self.indptr, copy=True)),
                            self.shape, self.format, copy=False,
-                           has_sorted_indices=1,
-                           has_canonical_format=1)
+                           has_canonical_format=True)
         return res
 
     def mask_dot(self, a, b, str mask_mode="last"):
@@ -3105,8 +3074,7 @@ cdef class KarmaSparse:
 
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -3168,8 +3136,7 @@ cdef class KarmaSparse:
                     pos_b = pos_b + 1
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -3235,8 +3202,7 @@ cdef class KarmaSparse:
                 pos_b = pos_b + 1
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
                                            self.shape, self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         res.eliminate_zeros()
         return res
 
@@ -3456,7 +3422,7 @@ cdef class KarmaSparse:
         check_bounds(col, self.ncols)
         return self.aligned_get_single_element(row, col)
 
-    cdef bool check_arrays(self, np.ndarray rows, np.ndarray cols) except 0:
+    cdef void check_arrays(self, np.ndarray rows, np.ndarray cols) except *:
         assert rows.ndim == 1
         assert cols.ndim == 1
         check_shape_comptibility(rows.shape[0], cols.shape[0])
@@ -3472,7 +3438,6 @@ cdef class KarmaSparse:
         check_bounds(maxx, self.shape[0])
         check_bounds(miny, self.shape[1])
         check_bounds(maxy, self.shape[1])
-        return 1
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -3540,8 +3505,7 @@ cdef class KarmaSparse:
            shape = (col1 - col0, nrows)
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr), shape=shape,
                                            format=self.format, copy=False,
-                                           has_sorted_indices=1,
-                                           has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -3572,7 +3536,7 @@ cdef class KarmaSparse:
         shape = (nrows, self.ncols) if self.format == CSR else (self.ncols, nrows)
         cdef KarmaSparse res = KarmaSparse((data, indices, indptr),
                                            shape=shape, format=self.format, copy=False,
-                                           has_sorted_indices=1, has_canonical_format=1)
+                                           has_canonical_format=True)
         return res
 
     @cython.wraparound(False)
@@ -3615,17 +3579,14 @@ cdef class KarmaSparse:
                 memcpy(&new_indices[indptr[i]], &self.indices[self.indptr[row]], size * sizeof(ITYPE_t))
             shape = (length, self.ncols) if axis == 1 else (self.ncols, length)
             res = KarmaSparse((data, new_indices, indptr),
-                              shape=shape, format=self.format, copy=False,
-                              has_sorted_indices=1, has_canonical_format=1)
+                              shape=shape, format=self.format, copy=False, has_canonical_format=True)
             return res
         else: # non-aligned axis
             data = np.ones(length, dtype=DTYPE)
             indptr = np.arange(length + 1, dtype=LTYPE)
             extractor = KarmaSparse((data, indices, indptr),
                                     shape=(length, dim),
-                                    format=CSR, copy=False,
-                                    has_sorted_indices=1,
-                                    has_canonical_format=1).tocsc()
+                                    format=CSR, copy=False, has_canonical_format=True).tocsc()
             if axis == 1:
                 return extractor.dot(self)
             else:

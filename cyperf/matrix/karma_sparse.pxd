@@ -373,6 +373,7 @@ cdef class KarmaSparse:
     cdef:
         readonly Shape_t shape
         readonly str format
+        bool has_unique_indices
         bool has_sorted_indices
         bool has_canonical_format
         ITYPE_t[::1] indices
@@ -381,34 +382,36 @@ cdef class KarmaSparse:
         ITYPE_t nrows
         ITYPE_t ncols
 
+    cdef void set_canonical_flag(self, bool has_canonical_format, bool has_sorted_indices, bool has_unique_indices) nogil
+
     cdef bool aligned_axis(self, axis) except? 0
 
     cdef str swap_format(self)
 
-    cdef bool from_flat_array(self, data, indices, indptr, tuple shape, str format=*, bool copy=*,
-                              str aggregator=*) except 0
+    cdef void from_flat_array(self, data, indices, indptr, tuple shape, str format=*, bool copy=*,
+                              str aggregator=*) except *
 
-    cdef bool from_scipy_sparse(self, a, format=*, copy=*, str aggregator=*) except 0
+    cdef void from_scipy_sparse(self, a, format=*, copy=*, str aggregator=*) except *
 
-    cdef bool from_zeros(self, tuple shape, format=*) except 0
+    cdef void from_zeros(self, tuple shape, format=*) except *
 
-    cdef bool from_dense(self, np.ndarray a, format=*) except 0
+    cdef void from_dense(self, np.ndarray a, format=*) except *
 
-    cdef bool from_coo(self, data, ix, iy, shape=*, format=*, str aggregator=*) except 0
+    cdef void from_coo(self, data, ix, iy, shape=*, format=*, str aggregator=*) except *
 
-    cdef bool check_internal_structure(self, bool full=*) except 0
+    cdef void check_internal_structure(self, bool full=*) except *
 
-    cpdef bool check_positive(self) except 0
+    cpdef void check_positive(self) except *
 
-    cdef bool prune(self) except 0
+    cdef void prune(self) except *
 
     cdef LTYPE_t get_nnz(self) nogil except -1
 
-    cpdef bool eliminate_zeros(self, DTYPE_t value=*) except 0
+    cpdef void eliminate_zeros(self, DTYPE_t value=*) except *
 
-    cdef bool keep_tril(self, ITYPE_t k=*) except 0
+    cdef void keep_tril(self, ITYPE_t k=*) except *
 
-    cdef bool keep_triu(self, ITYPE_t k=*) except 0
+    cdef void keep_triu(self, ITYPE_t k=*) except *
 
     cpdef KarmaSparse tril(self, ITYPE_t k=*)
 
@@ -420,7 +423,7 @@ cdef class KarmaSparse:
 
     cdef bool _has_canonical_format(self)
 
-    cdef bool make_canonical(self, str aggregator=*) except 0
+    cdef void make_canonical(self, str aggregator=*) except *
 
     cpdef KarmaSparse copy(self)
 
@@ -442,9 +445,9 @@ cdef class KarmaSparse:
 
     cdef KarmaSparse swap_slicing(self)
 
-    cdef bool scale_rows(self, np.ndarray factor) except 0
+    cdef void scale_rows(self, np.ndarray factor) except *
 
-    cdef bool scale_columns(self, np.ndarray factor) except 0
+    cdef void scale_columns(self, np.ndarray factor) except *
 
     cpdef KarmaSparse apply_pointwise_function(self, function, function_args=*, function_kwargs=*)
 
@@ -553,7 +556,7 @@ cdef class KarmaSparse:
                                                     DTYPE_t homo_factor,
                                                     DTYPE_t hetero_factor)
 
-    cdef bool aligned_truncate_by_count_by_group(self, raw_group, ITYPE_t nb_keep) except 0
+    cdef void aligned_truncate_by_count_by_group(self, raw_group, ITYPE_t nb_keep) except *
 
     cpdef KarmaSparse truncate_by_count_by_groups(self, group, ITYPE_t nb, axis=*)
 
@@ -615,7 +618,7 @@ cdef class KarmaSparse:
 
     cdef DTYPE_t get_single_element(self, ITYPE_t row, ITYPE_t col) except? -1
 
-    cdef bool check_arrays(self, np.ndarray rows, np.ndarray cols) except 0
+    cdef void check_arrays(self, np.ndarray rows, np.ndarray cols) except *
 
     cdef np.ndarray[DTYPE_t, ndim=1] sample_values(self, row_list, col_list)
 
