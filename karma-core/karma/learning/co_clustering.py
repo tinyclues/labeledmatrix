@@ -113,7 +113,7 @@ class CoClustering(object):
             w_indices = np.random.randint(0, self.ranks[0], self.n)
             self.w = KarmaSparse((np.ones(self.n, dtype=DTYPE), w_indices, np.arange(self.n + 1)),
                                  shape=((self.n, self.ranks[0])),
-                                 format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
+                                 format="csr", copy=False, has_canonical_format=True)
         else:
             self.w = w
         self.w_old = self.w
@@ -122,7 +122,7 @@ class CoClustering(object):
             h_indices = np.random.randint(0, self.ranks[1], self.m)
             self.h = KarmaSparse((np.ones(self.m, dtype=DTYPE), h_indices, np.arange(self.m + 1)),
                                  shape=((self.m, self.ranks[1])),
-                                 format="csr", copy=False, has_sorted_indices=True, has_canonical_format=True)
+                                 format="csr", copy=False, has_canonical_format=True)
         else:
             self.h = h
         self.h_old = self.h
