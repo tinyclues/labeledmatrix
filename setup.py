@@ -64,7 +64,7 @@ requirements = ["numpy>=1.16",
                 "pandas>=0.22"]
 
 VERSION = "1"
-NB_COMPILE_JOBS = multiprocessing.cpu_count()
+NB_COMPILE_JOBS = 8
 
 
 def setup_given_extensions(extensions):
@@ -82,6 +82,7 @@ def setup_extensions_in_sequential():
 
 
 def setup_extensions_in_parallel():
+    cythonize(EXTENSIONS, nthreads=NB_COMPILE_JOBS, compiler_directives=compiler_directives)
     pool = multiprocessing.Pool(processes=NB_COMPILE_JOBS)
     pool.map(setup_given_extensions, EXTENSIONS)
     pool.close()
