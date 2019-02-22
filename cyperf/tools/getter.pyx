@@ -16,7 +16,7 @@ import numpy as np
 from cyperf.tools.types import DTYPE, LTYPE
 
 
-cdef bool check_values(ITER values, dtype=np.int32) except? False:
+cpdef bool check_values(ITER values, dtype=np.int32) except? False:
     assert PySequence_Check(values)
     if len(values) > np.iinfo(dtype).max:
         raise MemoryError("Length of list is too large : {} > {}"

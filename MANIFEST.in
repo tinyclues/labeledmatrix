@@ -1,0 +1,5 @@
+include MANIFEST.in
+include *.txt
+recursive-include cyperf/tools *.pyx.in *.pxd.in
+recursive-include cyperf *.pyx *.pxd *.py *.pxi *.cc *.h
+global-exclude *.pyc *.pyo *.pyd *.swp *.bak *~

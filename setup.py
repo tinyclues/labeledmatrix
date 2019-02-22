@@ -1,12 +1,12 @@
-#
-# Copyright tinyclues, All rights reserved
-#
+import os
 import sys
 from glob import glob
 import multiprocessing
 
 from setuptools import find_packages, setup
+from pip._internal.req import parse_requirements
 from Cython.Build import cythonize
+from Cython import Tempita as tempita
 from Cython.Distutils.extension import Extension
 
 import numpy as np
@@ -14,25 +14,27 @@ from numpy.distutils.misc_util import get_info
 
 root_path = 'cyperf'
 
+
+# trying to sort in increasing compilation time to get more win from parallel build
 SOURCE_FILE = [
     'clustering/sparse_affinity_propagation.pyx',
     'clustering/hierarchical.pyx',
     'clustering/space_tools.pyx',
     'clustering/heap.pyx',
+    'hashing/hash_tools.pyx',
     'matrix/karma_sparse.pyx',
     'matrix/routine.pyx',
     'matrix/rank_dispatch.pyx',
     'matrix/argmax_dispatch.pyx',
+    'tools/types.pyx',
     'tools/getter.pyx',
     'tools/sort_tools.pyx',
-    'tools/types.pyx',
     'tools/curve.pyx',
     'indexing/column_index.pyx',
     'indexing/indexed_list.pyx',
-    'where/indices_where_int.pyx',
-    'where/indices_where_long.pyx',
-    'where/indices_where_float.pyx',
-    'hashing/hash_tools.pyx']
+    'where/cy_filter.pyx']
+
+TEMPLATE_SOURCE = ['tools/vector.pyx.in']
 
 cargs = ['-O3', '-std=c++11', '-ffast-math', '-fopenmp', '-lgomp', '-msse4.2',
          '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable']
@@ -42,6 +44,27 @@ info = get_info('npymath')
 
 compiler_directives = {'language_level': sys.version_info[0], 'embedsignature': True}
 
+
+def render_tempita_pyx(file_path):
+    source = [root_path + '/' + file_path]
+
+    pxd_source = root_path + '/' + file_path.replace('.pyx.in', '.pxd.in')
+    if os.path.exists(pxd_source):
+        source.append(pxd_source)
+
+    for f_name in source:
+        destination = f_name.rstrip('.in')
+        if os.path.exists(destination) and (os.stat(f_name).st_mtime < os.stat(destination).st_mtime):
+            continue
+        with open(f_name, "r") as f:
+            tmpl = f.read()
+        pyxcontent = tempita.sub(tmpl)
+        with open(destination, "w") as f:
+            f.write(pyxcontent)
+
+    return file_path.rstrip('.in')
+
+
 EXTENSIONS = [Extension(root_path + '.' + f.replace('.pyx', '').replace('/', '.'),
                         glob(root_path + '/' + f),
                         language="c++",
@@ -49,19 +72,10 @@ EXTENSIONS = [Extension(root_path + '.' + f.replace('.pyx', '').replace('/', '.'
                         library_dirs=info['library_dirs'],
                         libraries=info['libraries'],
                         extra_compile_args=cargs,
-                        extra_link_args=largs) for f in SOURCE_FILE]
+                        extra_link_args=largs)
+              for f in [render_tempita_pyx(f) for f in TEMPLATE_SOURCE] + SOURCE_FILE]
 
-
-#
-# Requirements here declare to the _users_ of this lib, what are the dependencies to run it properly.
-# /!\ This must be kept in sync with requirements.txt
-#    Unfortunately, a `parse_requirements("requirements.txt")` will not work, as this setup.py is ran by tox
-#    within a virtualenv in a separate directory
-#
-requirements = ["numpy>=1.16",
-                "scipy>=1.2",
-                "cython>=0.29",
-                "pandas>=0.22"]
+requirements = [str(i.req) for i in parse_requirements("requirements.txt", session=False)]
 
 VERSION = "1"
 NB_COMPILE_JOBS = 8
@@ -82,7 +96,6 @@ def setup_extensions_in_sequential():
 
 
 def setup_extensions_in_parallel():
-    cythonize(EXTENSIONS, nthreads=NB_COMPILE_JOBS, compiler_directives=compiler_directives)
     pool = multiprocessing.Pool(processes=NB_COMPILE_JOBS)
     pool.map(setup_given_extensions, EXTENSIONS)
     pool.close()

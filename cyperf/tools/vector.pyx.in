@@ -1,0 +1,101 @@
+#cython: wraparound=False
+#cython: boundscheck=False
+
+import numpy as np
+from cyperf.tools.types cimport A
+
+class stdvector_base:
+     pass
+
+
+{{py:
+
+dtypes = (
+    ('int32', 'np.int32_t'),
+    ('int64', 'np.int64_t'),
+    ('float32', 'np.float32_t'),
+    ('float64', 'np.float64_t')
+)
+
+# type_name, c_type, dtype
+def get_dispatch(dtypes):
+    for name, c_type in dtypes:
+        yield name, c_type
+}}
+
+{{for name, c_type in get_dispatch(dtypes)}}
+
+cdef class {{name}}Vector:
+
+    def __cinit__(self, long reserve=1):
+        self.exported = False
+        self.vector_buffer.reserve(reserve)
+
+    def __getitem__(self, long i):
+        if i < 0: i += len(self)
+        if i < 0 or i >= len(self):
+            raise IndexError(i)
+        return self.vector_buffer[i]
+
+    def __dealloc__(self):
+        self.vector_buffer.clear()
+
+    def __len__(self):
+        return self.size()
+
+    cdef size_t size(self) nogil:
+        return self.vector_buffer.size()
+
+    cdef inline void append(self, {{c_type}} x) nogil:
+        self.vector_buffer.push_back(x)
+
+    # py push_back&extend methods are here for tests
+    def push_back(self, x):
+        if self.exported:
+            raise RuntimeError('Vector already exported')
+        self.append(x)
+
+    def extend(self, A[:] arr):
+        if self.exported:
+            raise RuntimeError('Vector already exported')
+
+        cdef size_t i
+        with nogil:
+            for i in range(len(arr)):
+                self.append(<{{c_type}}>arr[i])
+
+    def __array__(self):
+        return self.asarray()
+
+    cpdef np.ndarray[dtype={{c_type}}, ndim=1, mode="c"] asarray(self):
+        """
+        returning a view (without a copy) on Vector as numpy array.
+
+        For trick to pass by buffer and avoid any data being copied, see:
+        http://docs.scipy.org/doc/numpy/reference/arrays.interface.html
+        http://docs.cython.org/src/userguide/buffer.html
+        https://jakevdp.github.io/blog/2014/05/05/introduction-to-the-python-buffer-protocol/
+        https://developers.google.com/protocol-buffers/docs/pythontutorial#extending-a-protocol-buffer
+        """
+        if self.exported:
+            raise RuntimeError('Vector already exported')
+
+        self.vector_buffer.shrink_to_fit()  # this needs c++11
+
+        dtype = np.dtype(np.{{name}})
+        if len(self) == 0:
+            return np.array([], dtype=dtype)
+
+        base = stdvector_base()
+        base.__array_interface__ = dict(
+            data = (<np.uintp_t>self.vector_buffer.data(), False),
+            descr = dtype.descr,
+            shape = (self.vector_buffer.size(),),
+            strides = (dtype.itemsize,),
+            typestr = dtype.str,
+            version = 3)
+        base.Vector = self
+        self.exported = True
+        return np.asarray(base)
+
+{{endfor}}

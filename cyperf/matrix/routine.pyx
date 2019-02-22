@@ -19,11 +19,10 @@ import numpy as np
 cimport numpy as np
 from cyperf.tools.types import LTYPE, BOOL, FTYPE
 
-from cyperf.where.indices_where_long cimport Vector
-from cyperf.where.indices_where_long import Vector
-
-from cyperf.where.indices_where_float cimport Vector as FVector
-from cyperf.where.indices_where_float import Vector as FVector
+from cyperf.tools.vector import int64Vector
+from cyperf.tools.vector cimport int64Vector
+from cyperf.tools.vector import float32Vector
+from cyperf.tools.vector cimport float32Vector
 
 
 from cython.parallel import prange
@@ -240,8 +239,8 @@ def indices_truncation_lookup(INT3[::1] target_users_position_in_source_index, L
     cdef LTYPE_t nrows = len(target_users_position_in_source_index)
     cdef LTYPE_t NAT = np.datetime64('NaT').astype(LTYPE)
 
-    cdef FVector truncated_intensity = FVector(2 * nrows)
-    cdef Vector truncated_indices = Vector(2 * nrows)
+    cdef float32Vector truncated_intensity = float32Vector(2 * nrows)
+    cdef int64Vector truncated_indices = int64Vector(2 * nrows)
     cdef LTYPE_t[::1] truncated_indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     cdef LTYPE_t j, i, dd, uu, date, ind, p, count
@@ -311,7 +310,7 @@ def indices_lookup(INT3[::1] target_users_position_in_source_index,
 
     cdef LTYPE_t nrows = len(target_users_position_in_source_index)
 
-    cdef Vector indices = Vector(2 * nrows)
+    cdef int64Vector indices = int64Vector(2 * nrows)
     cdef LTYPE_t[::1] indptr = np.zeros(nrows + 1, dtype=LTYPE)
 
     cdef LTYPE_t j, p, start, stop, count

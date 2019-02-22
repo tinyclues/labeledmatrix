@@ -3,7 +3,7 @@ import unittest
 from numpy.testing import assert_equal
 from cyperf.where import (indices_where_between, np, indices_where_same, indices_where_not_same, indices_where_ge,
                           indices_where_gt, indices_where, indices_where_not, indices_where_eq, indices_where_ne,
-                          indices_where_lt, indices_where_le)
+                          indices_where_lt, indices_where_le, fast_filter)
 from six import PY3
 
 
@@ -12,6 +12,12 @@ class testWhere(unittest.TestCase):
     array1 = np.arange(4).astype('S')
     array2 = np.array(['x', '', 'xx', 'y', '', 'z'], dtype='S')
     array3 = np.array([]).astype('S')
+
+    def test_fast_filter(self):
+        assert_equal(indices_where_eq(self.array1, b'1'), fast_filter('eq', b'1')(self.array1))
+        assert_equal(indices_where_le(self.array1, b'2'), fast_filter('le', b'2')(self.array1))
+        assert_equal(indices_where_between(self.array2, (b'x', b'y')),
+                     fast_filter('between', (b'x', b'y'))(self.array2))
 
     def test_indices_where(self):
         assert_equal(indices_where(self.array1), np.arange(4))

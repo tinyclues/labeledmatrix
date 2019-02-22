@@ -9,12 +9,41 @@ from cyperf.tools.getter import (apply_python_dict, cy_safe_intern,
                                  coalesce_is_not_none, coalesce_generic, Unifier)
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort,
                                      inplace_parallel_sort, parallel_sort)
+from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
+
 import six
 from six.moves import map
 from six.moves import range
 
 
 class GetterTestCase(unittest.TestCase):
+
+    def test_vector_int32(self):
+        for v in [int32Vector(), int64Vector(), float32Vector(), float64Vector()]:
+
+            self.assertFalse(v.exported)
+            v.push_back(-4.)
+            self.assertFalse(v.exported)
+
+            v.extend(np.arange(4))
+            arr = np.asarray(v)
+            self.assertTrue(v.exported)
+            self.assertEquals(arr.dtype, getattr(np, v.__class__.__name__.split('Vector')[0]))
+            np.testing.assert_equal(arr, [-4, 0, 1, 2, 3])
+
+            with self.assertRaises(RuntimeError):
+                np.asarray(v)
+
+            with self.assertRaises(RuntimeError):
+                v.push_back(5)
+
+            with self.assertRaises(RuntimeError):
+                v.extend(np.arange(4))
+
+            arr[2] = -12
+            self.assertEquals(arr[0], -4)
+            self.assertEquals(arr[-1], 3)
+            self.assertEquals(arr[2], -12)
 
     def test_argpartition(self):
         for _ in range(100):

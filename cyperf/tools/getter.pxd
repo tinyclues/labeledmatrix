@@ -10,7 +10,7 @@ ctypedef fused INDICE_t:
     object
 
 
-cdef bool check_values(ITER values, dtype=*) except? False
+cpdef bool check_values(ITER values, dtype=*) except? False
 cpdef list take_indices_on_iterable(ITER iterable, INDICE_t indices)
 cpdef ITER_NP take_indices_on_numpy(ITER_NP ar, INDICE_t indices)
 cpdef list apply_python_dict(dict mapping, ITER indices, object default, bool keep_same)
