@@ -13,7 +13,6 @@ from cyperf.matrix.karma_sparse import is_karmasparse
 from cyperf.matrix import linear_error
 
 from karma.learning.lasso_gram import lasso_gram
-from karma import KarmaSetup
 from karma.thread_setter import blas_threads, open_mp_threads
 from karma.learning.utils import VirtualDirectProduct
 from karma.learning.matrix_utils import second_moment
@@ -21,7 +20,7 @@ from karma.learning.matrix_utils import second_moment
 __all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments']
 
 
-def compute_indices_and_model_rank(dataframe, x, y, model_rank, min_model_rank,
+def compute_indices_and_model_rank(X, Y, model_rank, min_model_rank,
                                    cv=None, nb_threads=None):
     """
     >>> from karma.synthetic.regression import regression_dataframe
@@ -35,21 +34,23 @@ def compute_indices_and_model_rank(dataframe, x, y, model_rank, min_model_rank,
     ...                           noise=0., logistic=False, missing_rate=0)
 
     # model_rank is the full set of variables
-    >>> indices, model_rank = compute_indices_and_model_rank(dd, "x", "y", 20, None)
+    >>> X = np.asarray(dd['x'][:])
+    >>> Y = np.asarray(dd['y'][:])
+    >>> indices, model_rank = compute_indices_and_model_rank(X, Y, 20, None)
     >>> model_rank == 10
     True
     >>> np.all(indices == np.arange(10))
     True
 
     # fixed model_rank
-    >>> indices, model_rank = compute_indices_and_model_rank(dd, "x", "y", 5, None)
+    >>> indices, model_rank = compute_indices_and_model_rank(X, Y, 5, None)
     >>> model_rank == 5
     True
     >>> len(indices) == model_rank
     True
 
     # best model_rank
-    >>> indices, model_rank = compute_indices_and_model_rank(dd, "x", "y", None, None )
+    >>> indices, model_rank = compute_indices_and_model_rank(X, Y, None, None)
     >>> model_rank == 7
     True
     >>> np.all(indices == np.arange(3,10))
@@ -58,14 +59,14 @@ def compute_indices_and_model_rank(dataframe, x, y, model_rank, min_model_rank,
     # best model_rank with cv
     >>> from sklearn.model_selection import KFold
     >>> cv = KFold(n_splits=5)
-    >>> indices_, model_rank_ = compute_indices_and_model_rank(dd, "x", "y", None, None, cv=cv)
+    >>> indices_, model_rank_ = compute_indices_and_model_rank(X, Y, None, None, cv=cv)
     >>> model_rank == model_rank_
     True
     >>> np.all(indices == indices_)
     True
 
     # min_model_rank under true rank
-    >>> indices__, model_rank__ = compute_indices_and_model_rank(dd, "x", "y", None, 4)
+    >>> indices__, model_rank__ = compute_indices_and_model_rank(X, Y, None, 4)
     >>> model_rank == model_rank__
     True
     >>> np.all(indices == indices__)
@@ -73,44 +74,41 @@ def compute_indices_and_model_rank(dataframe, x, y, model_rank, min_model_rank,
 
     # right now min_model_rank is not strictly enforced
     # min_model_rank over true rank
-    >>> indices, model_rank = compute_indices_and_model_rank(dd, "x", "y", None, 8)
+    >>> indices, model_rank = compute_indices_and_model_rank(X, Y, None, 8)
     >>> model_rank >= 7
     True
 
     # recompute with fixed rank gives same model
-    >>> indices_guessed, model_rank_guessed = compute_indices_and_model_rank(dd, "x", "y", None, None, cv=cv)
-    >>> np.all(compute_indices_and_model_rank(dd, "x", "y", model_rank_guessed, None, cv=cv)[0] == indices_guessed)
+    >>> indices_guessed, model_rank_guessed = compute_indices_and_model_rank(X, Y, None, None, cv=cv)
+    >>> np.all(compute_indices_and_model_rank(X, Y, model_rank_guessed, None, cv=cv)[0] == indices_guessed)
     True
     """
-    dim = dataframe[x].vectorial_shape()[0]
+    dim = X.shape[1]
 
     if model_rank is None:
         # no fixed model_rank input, find the best one
-        indices, betas, intercepts = best_model_cv(dataframe, x, y, cv=cv, n_jobs=nb_threads)
+        indices, betas, intercepts = best_model_cv(X, Y, cv=cv, n_jobs=nb_threads)
         model_rank = indices.shape[0]
         if min_model_rank and model_rank < min_model_rank:
             # best model_rank is less than required minimum,
             # we need to compute the lasso path up until this minimum rank to have the correct indices
             # ideally this should be done in best_model_cv directly. Unfortunately the underlying sklearn class
             # model isn't nicely suited for this task. To investigate?
-            betas, intercepts = lassopath(dataframe, x, y, min_model_rank)
+            betas, intercepts = lassopath(X, Y, min_model_rank)
             model_rank = max(min(model_rank, len(betas) - 1), 0)
             indices = betas[model_rank].nonzero()[0]
     elif model_rank < dim:
-        betas, intercepts = lassopath(dataframe, x, y, model_rank)
+        betas, intercepts = lassopath(X, Y, model_rank)
         model_rank = max(min(model_rank, len(betas) - 1), 0)
         indices = betas[model_rank].nonzero()[0]
     else:  # full set of variables is used here!
         model_rank = dim
         indices = np.arange(dim, dtype=np.int)
-    if KarmaSetup.verbose:
-        print 'LOGISTIC_LASSO on column {} uses model_rank : {}'.format(x, model_rank)
-        print "LOGISTIC_LASSO takes the following coordinates :"
-        print [dataframe[x].coordinates[e] for e in indices]
+
     return indices, model_rank
 
 
-def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
+def best_model_cv(X, Y, cv=None, n_jobs=None):
     """
     Compute the indices of the relevant variables using LARS-lasso (see Elements of Statistical Learning around p68).
     Non-zero indices
@@ -124,7 +122,9 @@ def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
     >>> ori_betas[zero_indices] = 0.
     >>> dd = regression_dataframe(200, dim=10, coeff_dist=np.random.uniform, law=ori_betas,
     ...                           noise=0., logistic=False, missing_rate=0)
-    >>> indices, betas, intercepts = best_model_cv(dd, "x", "y")
+    >>> X = np.asarray(dd['x'][:])
+    >>> Y = np.asarray(dd['y'][:])
+    >>> indices, betas, intercepts = best_model_cv(X, Y)
     >>> betas.shape == (10,)
     True
     >>> np.all(indices == non_zero_indices)
@@ -135,36 +135,34 @@ def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
     True
     >>> from sklearn.model_selection import KFold
     >>> cv = KFold(n_splits=4)
-    >>> indices, betas, intercept = best_model_cv(dd, "x", "y", cv=cv)
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv)
     >>> betas.shape == (10,)
     True
     >>> np.all(indices == non_zero_indices)
     True
 
     # constant input
-    >>> ddd = DataFrame(list(0.2 * np.ones((10,3,3))), columns=['a', 'b', 'c'])
-    >>> ddd['y'] = Column(np.arange(10))
-    >>> indices, betas, intercept = best_model_cv(ddd, "a", "y", cv=cv)
+    >>> X = 0.2 * np.ones((10,3))
+    >>> Y = np.arange(10)
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv)
     >>> indices.shape, betas.shape
     ((0,), (0,))
     >>> intercept
     4.5
 
     # constant output
-    >>> ddd = DataFrame(list(np.random.rand(10,3,3)), columns=['a', 'b', 'c'])
-    >>> ddd['y'] = Column(np.ones(10, dtype='float'))
-    >>> indices, betas, intercept = best_model_cv(ddd, "a", "y", cv=cv)
+    >>> X = np.random.rand(10,3)
+    >>> Y = np.ones(10, dtype='float')
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv)
     >>> indices.shape, betas.shape
     ((0,), (0,))
     >>> intercept
     1.0
     """
-    X = dataframe[x][:]
     if is_karmasparse(X):
         X = X.to_scipy_sparse(copy=False).astype(np.float, copy=False)
     else:
         X = np.asarray(X, dtype=np.float)
-    Y = np.asarray(dataframe[y][:], dtype=np.float)
     if np.all(Y == Y[0]):
         return np.array([], dtype=np.int), np.array([], dtype=np.float), Y[0]
 
@@ -181,13 +179,15 @@ def best_model_cv(dataframe, x, y, cv=None, n_jobs=None):
     return np.nonzero(np.abs(lasso_cv.coef_) > 1e-10)[0], lasso_cv.coef_, lasso_cv.intercept_
 
 
-def lassopath(dataframe, x, y, max_features=None, min_alpha=0., max_iter=500):
+def lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
     """
     >>> from karma.synthetic.regression import regression_dataframe
     >>> dd = regression_dataframe(200, dim=10, coeff_dist=np.random.uniform, law=None,
     ...                           noise=0.10, logistic=False, missing_rate=0)
     >>> k = 7
-    >>> betas, intercepts = lassopath(dd, "x", "y", k)
+    >>> xx = np.asarray(dd['x'][:])
+    >>> yy = np.asarray(dd['y'][:])
+    >>> betas, intercepts = lassopath(xx, yy, k)
     >>> betas.shape == (k+1, 10)
     True
     >>> intercepts.shape == (k+1,)
@@ -197,15 +197,7 @@ def lassopath(dataframe, x, y, max_features=None, min_alpha=0., max_iter=500):
     >>> err1 < 0.7 * err2
     True
     """
-
-    xx = dataframe[x][:]
     xx = xx if is_karmasparse(xx) else np.asarray(xx, dtype=np.float)
-    yy = np.asarray(dataframe[y][:], dtype=np.float)
-
-    return _lassopath(xx, yy, max_features, min_alpha, max_iter)
-
-
-def _lassopath(xx, yy, max_features=None, min_alpha=0., max_iter=500):
     if max_features is None:
         max_features = xx.shape[1]
 
@@ -249,7 +241,7 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
 
     def error_by_rank(args):
         x_train, y_train, x_test, y_test = args
-        betas, intercepts = _lassopath(x_train, y_train, max_features, min_alpha, max_iter)
+        betas, intercepts = lassopath(x_train, y_train, max_features, min_alpha, max_iter)
 
         if isinstance(x_test, VirtualDirectProduct):
             # TODO : write dedicated routine for linear_error on VirtualDirectProduct
@@ -273,6 +265,6 @@ def best_lasso_model_cv_from_moments(xx, yy, max_features=None, min_alpha=0., ma
     optimal_rank = error_series.argmin()
 
     with blas_threads(nb_blas_threads), open_mp_threads(nb_blas_threads):
-        whole_betas, whole_intercepts = _lassopath(xx, yy, optimal_rank, min_alpha, max_iter)
+        whole_betas, whole_intercepts = lassopath(xx, yy, optimal_rank, min_alpha, max_iter)
     betas, intercept = whole_betas[-1], whole_intercepts[-1]
     return xx.dot(betas) + intercept, intercept, betas
