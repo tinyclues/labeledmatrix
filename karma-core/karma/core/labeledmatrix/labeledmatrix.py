@@ -1783,7 +1783,7 @@ class LabeledMatrix(object):
         return dict(izip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
 
     @enforce_lib_closure
-    def to_karmacode(self, inp, output, default="zero"):
+    def to_karmacode(self, inp, output, default="zero", coordinates=None):
         """
         >>> lm = LabeledMatrix((['a', 'b'], ['x', 'y', 'z']), np.arange(6).reshape(2,3))
         >>> df = DataFrame({'col': ['c', 'b', 'b', 'a']})
@@ -1805,7 +1805,11 @@ class LabeledMatrix(object):
         >>> type(kc_dense[0].mapping[0])
         <type 'list'>
         """
-        kc, inputs, coordinates = KarmaCode([]), (inp,), self.column.list
+        kc, inputs = KarmaCode([]), (inp,)
+        if coordinates is None:
+            coordinates = self.column.list
+        else:
+            assert len(coordinates) == len(self.column)
         if not self.is_sparse:
             kc += Map(inputs, output, (self.row.list, self.matrix),
                       default_row(self.matrix, default), coordinates=coordinates)
