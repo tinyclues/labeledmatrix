@@ -4,7 +4,7 @@
 
 import numpy as np
 # XXX we should have used LassoLarsCV here but its parallel version is currently broken
-from sklearn.linear_model import LassoCV
+from sklearn.linear_model import LassoCV, LassoLarsCV
 from sklearn.model_selection import ShuffleSplit
 from karma.core.utils.utils import Parallel
 
@@ -17,12 +17,14 @@ from karma.thread_setter import blas_threads, open_mp_threads
 from karma.learning.utils import VirtualDirectProduct
 from karma.learning.matrix_utils import second_moment
 
-__all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments']
+__all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments', 'compute_indices_and_model_rank']
 
 
 def compute_indices_and_model_rank(X, Y, model_rank, min_model_rank,
-                                   cv=None, nb_threads=None):
+                                   cv=None, nb_threads=None, use_lars=False):
     """
+    Due to parallelism issues in LARS, set nb_threads=1 if use_lars
+
     >>> from karma.synthetic.regression import regression_dataframe
     >>> base_indices = np.arange(10)
     >>> ori_betas = np.arange(10.)
@@ -87,7 +89,7 @@ def compute_indices_and_model_rank(X, Y, model_rank, min_model_rank,
 
     if model_rank is None:
         # no fixed model_rank input, find the best one
-        indices, betas, intercepts = best_model_cv(X, Y, cv=cv, n_jobs=nb_threads)
+        indices, betas, intercepts = best_model_cv(X, Y, cv=cv, n_jobs=nb_threads, use_lars=use_lars)
         model_rank = indices.shape[0]
         if min_model_rank and model_rank < min_model_rank:
             # best model_rank is less than required minimum,
@@ -108,10 +110,12 @@ def compute_indices_and_model_rank(X, Y, model_rank, min_model_rank,
     return indices, model_rank
 
 
-def best_model_cv(X, Y, cv=None, n_jobs=None):
+def best_model_cv(X, Y, cv=None, n_jobs=None, use_lars=False):
     """
     Compute the indices of the relevant variables using LARS-lasso (see Elements of Statistical Learning around p68).
     Non-zero indices
+
+    Due to parallelism issues in LARS, set n_jobs=1 if use_lars
 
     >>> from karma.synthetic.regression import regression_dataframe
     >>> from karma import DataFrame, Column
@@ -140,6 +144,11 @@ def best_model_cv(X, Y, cv=None, n_jobs=None):
     True
     >>> np.all(indices == non_zero_indices)
     True
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv, use_lars=True)
+    >>> betas.shape == (10,)
+    True
+    >>> np.all(indices == non_zero_indices)
+    True
 
     # constant input
     >>> X = 0.2 * np.ones((10,3))
@@ -149,11 +158,22 @@ def best_model_cv(X, Y, cv=None, n_jobs=None):
     ((0,), (0,))
     >>> intercept
     4.5
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv, use_lars=True)
+    >>> indices.shape, betas.shape
+    ((0,), (0,))
+    >>> intercept
+    4.5
+
 
     # constant output
     >>> X = np.random.rand(10,3)
     >>> Y = np.ones(10, dtype='float')
     >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv)
+    >>> indices.shape, betas.shape
+    ((0,), (0,))
+    >>> intercept
+    1.0
+    >>> indices, betas, intercept = best_model_cv(X, Y, cv=cv, use_lars=True)
     >>> indices.shape, betas.shape
     ((0,), (0,))
     >>> intercept
@@ -174,7 +194,8 @@ def best_model_cv(X, Y, cv=None, n_jobs=None):
             n_jobs = cv.get_n_splits() if cv is not None else 1
         if cv is None:
             cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=Y.shape[0])
-        lasso_cv = LassoCV(cv=cv.split(X, Y), normalize=True, precompute=True, n_jobs=n_jobs, random_state=X.shape[0])
+        kwargs = dict(cv=cv.split(X, Y), normalize=True, precompute=True, n_jobs=n_jobs)
+        lasso_cv = LassoLarsCV(**kwargs) if use_lars else LassoCV(random_state=X.shape[0], **kwargs)
         lasso_cv.fit(X, Y)
     return np.nonzero(np.abs(lasso_cv.coef_) > 1e-10)[0], lasso_cv.coef_, lasso_cv.intercept_
 
