@@ -8,8 +8,7 @@ from cyperf.tools import parallel_unique
 
 from sklearn.model_selection import StratifiedShuffleSplit
 
-from cyperf.tools import take_indices, logit_inplace, argsort
-from cyperf.tools.sort_tools import parallel_sort
+from cyperf.tools import take_indices, logit_inplace, argsort, parallel_sort
 
 from karma import KarmaSetup
 

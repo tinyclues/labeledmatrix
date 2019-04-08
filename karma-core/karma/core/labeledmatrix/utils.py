@@ -88,8 +88,8 @@ def lm_occurence(val0, val1, dense_output=False):
     col0 | col1 | similarity
     ------------------------
     0      a      2.0
-    1      b      1.0
     1      a      1.0
+    1      b      1.0
     """
     from karma.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix(*simple_counter((val0, val1), sparse=not dense_output))

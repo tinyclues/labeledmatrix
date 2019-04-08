@@ -4,6 +4,8 @@ from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed, coerce_to_tuple_and_check_all_strings, slice_batches, flatten
 from karma.core.instructions.constant import One
 
+from cyperf.tools import parallel_sort
+
 
 def feedback_by_granularity_generator(df, implicit=False, sync_blocks=None, contrast_granularity=None,
                                       sorted_granularity=True, response=None, negative_positive_ratio=2,
@@ -14,14 +16,14 @@ def feedback_by_granularity_generator(df, implicit=False, sync_blocks=None, cont
 
         if contrast_granularity is None:
             contrast_granularity = 'constant'
-            df_copy = df_copy.with_instruction_column(contrast_granularity, One((), contrast_granularity
-                                                                                  , dtype=np.int8))
+            df_copy = df_copy.with_instruction_column(contrast_granularity,
+                                                      One((), contrast_granularity , dtype=np.int8))
 
         df_copy[contrast_granularity].create_index()
         granularity_index = df_copy[contrast_granularity].index
 
         if sorted_granularity:
-            granularities = sorted(granularity_index.keys())
+            granularities = parallel_sort(granularity_index.keys())
         else:
             granularities = np.random.permutation(granularity_index.keys())
 

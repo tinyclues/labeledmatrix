@@ -21,8 +21,8 @@ class MatrixUtilsTestCase(unittest.TestCase):
             sparse_G = KarmaSparse(rand(100, 10, 0.1))
 
         assert_almost_equal(gram_quantiles(sparse_G, 0.1), [0.])
-        assert_almost_equal(gram_quantiles(sparse_G, 0.9), [0.20081272])
-        assert_almost_equal(gram_quantiles(sparse_G, [0.1, 0.9]), [0., 0.20081272])
+        assert_almost_equal(gram_quantiles(sparse_G, 0.9), [0.2347988])
+        assert_almost_equal(gram_quantiles(sparse_G, [0.1, 0.9]), [0., 0.2347988])
 
     def test_second_moment(self):
         assert_almost_equal(second_moment(np.array([[1, 2], [-1, 3], [-1, 0]])), [[3., -1.], [-1., 13.]])

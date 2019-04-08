@@ -26,7 +26,7 @@ class RegressionUtilsTestCase(unittest.TestCase):
         meta = create_meta_of_regression(y_hat, y)
 
         np.testing.assert_array_equal(meta['curves'].x, [0., 0.25, 0.5, 0.75, 1.])
-        np.testing.assert_array_almost_equal(meta['curves'].y, [0., 0.5, 0.8333, 1., 1.], decimal=3)
+        np.testing.assert_array_almost_equal(meta['curves'].y, [0., 0.5, 0.833, 0.833, 1.], decimal=3)
 
 
 class LassoTestCase(unittest.TestCase):
