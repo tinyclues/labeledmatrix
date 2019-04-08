@@ -11,7 +11,7 @@ from six import PY3
 import numpy as np
 from cython.parallel import parallel, prange
 from cyperf.tools.types import ITYPE, LTYPE, BOOL
-from cyperf.tools.sort_tools import parallel_sort
+from cyperf.tools import parallel_sort
 
 DTYPE = np.float32
 

@@ -3,12 +3,11 @@ from itertools import product
 import numpy as np
 import unittest
 
-from cyperf.tools import slice_length, compose_slices, take_indices, parallel_unique
+from cyperf.tools import slice_length, compose_slices, take_indices
 from cyperf.tools.getter import (apply_python_dict, cy_safe_intern,
                                  cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
                                  coalesce_is_not_none, coalesce_generic, Unifier)
-from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort,
-                                     inplace_parallel_sort, parallel_sort)
+from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort)
 from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
 
 import six
@@ -58,20 +57,6 @@ class GetterTestCase(unittest.TestCase):
             np_res = np.argpartition(-x, size)
             self.assertEqual(len(np.intersect1d(res[:size], np_res[:size], assume_unique=True)),
                              size)
-
-    def test_unique_parallel(self):
-        for _ in range(20):
-            x = np.random.randint(-np.random.randint(100), np.random.randint(100), np.random.randint(1000))
-            x //= 7
-            for dtype in [np.int32, np.int64, np.float32, np.float64]:
-                y = x.astype(dtype)
-                np.testing.assert_equal(parallel_unique(y), np.unique(y))
-
-        np.testing.assert_equal(parallel_unique([]), np.unique([]))
-        np.testing.assert_equal(parallel_unique([1] * 100), np.unique([1]))
-        np.testing.assert_equal(parallel_unique([1.23] * 100), np.unique([1.23]))
-        x = ['R', 'T', 'B', 'TR', 'T']
-        np.testing.assert_equal(parallel_unique(x), np.unique(x))  # it should fall back on numpy implem
 
     def test_inplace_permutation(self):
         for _ in range(1000):
@@ -139,22 +124,6 @@ class GetterTestCase(unittest.TestCase):
         y = x.copy()
         np.random.shuffle(x)
         np.testing.assert_equal(x[cython_argsort(x, x.shape[0], False)], y)
-
-    def test_parallel_sort(self):
-        for _ in range(100):
-            a = np.random.randn(np.random.randint(1000) + 1)
-            a *= 1000
-            for dtype in [np.float64, np.float32, np.int64, np.int32]:
-                b = a.astype(dtype, copy=True)
-                bb = b.copy()
-                np.testing.assert_equal(parallel_sort(b), np.sort(b))
-                np.testing.assert_equal(parallel_sort(b[::-1]), np.sort(b))  # non contiguous case
-                np.testing.assert_equal(bb, b)
-
-                inplace_parallel_sort(b)
-                bb.sort()
-                np.testing.assert_equal(bb, b)
-                np.testing.assert_equal(b, np.sort(b))
 
     def test_compose_slices(self):
         arr = np.arange(20, dtype=np.uint8)

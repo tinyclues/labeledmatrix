@@ -6,7 +6,7 @@
 
 import numpy as np
 from cyperf.tools.types import ITYPE
-from cyperf.tools import parallel_unique
+from cyperf.tools import parallel_unique, argsort
 
 cimport cython
 cimport numpy as np
@@ -245,12 +245,12 @@ cdef class IndexedList:
         >>> bb
         ['a', 'b', 'c', 'd']
         >>> arg
-        [0, 1, 3, 2]
+        array([0, 1, 3, 2], dtype=int32)
         >>> bb.is_sorted()
         True
         """
-        argsort = sorted(np.arange(len(self), dtype=ITYPE), key=self.__getitem__)
-        return self.select(argsort), argsort
+        indices = argsort(self.list)
+        return self.select(indices), indices
 
     @cython.wraparound(False)
     @cython.boundscheck(False)

@@ -1,13 +1,88 @@
 from __future__ import absolute_import
 from __future__ import division   # see https://www.python.org/dev/peps/pep-0238/#abstract
+from six.moves import map, range
+
+from warnings import warn
+
 import numpy as np
 from itertools import islice
 from scipy.special import expit
 
-from cyperf.tools.sort_tools import cython_argsort, parallel_sort
+from cyperf.tools.sort_tools import cython_argsort
+from cyperf.tools import parallel_sort_routine
+from cyperf.tools.parallel_sort_routine import (inplace_string_parallel_sort,
+                                                inplace_numerical_parallel_sort as _inplace_numerical_parallel_sort,
+                                                inplace_numerical_parallel_sort_nan)
 from cyperf.tools.getter import (take_indices_on_numpy, take_indices_on_iterable,
                                  apply_python_dict, cast_to_float_array)
-from six.moves import map
+
+
+def _direct_dtype_converter(arr):
+    if not isinstance(arr, np.ndarray):
+        return arr
+
+    kind = arr.dtype.kind
+    if kind in ['b', 'B']:
+        return arr.view(np.uint8)
+    elif kind in ['M', 'm']:
+        return arr.view(np.int64)
+    else:
+        return arr
+
+
+def _check_as_one_dim(arr):
+    assert arr.ndim == 1 or (arr.ndim == 2 and arr.shape[1] == 1)
+    return arr.ravel()
+
+
+def inplace_numerical_parallel_sort(a, reverse=False):
+    if a.dtype.kind == 'f' and np.any(np.isnan(a)):
+        inplace_numerical_parallel_sort_nan(a, reverse=reverse)
+    else:
+        _inplace_numerical_parallel_sort(_direct_dtype_converter(a), reverse=reverse)
+
+
+def cy_parallel_sort(a, reverse=False):
+    """
+    it does not support np.dtype == "S" or "U"
+    """
+    if isinstance(a, (list, tuple)):
+        assert len(a) == 0 or isinstance(a[0], str)
+        b = list(a)
+        inplace_string_parallel_sort(b, reverse)
+    elif isinstance(a, np.ndarray):
+        a = _check_as_one_dim(a)
+        kind = a.dtype.kind
+
+        if kind in ['S', 'U']:
+            raise TypeError('unsupported kind of numpy array {}'.format(kind))
+        b = a.copy()
+        if kind == 'O':  # we expect to have a string
+            inplace_string_parallel_sort(b, reverse)
+        else:
+            inplace_numerical_parallel_sort(b, reverse)
+    else:
+        raise TypeError('unsupported type: {}'.format(type(a)))
+    return b
+
+
+def sort_fallback(a, reverse=False):
+    if isinstance(a, np.ndarray):
+        a = _check_as_one_dim(a)
+        return np.sort(a)[::-1] if reverse else np.sort(a)
+    else:
+        return sorted(a, reverse=reverse)
+
+
+def parallel_sort(a, reverse=False):
+    """
+    Parallel sort for numpy arrays based on "gnu_parallel" gcc library
+    """
+    try:
+        return cy_parallel_sort(a, reverse=reverse)
+    except (TypeError, AssertionError):
+        warn('Unsupported type {} for ParallelSort, fallback on slow implem.'.format(type(a)))
+        return sort_fallback(a, reverse=reverse)
 
 
 def parallel_unique(a):
@@ -16,7 +91,7 @@ def parallel_unique(a):
     """
     try:
         a_sorted = parallel_sort(np.asarray(a))
-    except TypeError:
+    except (TypeError, AssertionError):
         return np.unique(a)
 
     if len(a_sorted) < 2:
@@ -26,20 +101,69 @@ def parallel_unique(a):
         return a_sorted[uindex]
 
 
-def argsort(xx, nb=-1, reverse=False):
+def argsort_fallback(arr, reverse=False):
+    from cyperf.indexing import get_index_dtype
+    out_dtype = get_index_dtype(len(arr))
+    # warn if fallback
+    if isinstance(arr, np.ndarray) and not reverse:
+        arr = _check_as_one_dim(arr)
+        result = np.argsort(arr, kind="mergesort").astype(out_dtype, copy=False)
+    else:
+        # FIXME : when reverse is True and arr is np.ndarray it will be slow but true formula
+        # FIXME: test on Nan, results will not be correct on np.nan
+        result = np.asarray(sorted(range(len(arr)), key=arr.__getitem__, reverse=reverse), dtype=out_dtype)
+    return result
+
+
+def cy_parallel_argsort(arr, reverse=False):
+    output_dtype_str = 'long' if len(arr) > np.iinfo(np.int32).max else 'int'
+    if isinstance(arr, (list, tuple)):
+        name = 'object'
+    else:
+        arr = np.asarray(arr)
+        arr = _direct_dtype_converter(_check_as_one_dim(arr))
+        dtype = arr.dtype
+
+        name = 'numpy_strings' if dtype.kind == 'S' else dtype.name
+        if dtype.kind == 'f' and np.any(np.isnan(arr)):
+            output_dtype_str += "_nan"
+
+    return getattr(parallel_sort_routine,
+                   'parallel_argsort_{}_{}'.format(name, output_dtype_str))(arr, reverse=reverse)
+
+
+def parallel_argsort(arr, reverse=False):
     """
-       QuickSort cython fast version of argsort
+    Parallel MergeSort
+
+    it support the most of numerical types and string containers (like np.array or list)
+    it support np.string_ dtype but not np.unicode_ (but it could)
+    """
+    try:
+        return cy_parallel_argsort(arr, reverse=reverse)
+    except (AttributeError, TypeError):
+        warn('Unsupported argument {} for ParallelArgSort, fallback on slow implem.'.format(type(arr)))
+        return argsort_fallback(arr, reverse=reverse)
+
+
+def argsort(arr, nb=-1, reverse=False):
+    """
+       Parallel and QuickSort cython fast version of argsort
 
        args:
-            * xx - input array
+            * arr - input array
             * nb - number of elements to sort (for partial sort); default=-1 meaning full argsort
             * reverse - False/True, to use decreasing/increasing order
     """
-    try:
-        return cython_argsort(xx, nb, reverse)
-    except TypeError:  # fallback if non-accepted dtype (like string)
-        x = np.argsort(xx, kind='quicksort')
-        return x[::-1] if reverse else x
+    if nb < 0:
+        nb += len(arr) + 1
+
+    if nb <= len(arr) // 5:  # arbitrary constant
+        try:
+            return cython_argsort(arr, nb, reverse)
+        except TypeError:
+            pass
+    return parallel_argsort(arr, reverse=reverse)
 
 
 def logit(x, shift=0., width=1.):
@@ -145,6 +269,7 @@ def take_indices(iterable, indices, length=None):
             Pure python analogue
         """
         return list(map(iterable.__getitem__, indices))
+
     if indices is None:
         return iterable  # without copy
     elif np.isscalar(indices):
@@ -157,7 +282,7 @@ def take_indices(iterable, indices, length=None):
             return compose_slices(iterable, indices, length)
         try:
             return iterable[indices]
-        except:
+        except Exception:
             return islice(iterable, indices.start, indices.stop, indices.step)
     elif isinstance(iterable, slice):
         return take_on_slice(iterable, indices, length)
@@ -171,7 +296,7 @@ def take_indices(iterable, indices, length=None):
             return take_indices_on_numpy(iterable, indices)
         except IndexError as e:
             raise e
-        except:
+        except Exception:
             return iterable.take(indices, axis=0)
     elif is_karmasparse(iterable):
         return iterable[indices]
@@ -186,7 +311,7 @@ def take_indices(iterable, indices, length=None):
             return take_indices_on_iterable(iterable, indices)
         except IndexError as e:
             raise e
-        except:
+        except Exception:
             return fall_back_take_indices(iterable, indices)
 
 

@@ -24,3 +24,8 @@ def get_open_mp_num_thread():
     3
     """
     return omp_get_max_threads()
+
+
+cdef np.ndarray[char, ndim=2, mode="c"] safe_numpy_string_convertor(np.ndarray keys):
+    assert keys.dtype.kind == 'S'
+    return np.ascontiguousarray(keys).view(np.int8).reshape(len(keys), keys.dtype.itemsize)

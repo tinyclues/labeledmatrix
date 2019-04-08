@@ -32,13 +32,26 @@ SOURCE_FILE = [
     'tools/curve.pyx',
     'indexing/column_index.pyx',
     'indexing/indexed_list.pyx',
-    'where/cy_filter.pyx']
+    'where/cy_filter.pyx',
+    ]
 
-TEMPLATE_SOURCE = ['tools/vector.pyx.in']
+TEMPLATE_SOURCE = ['tools/vector.pyx.in',
+                   'tools/parallel_sort_routine.pyx.in'
+                   ]
 
-cargs = ['-O3', '-std=c++11', '-ffast-math', '-fopenmp', '-lgomp', '-msse4.2',
-         '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable']
+basic_cargs = ['-O3', '-std=c++11', '-fopenmp', '-lgomp', '-msse4.2',
+               '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable']
 largs = ['-fopenmp', '-lgomp']
+
+
+def cargs(f):
+    if 'parallel_sort_routine' in f:
+        # we need to remove flag '-ffast-math' flag to deal with nan
+        # see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25975 and https://github.com/cython/cython/issues/550
+        return basic_cargs
+    else:
+        return basic_cargs + ['-ffast-math']
+
 
 info = get_info('npymath')
 
@@ -71,14 +84,14 @@ EXTENSIONS = [Extension(root_path + '.' + f.replace('.pyx', '').replace('/', '.'
                         include_dirs=info['include_dirs'],
                         library_dirs=info['library_dirs'],
                         libraries=info['libraries'],
-                        extra_compile_args=cargs,
+                        extra_compile_args=cargs(f),
                         extra_link_args=largs)
               for f in [render_tempita_pyx(f) for f in TEMPLATE_SOURCE] + SOURCE_FILE]
 
 requirements = [str(i.req) for i in parse_requirements("requirements.txt", session=False)]
 
 VERSION = "1"
-NB_COMPILE_JOBS = 8
+NB_COMPILE_JOBS = multiprocessing.cpu_count()
 
 
 def setup_given_extensions(extensions):

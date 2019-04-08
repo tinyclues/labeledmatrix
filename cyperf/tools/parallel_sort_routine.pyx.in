@@ -1,0 +1,309 @@
+#cython: boundscheck=False, wraparound=False, overflowcheck=True
+
+from libc.stdlib cimport malloc, free
+from cython.parallel cimport prange
+from libc.string cimport strlen, strcmp, strncmp
+from cpython.object cimport PyObject
+import numpy as np
+
+cdef parallel_tag mt = <parallel_tag>multiway_mergesort_sampling_tag()
+
+
+cdef extern from "Python.h" nogil:  # dangerous zone
+    bint PyString_Check(PyObject* o)
+
+
+cdef extern from "Python.h":
+    ctypedef struct PyListObject:
+        PyObject **ob_item
+        Py_ssize_t allocated
+
+ctypedef fused PY_ITER:
+    np.ndarray[object, ndim=1]
+    list
+    tuple
+
+# ----------------------------------------------------------------------------------------------------
+#                               SORT
+# ----------------------------------------------------------------------------------------------------
+
+cdef inline bint greater_numeric(NUMERIC x, NUMERIC y) nogil:
+    return x > y
+
+
+cpdef void inplace_numerical_parallel_sort(NUMERIC[::1] a, bint reverse=False):
+    """
+    In-place parallel sort for numpy arrays based on "gnu_parallel" gcc library
+    Currently works only on contiguous numerical np.array
+    """
+    with nogil:
+        if reverse:
+            sort(&a[0], &a[a.shape[0]], greater_numeric[NUMERIC], mt)
+        else:
+            sort(&a[0], &a[a.shape[0]], mt)
+
+
+cdef inline bint lesser_numeric_nan(FLOATING x, FLOATING y) nogil:
+    cdef bint xnan = (x != x)
+    cdef bint ynan = (y != y)
+
+    if xnan:
+        return False
+    if ynan:
+        return True
+    return x < y
+
+
+cdef inline bint greater_numeric_nan(FLOATING x, FLOATING y) nogil:
+    cdef bint xnan = (x != x)
+    cdef bint ynan = (y != y)
+
+    if ynan:
+        return False
+    if xnan:
+        return True
+    return x > y
+
+
+cpdef void inplace_numerical_parallel_sort_nan(FLOATING[::1] a, bint reverse=False):
+    """
+    In-place parallel sort for numpy arrays based on "gnu_parallel" gcc library
+    Currently works only on contiguous numerical np.array
+    """
+    with nogil:
+        if reverse:
+            sort(&a[0], &a[a.shape[0]], greater_numeric_nan[FLOATING], mt)
+        else:
+            sort(&a[0], &a[a.shape[0]], lesser_numeric_nan[FLOATING], mt)
+
+
+cdef inline bint greater_py_string(PyObject* x, PyObject* y) nogil:
+    return strcmp(get_c_string(x), get_c_string(y)) > 0
+
+
+cdef inline bint lesser_py_string(PyObject* x, PyObject* y) nogil:
+    return strcmp(get_c_string(x), get_c_string(y)) < 0
+
+
+cpdef void inplace_string_parallel_sort(PY_ITER_CONTI arr, bint reverse=False) except *:
+    cdef long nb = len(arr), i
+    cdef PyObject** pp
+
+    if isinstance(arr, list):
+        pp = <PyObject**>(<PyListObject*>arr).ob_item
+    else:
+        pp = <PyObject**>((<np.ndarray[object, ndim=1, mode='c']>arr).data)
+
+    with nogil:
+        for i in prange(nb):
+            val = pp[i]
+            if not PyString_Check(val):
+                with gil: raise TypeError('string is expected, got {}'.format(<object>val))
+        if reverse:
+            sort(&(pp[0]), &(pp[nb]), greater_py_string, mt)
+        else:
+            sort(&(pp[0]), &(pp[nb]), lesser_py_string, mt)
+
+
+# ----------------------------------------------------------------------------------------------------
+#                               ARGSORT
+# ----------------------------------------------------------------------------------------------------
+
+                            # Fixed Length support
+
+# currently it's not the fastest solution due to the overhead induced by `cpp:function`
+# True solution could be come from https://github.com/cython/cython/issues/2215
+# It's x2 faster to have directly declared function instead of "function[bint(const FLCouple, const FLCouple)]"
+
+cdef extern from "cmp.cc" nogil:
+    cdef cppclass FLCouple[T]:
+        char* value
+        T index
+    cdef function[bint(const FLCouple, const FLCouple)] make_str_greater_cmp[T](size_t length)
+    cdef function[bint(const FLCouple, const FLCouple)] make_str_lesser_cmp[T](size_t length)
+
+
+{{py:
+def get_size_dispatcher():
+    for out_c_type, out_dtype in [('int', 'np.int32'), ('long', 'np.int64')]:
+        yield out_c_type, out_dtype
+}}
+
+{{for out_c_type, out_dtype in get_size_dispatcher()}}
+
+
+ctypedef bint (*comp_func_{{out_c_type}})(const FLCouple[{{out_c_type}}] x, const FLCouple[{{out_c_type}}] y) nogil
+cdef comp_func_{{out_c_type}} lesser_array_{{out_c_type}}[301]
+cdef comp_func_{{out_c_type}} greater_array_{{out_c_type}}[301]
+
+
+{{for N in range(301)}}
+
+cdef inline bint lesser{{N}}_{{out_c_type}}(const FLCouple[{{out_c_type}}] x, const FLCouple[{{out_c_type}}] y) nogil:
+    return strncmp(x.value, y.value, {{N}}) < 0
+
+cdef inline bint greater{{N}}_{{out_c_type}}(const FLCouple[{{out_c_type}}] x, const FLCouple[{{out_c_type}}] y) nogil:
+    return strncmp(x.value, y.value, {{N}}) > 0
+
+lesser_array_{{out_c_type}}[{{N}}] = lesser{{N}}_{{out_c_type}}
+greater_array_{{out_c_type}}[{{N}}] = greater{{N}}_{{out_c_type}}
+
+{{endfor}}
+
+
+def parallel_argsort_numpy_strings_{{out_c_type}}(keys, bint reverse=False):
+    cdef char[:, ::1] arr = safe_numpy_string_convertor(keys)
+    cdef size_t length = keys.dtype.itemsize, nb = len(keys), i
+    cdef int[::1] res = np.empty(nb, dtype=np.int32)
+
+    with nogil:
+        coupled_struct = <FLCouple[{{out_c_type}}]*>malloc(nb * sizeof(FLCouple[{{out_c_type}}]))
+        for i in prange(nb):
+            coupled_struct[i].value = &arr[i, 0]
+            coupled_struct[i].index = i
+
+        if length >= 300:  # fallback to slow implem
+            if reverse:
+                stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), make_str_greater_cmp[{{out_c_type}}](length), mt)
+            else:
+                stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), make_str_lesser_cmp[{{out_c_type}}](length), mt)
+        elif reverse:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), greater_array_{{out_c_type}}[length], mt)
+        else:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), lesser_array_{{out_c_type}}[length], mt)
+
+        for i in prange(nb, schedule="static"):
+            res[i] = coupled_struct[i].index
+        free(coupled_struct)
+    return np.asarray(res)
+
+{{endfor}}
+
+
+                                    # Other dtype
+{{py:
+
+dtypes = (
+    ('object', 'const char*'),  # py strings only support
+    ('int8', 'np.int8_t'),
+    ('int16', 'np.int16_t'),
+    ('int32', 'np.int32_t'),
+    ('int64', 'np.int64_t'),
+    ('uint8', 'np.uint8_t'),
+    ('uint16', 'np.uint16_t'),
+    ('uint32', 'np.uint32_t'),
+    ('uint64', 'np.uint64_t'),
+    ('float32', 'np.float32_t'),
+    ('float64', 'np.float64_t'),
+)
+
+# type_name, c_type, dtype
+def get_dispatch(dtypes):
+    for out_c_type, out_dtype in [('int', 'np.int32'), ('long', 'np.int64')]:
+        for name, c_type in dtypes:
+            yield name, c_type, out_c_type, out_dtype
+}}
+
+{{for name, c_type, out_c_type, out_dtype in get_dispatch(dtypes)}}
+
+ctypedef packed struct Couple_{{name}}_{{out_c_type}}:
+    {{c_type}} value
+    {{out_c_type}} index
+
+
+cdef inline bint lesser_couple_{{name}}_{{out_c_type}}(const Couple_{{name}}_{{out_c_type}} x,
+                                                       const Couple_{{name}}_{{out_c_type}} y) nogil:
+    {{if name == 'object'}}
+    return strcmp(x.value, y.value) < 0
+    {{else}}
+    return x.value < y.value
+    {{endif}}
+
+cdef inline bint greater_couple_{{name}}_{{out_c_type}}(const Couple_{{name}}_{{out_c_type}} x,
+                                                        const Couple_{{name}}_{{out_c_type}} y) nogil:
+    {{if name == 'object'}}
+    return strcmp(x.value, y.value) > 0
+    {{else}}
+    return x.value > y.value
+    {{endif}}
+
+
+def parallel_argsort_{{name}}_{{out_c_type}}({{if name == 'object'}}PY_ITER arr, {{else}}{{c_type}}[:] arr,
+                {{endif}} bint reverse=False):
+    cdef {{out_c_type}} nb = len(arr), i
+    cdef {{out_c_type}}[::1] res = np.empty(nb, dtype={{out_dtype}})
+
+
+    with nogil:
+        coupled_struct = <Couple_{{name}}_{{out_c_type}}*>malloc(nb * sizeof(Couple_{{name}}_{{out_c_type}}))
+        # this copy is memory consuming
+        {{if name == 'object'}}
+        with gil:
+            for i in xrange(nb):
+                val = <PyObject*>arr[i]
+                if not PyString_Check(val):
+                    free(coupled_struct)
+                    raise TypeError('string is expected, got {}'.format(<object>val))
+                coupled_struct[i].value = get_c_string(val)
+                coupled_struct[i].index = i
+        {{else}}
+        for i in prange(nb, schedule="static"):
+            coupled_struct[i].value = arr[i]
+            coupled_struct[i].index = i
+        {{endif}}
+
+        if reverse:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), greater_couple_{{name}}_{{out_c_type}}, mt)
+        else:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), lesser_couple_{{name}}_{{out_c_type}}, mt)
+
+        for i in prange(nb, schedule="static"):
+            res[i] = coupled_struct[i].index
+        free(coupled_struct)
+    return np.asarray(res)
+
+{{endfor}}
+
+
+{{py:
+def get_dispatch_nan():
+    for out_c_type, out_dtype in [('int', 'np.int32'), ('long', 'np.int64')]:
+        for name, c_type in [('float32', 'np.float32_t'), ('float64', 'np.float64_t')]:
+            yield name, c_type, out_c_type, out_dtype
+}}
+
+{{for name, c_type, out_c_type, out_dtype in get_dispatch_nan()}}
+
+
+cdef inline bint lesser_couple_{{name}}_{{out_c_type}}_nan(const Couple_{{name}}_{{out_c_type}} x,
+                                                           const Couple_{{name}}_{{out_c_type}} y) nogil:
+    return lesser_numeric_nan(x.value, y.value)
+
+
+cdef inline bint greater_couple_{{name}}_{{out_c_type}}_nan(const Couple_{{name}}_{{out_c_type}} x,
+                                                            const Couple_{{name}}_{{out_c_type}} y) nogil:
+    return greater_numeric_nan(x.value, y.value)
+
+
+def parallel_argsort_{{name}}_{{out_c_type}}_nan({{c_type}}[:] arr, bint reverse=False):
+    cdef {{out_c_type}} nb = len(arr), i
+    cdef {{out_c_type}}[::1] res = np.empty(nb, dtype={{out_dtype}})
+
+    with nogil:
+        coupled_struct = <Couple_{{name}}_{{out_c_type}}*>malloc(nb * sizeof(Couple_{{name}}_{{out_c_type}}))
+        # this copy is memory consuming
+        for i in prange(nb, schedule="static"):
+            coupled_struct[i].value = arr[i]
+            coupled_struct[i].index = i
+
+        if reverse:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), greater_couple_{{name}}_{{out_c_type}}_nan, mt)
+        else:
+            stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), lesser_couple_{{name}}_{{out_c_type}}_nan, mt)
+
+        for i in prange(nb, schedule="static"):
+            res[i] = coupled_struct[i].index
+        free(coupled_struct)
+    return np.asarray(res)
+
+{{endfor}}

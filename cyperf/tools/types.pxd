@@ -1,4 +1,5 @@
 cimport numpy as np
+from cpython.object cimport PyObject
 
 ctypedef np.float64_t DTYPE_t
 ctypedef np.float32_t FTYPE_t
@@ -69,3 +70,22 @@ ctypedef fused INT2:
 ctypedef fused INT3:
     ITYPE_t
     LTYPE_t
+
+cdef np.ndarray[char, ndim=2, mode="c"] safe_numpy_string_convertor(np.ndarray keys)
+
+
+# https://cython.readthedocs.io/en/latest/src/userguide/external_C_code.html#including-verbatim-c-code
+# Warning : import in nogil is dangerous zone !!! Make sure that PyString_Check(obj) before call
+cdef extern from * nogil:
+    """
+    // returns ASCII or UTF8 (py3) view on python str
+    // python object owns memory, should not be freed
+    static const char* get_c_string(PyObject* obj) {
+    #if PY_VERSION_HEX >= 0x03000000
+        return PyUnicode_AsUTF8(obj);
+    #else
+        return PyString_AsString(obj);
+    #endif
+    }
+    """
+    const char *get_c_string(PyObject* obj) except NULL

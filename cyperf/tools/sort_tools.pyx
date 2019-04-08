@@ -1,5 +1,3 @@
-#cython: embedsignature=True
-#cython: nonecheck=True
 #cython: overflowcheck=True
 #cython: unraisable_tracebacks=True
 #cython: wraparound=False
@@ -75,35 +73,6 @@ cpdef np.ndarray[dtype=ITYPE_t, ndim=1] cython_argsort(A[:] xx, ITYPE_t nb,  boo
     with nogil:
         partial_sort(&dist[0], &idx[0], size, nb, reverse)
     return np.asarray(idx)
-
-
-cdef extern from "<parallel/algorithm>" namespace "__gnu_parallel":
-    cdef cppclass parallel_tag:
-        parallel_tag()
-    cdef cppclass multiway_mergesort_sampling_tag(parallel_tag):
-        multiway_mergesort_sampling_tag()
-    cdef void sort[T](T first, T last, parallel_tag tag) nogil
-
-
-cpdef inplace_parallel_sort(A[::1] a):
-    """
-    In-place parallel sort for numpy arrays based on "gnu_parallel" gcc library
-    Currently works only on contiguous array
-    """
-    cdef multiway_mergesort_sampling_tag mt = multiway_mergesort_sampling_tag()
-    with nogil:
-        sort(&a[0], &a[a.shape[0]], <parallel_tag>mt)
-
-
-cpdef np.ndarray[A, ndim=1, mode="c"] parallel_sort(A[:] a):
-    """
-    Parallel sort for numpy arrays based on "gnu_parallel" gcc library
-    """
-    cdef multiway_mergesort_sampling_tag mt = multiway_mergesort_sampling_tag()
-    cdef A[::1] b = np.array(a, order="C")
-    with nogil:
-        sort(&b[0], &b[b.shape[0]], <parallel_tag>mt)
-    return np.asarray(b)
 
 
 cpdef void cython_simaltanious_sort(A[::1] xx, B[::1] yy,  bool reverse=True):

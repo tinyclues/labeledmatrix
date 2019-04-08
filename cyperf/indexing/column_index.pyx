@@ -1,4 +1,3 @@
-# cython: embedsignature=True
 # cython: nonecheck=True
 # cython: overflowcheck=True
 # cython: unraisable_tracebacks=True
@@ -13,12 +12,21 @@ from cpython.ref cimport PyObject
 from cpython.set cimport PySet_Contains, PySet_Add
 from cpython.dict cimport PyDict_GetItem
 from cpython.tuple cimport PyTuple_CheckExact
-from cyperf.tools.sort_tools import inplace_parallel_sort
+from cyperf.tools import inplace_numerical_parallel_sort, argsort
 from cyperf.tools.types import BOOL
 
 
 
 cpdef INDICES_NP merge_sort(INDICES_NP arr1, INDICES_NP arr2):
+    """
+    arr1 and arr2 are assumed to have unique&sorted indices
+    return is equivalent to np.unique(np.concatenate([arr1, arr2]))
+
+    >>> a = np.array([1, 2, 3, 10])
+    >>> b = np.array([-10, 2, 3, 10])
+    >>> merge_sort(a, b)
+    array([-10,   1,   2,   3,  10])
+    """
     cdef long i = 0, j= 0, n1 = arr1.shape[0], n2 = arr2.shape[0], c = 0
     cdef INDICES_NP result = np.empty(n1 + n2, dtype=arr1.dtype)
     cdef int size = arr1.itemsize
@@ -130,11 +138,21 @@ cpdef dict factorize_inplace(ITER values, INDICES_NP reversed_indices):
     return key_position
 
 
+
+# TODO : find good rule to make a switch between groupsort_indexer and groupsort_indexer_as_parallel_argsort
+cpdef tuple groupsort_indexer_as_parallel_argsort(INDICES_NP indptr, INDICES_NP_BIS reversed_indices):
+    indptr[1:] = np.bincount(reversed_indices, minlength=len(indptr)-1)
+    nb_unique = np.count_nonzero(indptr)
+    np.cumsum(indptr, out=indptr)
+    indices = argsort(reversed_indices)
+    return nb_unique, indices
+
+
 cpdef tuple groupsort_indexer(INDICES_NP indptr, INDICES_NP_BIS reversed_indices):
     """
     Args:
         reversed_indices: numpy array representing values using dict of positions
-        indptr: numpy array with index pointers
+        indptr: numpy array with index pointers (should be np.zeros of good dtype)
 
     Equivalent to pandas.algo.groupsort_indexer
 
@@ -473,7 +491,7 @@ cpdef INDICES_NP deduplicate_indices(INDICES_NP indptr, INDICES_NP indices, str 
     else:
         for i in range(nb):
             unique_indices[i] = indices[indptr[i + 1] - 1]
-        inplace_parallel_sort(unique_indices)
+        inplace_numerical_parallel_sort(unique_indices)
     return unique_indices
 
 
@@ -493,7 +511,7 @@ cpdef INDICES_NP deduplicate_indices_select(INDICES_NP indptr, INDICES_NP indice
             i = indptr[reversed_indices[indices[i]] + 1]
             unique_indices[count] = indices[i - 1]
         count += 1
-    inplace_parallel_sort(unique_indices)
+    inplace_numerical_parallel_sort(unique_indices)
     return unique_indices
 
 

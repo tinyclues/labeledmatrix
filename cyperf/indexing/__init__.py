@@ -2,18 +2,17 @@ from __future__ import absolute_import
 from __future__ import division   # see https://www.python.org/dev/peps/pep-0238/#abstract
 from six import PY3
 import numpy as np
-from cyperf.tools import take_indices
+from cyperf.tools import take_indices, parallel_sort
 
-from cyperf.indexing.column_index import (factorize_inplace, groupsort_indexer, get_positions,
-                                          get_size_batch, get_batch_indices, get_first_batch,
+from cyperf.indexing.column_index import (factorize_inplace, groupsort_indexer,
+                                          get_size_batch, get_batch_indices, get_first_batch, get_positions,
                                           sorted_indices, quantiles_indices, quantiles_indices_with_most_common,
                                           quantiles_indices_with_first, count,
                                           deduplicate_indices, get_keys_indices,
                                           unique_indices_inplace, get_unique_indices)
 
 from cyperf.indexing.column_index import (positions_select_inplace, count_select, deduplicate_indices_select,
-                                          reversed_index_select, get_keys_indices_select,
-                                          compact_select)
+                                          reversed_index_select, get_keys_indices_select, compact_select)
 
 from cyperf.indexing.column_index import (get_positions_multiindex, key_indices_multiindex,
                                           compact_multiindex, dispatch_tupled_values)
@@ -356,7 +355,7 @@ class ColumnIndex(object):
         """
         return list(self.position.keys()) if PY3 else self.position.keys()
 
-    def sorted_indices(self):
+    def sorted_indices(self, reverse=False):
         """
         >>> col = [4, 3, 5, 1, 8, 10, 0, 1, 10, 8, 7, 6, 2, 2, 9, 2, 5, 1, 5, 4]
         >>> index = ColumnIndex(col)
@@ -365,10 +364,20 @@ class ColumnIndex(object):
         >>> index_select = index.select(selection, select_col)
         >>> index_select.sorted_indices()
         array([ 2,  3, 10,  5,  6,  8,  0, 12,  1,  9, 11,  4,  7], dtype=int32)
+        >>> index_select.sorted_indices(reverse=True)
+        array([ 7,  4,  1,  9, 11,  0, 12,  5,  6,  8,  2,  3, 10], dtype=int32)
+        >>> take_indices(col, take_indices(selection, index_select.sorted_indices(reverse=True)))
+        [9, 8, 5, 5, 5, 4, 4, 2, 2, 2, 1, 1, 1]
+
+        >>> col = list(map(str, [4, 3, 5, 3, 2, 2]))
+        >>> index_str = ColumnIndex(col)
+        >>> index_str.sorted_indices(reverse=True)
+        array([2, 0, 1, 3, 4, 5], dtype=int32)
+        >>> index_str.sorted_indices(reverse=False)
+        array([4, 5, 1, 3, 0, 2], dtype=int32)
         """
-        keys = self.keys()
-        keys.sort()
-        sorted_keys_positions = self._get_positions(keys)
+        sorted_keys = parallel_sort(self.keys(), reverse=reverse)
+        sorted_keys_positions = self._get_positions(sorted_keys)
         return sorted_indices(sorted_keys_positions, self.indptr, self.indices)
 
     def _quantiles_indices(self, sorted_keys_positions, nb, label, actual_indptr, actual_indices):

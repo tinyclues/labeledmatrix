@@ -20,8 +20,6 @@ cpdef long unique_indices_inplace(ITER values, bool reverse, INDICES_NP position
 
 cpdef dict factorize_inplace(ITER values, INDICES_NP reversed_indices)
 
-cpdef tuple groupsort_indexer(INDICES_NP indptr, INDICES_NP_BIS reversed_indices)
-
 cpdef INDICES_NP get_positions(dict position, ITER values, INDICES_NP reversed_indices)
 
 cpdef INDICES_NP positions_select_inplace(INDICES_NP positions, INDICES_NP_BIS indptr)
