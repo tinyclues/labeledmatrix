@@ -14,10 +14,17 @@ from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_ad
 
 def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True):
     """
+    :param dataframe: DataFrame
+    :param key: str columnName corresponding to the index
+    :param axis: str columName corresponding to axis for the pivot.
+    :param values: str columns on which the aggregator will be used
+    :param aggregator: str (min, max, sum, first, last)
+    :param sparse: bool returns sparse result
+    :return: LabeledMatrix
+
     This can be used as routine to compute pivot matrices with associative aggregators (#, sum, min, max, !, last)
     # TODO : iterate over different values/aggregators and to use in df.pivot
     # TODO : implement mean aggregators
-
     Compare with the example from dataframe.pivot :
 
         >>> from karma import DataFrame, Column
@@ -49,14 +56,19 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         ----------------------
         1      100.0    42.0
         2      60.0     35.0
+
     """
+    from karma.core.labeledmatrix import LabeledMatrix
     aggregator_map = {'sum': 'add',
                       'min': 'min',
                       'max': 'max',
                       '!': 'first',
                       'last': 'last',
-                      'first': 'first'}
-    from karma.core.labeledmatrix import LabeledMatrix
+                      'first': 'first'
+                     }
+    if aggregator not in aggregator_map.keys():
+        raise ValueError('aggregator {} does not exist'.format(aggregator))
+
     if values is not None:
         val = np.asarray(dataframe[values][:])
         val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
