@@ -18,13 +18,52 @@ def _projector_naming(side, name, identifier=0):
     return 'PR{}_{}_{}'.format(side.capitalize(), name, identifier)
 
 
-class AbstractTorchKarmaIntegrator(torch.nn.Module): #Docs
+class AbstractTorchKarmaIntegrator(torch.nn.Module):
+    # TODO Docs
 
     __metaclass__ = ABCMeta
 
     @abstractproperty
     def name(self):
         pass
+
+    def _set_requires_grad_on_parameters(self, parameters, value_to_set):
+        if parameters is None:
+            parameters = self.params_dict.keys()
+        else:
+            parameters = coerce_to_tuple_and_check_all_strings(parameters, 'parameters')
+        parameters = set(parameters).intersection(self.params_dict.keys())
+        for key in parameters:
+            self.params_dict[key].requires_grad = value_to_set
+
+    def freeze(self, parameters=None):
+        """
+        Sets requires_grad to False on a given list or parameters or for the whole cell
+        :param parameters: list of parameters' names, default None = all parameters
+        >>> cell = ConcatBiInteractionCell((('input1', 'input2'), 'input3'), {'input1': 10, 'input2': 5, 'input3': 7})
+
+        One can freeze one parameter or list of parameters
+        >>> cell.params_dict['PRLeft_input1_0'].requires_grad
+        True
+        >>> cell.freeze('PRLeft_input1_0')
+        >>> cell.params_dict['PRLeft_input1_0'].requires_grad
+        False
+
+        or freeze the whole cell when it is a part of larger model
+        >>> cell.params_dict['PRRight_input3_0'].requires_grad
+        True
+        >>> cell.freeze()
+        >>> cell.params_dict['PRRight_input3_0'].requires_grad
+        False
+        """
+        self._set_requires_grad_on_parameters(parameters, value_to_set=False)
+
+    def unfreeze(self, parameters=None):
+        """
+        inverse operation for freeze
+        :param parameters: list of parameters' names, default None = all parameters
+        """
+        self._set_requires_grad_on_parameters(parameters, value_to_set=True)
 
     @use_seed()
     def reset_parameters(self):
@@ -309,5 +348,3 @@ class DeepFM(AbstractTorchKarmaIntegrator):
         else:
             kc += KarmaCode([Logit(kc_deep.outputs, out)], outputs=out)
             return kc.with_outputs(out)
-
-
