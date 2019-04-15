@@ -4,6 +4,7 @@
 
 import numpy as np
 # XXX we should have used LassoLarsCV here but its parallel version is currently broken
+from connect.logging import initialize_logger
 from sklearn.linear_model import LassoCV, LassoLarsCV
 from sklearn.model_selection import ShuffleSplit
 from karma.core.utils.utils import Parallel
@@ -16,6 +17,8 @@ from karma.learning.lasso_gram import lasso_gram
 from karma.thread_setter import blas_threads, open_mp_threads
 from karma.learning.utils import VirtualDirectProduct
 from karma.learning.matrix_utils import second_moment
+
+LOGGER = initialize_logger('learning.lasso')
 
 __all__ = ['best_model_cv', 'lassopath', 'best_lasso_model_cv_from_moments', 'compute_indices_and_model_rank']
 
@@ -195,8 +198,16 @@ def best_model_cv(X, Y, cv=None, n_jobs=None, use_lars=False):
         if cv is None:
             cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=Y.shape[0])
         kwargs = dict(cv=cv.split(X, Y), normalize=True, precompute=True, n_jobs=n_jobs)
-        lasso_cv = LassoLarsCV(**kwargs) if use_lars else LassoCV(random_state=X.shape[0], **kwargs)
-        lasso_cv.fit(X, Y)
+        if use_lars:
+            try:
+                lasso_cv = LassoLarsCV(**kwargs)
+                lasso_cv.fit(X, Y)
+            except Exception as e:
+                use_lars = False
+                LOGGER.warn('LassoLarsCV raised the following exception, switching to LassoCV: \n{}'.format(e))
+        if not use_lars:
+            lasso_cv = LassoCV(random_state=X.shape[0], **kwargs)
+            lasso_cv.fit(X, Y)
     return np.nonzero(np.abs(lasso_cv.coef_) > 1e-10)[0], lasso_cv.coef_, lasso_cv.intercept_
 
 
