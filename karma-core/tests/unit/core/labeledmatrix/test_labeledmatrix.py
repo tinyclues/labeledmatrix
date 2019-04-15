@@ -4,6 +4,8 @@ import numpy as np
 from cyperf.matrix.karma_sparse import DTYPE
 
 from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
+from karma.core.labeledmatrix.utils import lm_aggregate_pivot
+from karma import DataFrame, Column
 
 
 class LabeledMatrixTestCase(unittest.TestCase):
@@ -298,3 +300,27 @@ class LabeledMatrixTestCase(unittest.TestCase):
         np.testing.assert_array_almost_equal(pot_allocation.matrix, [[1., 0., 0.],
                                                                      [0.544, 0.456, 0.],
                                                                      [0.627, 0., 0.373]], decimal=3)
+
+    def test_lm_aggregate_pivot(self):
+        d = DataFrame()
+        d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3']
+        d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20]
+        d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+']
+        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean')
+        np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[90, 37.5],
+                                                                   [60, 32.5],
+                                                                   [20, 0]])
+
+        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std')
+        np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[10, 4.5],
+                                                                   [0, 2.5],
+                                                                   [0, 0]])
+
+        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False)
+        np.testing.assert_array_almost_equal(lm.matrix, [[10, 4.5],
+                                                         [0, 2.5],
+                                                         [0, 0]])
+
+        with self.assertRaises(ValueError) as e:
+            lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'dummyAggregator', sparse=False)
+        self.assertEqual('aggregator dummyAggregator does not exist', str(e.exception))

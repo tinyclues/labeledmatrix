@@ -24,7 +24,6 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
 
     This can be used as routine to compute pivot matrices with associative aggregators (#, sum, min, max, !, last)
     # TODO : iterate over different values/aggregators and to use in df.pivot
-    # TODO : implement mean aggregators
     Compare with the example from dataframe.pivot :
 
         >>> from karma import DataFrame, Column
@@ -32,7 +31,6 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         >>> d['gender'] = Column(['1', '1', '2', '2', '1', '2', '1'])
         >>> d['revenue'] = Column([100,  42,  60,  30,  80,  35,  33])
         >>> d['csp'] = Column(['+', '-', '+', '-', '+', '-', '-'])
-
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum').to_dense()\
             .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
@@ -40,6 +38,22 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         ----------------------
         1      180.0    75.0
         2      60.0     65.0
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean').to_dense()\
+            .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      90.0     37.5
+        2      60.0     32.5
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std').to_dense()\
+            .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      10.0     4.5
+        2      0.0      2.5
 
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'min', sparse=False)\
             .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
@@ -58,16 +72,18 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         2      60.0     35.0
 
     """
-    from karma.core.labeledmatrix import LabeledMatrix
     aggregator_map = {'sum': 'add',
                       'min': 'min',
                       'max': 'max',
                       '!': 'first',
                       'last': 'last',
-                      'first': 'first'
-                     }
+                      'first': 'first',
+                      'mean': _lm_aggregate_pivot_mean,
+                      'std': _lm_aggregate_pivot_std
+                      }
     if aggregator not in aggregator_map.keys():
         raise ValueError('aggregator {} does not exist'.format(aggregator))
+    aggregator = aggregator_map[aggregator]
 
     if values is not None:
         val = np.asarray(dataframe[values][:])
@@ -75,17 +91,68 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
     else:
         val = np.ones(len(dataframe), dtype=np.float32)
 
-    val_a, ind_a = dataframe[key].reversed_index()
-    val_b, ind_b = dataframe[axis].reversed_index()
+    ri_key = dataframe[key].reversed_index()
+    ri_axis = dataframe[axis].reversed_index()
 
-    shape = (len(val_a), len(val_b))
-    if sparse:
-        matrix = KarmaSparse((val, (ind_a, ind_b)), shape=shape, format="csr",
-                             aggregator=aggregator_map[aggregator])
+    if callable(aggregator):
+        return aggregator(val, ri_key, ri_axis, sparse)
     else:
-        matrix = dense_pivot(ind_a, ind_b, val, shape=shape,
-                             aggregator=aggregator_map[aggregator], default=0)
-    return LabeledMatrix((val_a, val_b), matrix)
+        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse)
+
+
+def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse):
+    """
+    private method called by lm_aggregate
+    :param val: np array
+    :param ri_key: tuple (unique values, reverse index) for key
+    :param ri_axis: tuple (unique values, reverse index) for axis
+    :param aggregator: str (add, min, max, first)
+    :param sparse: bool
+    :return: LabeledMatrix
+    """
+    from karma.core.labeledmatrix import LabeledMatrix
+
+    val_key, ind_key = ri_key
+    val_axis, ind_axis = ri_axis
+
+    shape = (len(val_key), len(val_axis))
+    if sparse:
+        matrix = KarmaSparse((val, (ind_key, ind_axis)), shape=shape, format="csr", aggregator=aggregator)
+    else:
+        matrix = dense_pivot(ind_key, ind_axis, val, shape=shape, aggregator=aggregator, default=0)
+    return LabeledMatrix((val_key, val_axis), matrix)
+
+
+def _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=True):
+    """
+    private method called by lm_aggregate_pivot
+
+    :param val: np array
+    :param ri_key: tuple (unique values, reverse index) for key
+    :param ri_axis: tuple (unique values, reverse index) for axis
+    :param sparse: bool
+    :return: LabeledMatrix
+    """
+    lm_sum = _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator='add', sparse=sparse)
+    lm_cardinality = _lm_aggregate_pivot(np.ones(len(val), dtype=np.float32),
+                                         ri_key, ri_axis, aggregator='add', sparse=sparse)
+    return lm_sum.divide(lm_cardinality)
+
+
+def _lm_aggregate_pivot_std(val, ri_key, ri_axis, sparse=True):
+    """
+        private method called by lm_aggregate_pivot
+
+        :param val: np array
+        :param ri_key: tuple (unique values, reverse index) for key
+        :param ri_axis: tuple (unique values, reverse index) for axis
+        :param sparse: bool
+        :return: LabeledMatrix
+        """
+    lm_mean = _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=sparse)
+    lm_sum_square = _lm_aggregate_pivot_mean(val ** 2, ri_key, ri_axis, sparse=sparse)
+    lm_var = lm_sum_square - lm_mean.power(2)
+    return lm_var.power(0.5)
 
 
 def aeq(matrix1, matrix2):
