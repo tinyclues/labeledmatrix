@@ -1,9 +1,9 @@
 import numpy as np
 from sklearn.utils import check_array, check_consistent_length
-from cyperf.tools import parallel_unique
+from cyperf.tools import parallel_unique, argsort
 from scipy.stats import rankdata
 
-__all__ = ['normalized_log_loss_from_prediction', 'auc_from_prediction']
+__all__ = ['normalized_log_loss_from_prediction', 'auc_from_prediction', 'normalized_discounted_cumulative_gain']
 
 
 def check_metric_arrays(predicted_values, true_values):
@@ -99,3 +99,67 @@ def root_mean_squared_error(predicted_values, true_values):
 def absolute_mean_error(predicted_values, true_values):
     predicted_values, true_values = check_metric_arrays(predicted_values, true_values)
     return np.mean(np.abs(predicted_values - true_values))
+
+
+def normalized_discounted_cumulative_gain(predicted_relevance, true_relevance, rescaled=True, rank=None):
+    """
+    Calculate normalized discounted cumulative gain for a ranking given by predicted_relevance
+    https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+    :param predicted_relevance: array-like of predicting relevance values that will be used for ranking
+    :param true_relevance: array-like of true relevance values
+    :param rescaled: boolean, if True result will be rescaled in a way that worst possible ranking will have score 0
+    :param rank: int
+    :return: float
+    >>> relevance = np.array([3, 2, 3, 0, 1, 2, 3, 2])
+    >>> normalized_discounted_cumulative_gain(relevance, relevance, rescaled=False)
+    1.0
+    >>> normalized_discounted_cumulative_gain(relevance, relevance)
+    1.0
+    >>> normalized_discounted_cumulative_gain(argsort(argsort(relevance, reverse=True)), relevance)
+    0.0
+    >>> normalized_discounted_cumulative_gain(argsort(argsort(relevance, reverse=True)), relevance, rescaled=False) # doctest: +ELLIPSIS
+    0.6922288...
+    >>> ranking = np.arange(8)
+    >>> ranking_relevance = ranking[::-1]
+    >>> normalized_discounted_cumulative_gain(ranking_relevance, relevance, rescaled=False) # doctest: +ELLIPSIS
+    0.9359086...
+    >>> normalized_discounted_cumulative_gain(ranking_relevance, relevance) # doctest: +ELLIPSIS
+    0.7917563...
+    >>> bad_relevance_rank_2 = np.array([3, 1, 3, 8, 8, 1, 3, 1])
+    >>> normalized_discounted_cumulative_gain(bad_relevance_rank_2, relevance) # doctest: +ELLIPSIS
+    0.1119118...
+    >>> normalized_discounted_cumulative_gain(bad_relevance_rank_2, relevance, rank=2)
+    0.0
+    >>> normalized_discounted_cumulative_gain(ranking_relevance, np.zeros_like(relevance))
+    nan
+    >>> normalized_discounted_cumulative_gain(ranking_relevance, np.ones_like(relevance))
+    nan
+    """
+    predicted_relevance, true_relevance = check_metric_arrays(predicted_relevance, true_relevance)
+    if rank is None:
+        true_best_indices = argsort(true_relevance, reverse=True)
+        if rescaled:
+            true_worst_indices = true_best_indices[::-1]
+    else:
+        true_best_indices = argsort(true_relevance, nb=rank, reverse=True)[:rank]
+        if rescaled:
+            true_worst_indices = argsort(true_relevance, nb=rank)[:rank]
+    pred_best_indices = argsort(predicted_relevance, nb=rank or -1, reverse=True)[:rank]
+
+    # log_discount_values = 1. / np.log2(np.arange(rank or max(true_relevance.shape), dtype=np.float32) + 2)
+    log_discount_values = np.arange(rank or max(true_relevance.shape), dtype=np.float32)
+    log_discount_values += 2
+    np.log2(log_discount_values, out=log_discount_values)
+    np.divide(1., log_discount_values, out=log_discount_values)
+
+    dcg = true_relevance[pred_best_indices].dot(log_discount_values)
+    dcg_best_possible = true_relevance[true_best_indices].dot(log_discount_values)
+    if dcg_best_possible < 1e-9:
+        return np.nan
+    if rescaled:
+        dcg_worst = true_relevance[true_worst_indices].dot(log_discount_values)
+        if abs(dcg_best_possible - dcg_worst) < 1e-9:
+            return np.nan
+        return (dcg - dcg_worst) / (dcg_best_possible - dcg_worst)
+    else:
+        return dcg / dcg_best_possible
