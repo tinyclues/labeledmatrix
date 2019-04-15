@@ -296,50 +296,72 @@ class DeepFM(AbstractTorchKarmaIntegrator):
     def __init__(self, model_kwargs, seed=None):
 
         super(DeepFM, self).__init__()
-        self.model_kwargs = model_kwargs
+        self.output = model_kwargs.get('output')
         self.size_dict = model_kwargs['size_dict']
         self.features = model_kwargs['features']
         assert(set(self.features).issubset(self.size_dict.keys()))
-        base_out_dim = 0
-        for idx, base_cell in enumerate(coerce_to_tuple(self.model_kwargs['base_cells'])):
-            cell = module_mapping[base_cell['type']](seed=seed, identifier=idx, size_dict=self.size_dict,
-                                                     **base_cell['cell_kwargs'])
-            self.add_module(base_cell['type'] + '_{}'.format(idx), cell)
-            base_out_dim += cell.out_dim
+        self.base_cells = DeepFM._create_cell_objects(DeepFM._get_base_cells_dict(model_kwargs), self.size_dict, seed)
+        for name, cell in self.base_cells.items():
+            self.add_module(name, cell)
+        base_out_dim = sum(map(lambda base_cell: base_cell.out_dim, self.base_cells.values()))
 
-        if 'deep_layer' in self.model_kwargs and self.model_kwargs['deep_layer'] is not None:
-            activation, hidden_sizes = self.model_kwargs['deep_layer']['activation'],\
-                                       coerce_to_tuple(self.model_kwargs['deep_layer']['hidden_sizes'])
+        deep_layers = model_kwargs.get('deep_layer')
+        if deep_layers is not None:
+            if isinstance(deep_layers, torch.nn.Module):
+                self.deep_layers = deep_layers
+            else:
+                self.deep_layers = DeepLayersCell((base_out_dim,) + coerce_to_tuple(deep_layers['hidden_sizes']),
+                                                  deep_layers['activation'], seed=seed)
         else:
-            activation, hidden_sizes = None, tuple()
-
-        self.deep_layers = DeepLayersCell((base_out_dim,) + hidden_sizes, activation, seed=seed)
-
-        if 'fit_linear' in self.model_kwargs and self.model_kwargs['fit_linear']:
+            self.deep_layers = DeepLayersCell((base_out_dim,), None, seed=seed)
+        self.fit_linear = model_kwargs.get('fit_linear', False)
+        if self.fit_linear:
             self.linear = LinearCell(size_dict=keyfilter(lambda x: x in self.features, self.size_dict), seed=seed)
 
+    @staticmethod
+    def _get_base_cells_dict(model_kwargs):
+        if isinstance(model_kwargs['base_cells'], dict):
+            return OrderedDict(model_kwargs['base_cells'].items())
+        else:
+            base_cells_dict = OrderedDict()
+            for idx, cell in enumerate(coerce_to_tuple(model_kwargs['base_cells'])):
+                type_ = cell._get_name() if isinstance(cell, torch.nn.Module) else cell['type']
+                base_cells_dict['{}_{}'.format(type_, idx)] = cell
+            return base_cells_dict
+
+    @staticmethod
+    def _create_cell_objects(base_cells_dict, size_dict, seed=None):
+        for idx, name in enumerate(base_cells_dict.keys()):
+            base_cell = base_cells_dict[name]
+            if isinstance(base_cell, torch.nn.Module):
+                # this is needed since we give ds into forward pass of base_cells
+                assert isinstance(base_cell, tuple(module_mapping.values()))
+            else:
+                base_cell = module_mapping[base_cell['type']](seed=seed, identifier=idx, size_dict=size_dict,
+                                                              **base_cell['cell_kwargs'])
+                base_cells_dict[name] = base_cell
+        return base_cells_dict
+
     def forward(self, ds):
-        res = torch.cat(tuple(self.children_dict[base_cell['type'] + '_{}'.format(idx)](ds)
-                              for idx, base_cell in enumerate(coerce_to_tuple(self.model_kwargs['base_cells']))), dim=1)
-
+        res = torch.cat(map(lambda cell: cell(ds), self.base_cells.values()), dim=1)
         res = self.deep_layers(res).reshape(-1)
-
-        if 'fit_linear' in self.model_kwargs and self.model_kwargs['fit_linear']:
+        if self.fit_linear:
             res += self.linear(ds)
 
         return torch.sigmoid(res)
 
     def to_karmacode(self, inp='', out=None):
-        out = self.model_kwargs.get('output') if out is None else out
+        out = self.output if out is None else out
         kc = KarmaCode()
-        base_types = set(b['type'] for b in self.model_kwargs['base_cells'])
-        for named_child in self.named_children():
-            if named_child[1].name in base_types:
-                kc += named_child[1].to_karmacode()
+        for base_cell in self.base_cells.values():
+            kc += base_cell.to_karmacode()
         kc += KarmaCode([DirectSum(kc.outputs, 'base_cells_agg_out')], outputs='base_cells_agg_out')
-        kc_deep = self.deep_layers.to_karmacode('base_cells_agg_out')
+        if hasattr(self.deep_layers, 'to_karmacode'):
+            kc_deep = self.deep_layers.to_karmacode('base_cells_agg_out')
+        else:
+            kc_deep = TorchModule('base_cells_agg_out', 'out_deep', self.deep_layers).to_karmacode()
         kc += kc_deep
-        if 'fit_linear' in self.model_kwargs and self.model_kwargs['fit_linear']:
+        if self.fit_linear:
             kc += self.linear.to_karmacode()
             kc += KarmaCode([Add(kc_deep.outputs + self.linear.to_karmacode().outputs, 'add_lin_deep')],
                             outputs='add_lin_deep')

@@ -1,9 +1,12 @@
+from copy import deepcopy
+
 import unittest
 import numpy as np
 import torch
 
 from functools import partial
 from cyperf.matrix.karma_sparse import KarmaSparse
+from torch.nn import Linear
 
 from karma.core.dataframe import DataFrame
 from karma.core.utils.utils import use_seed
@@ -152,3 +155,48 @@ class DeepFMTestCase(unittest.TestCase):
         self.df += deep_fm.to_karmacode(out='out_deepfm')
         np.testing.assert_array_almost_equal(deep_fm(self.df).detach(), self.df['out_deepfm'][:].reshape(-1),
                                              decimal=3)
+
+    def test_create_from_existing_cells(self):
+        model_kwargs = deepcopy(self.model_kwargs)
+        model_kwargs['base_cells'] = [{'type': 'concat_bi_interaction_cell',
+                                       'cell_kwargs': dict(config=('a', 'b'),
+                                                           embed_dim=2)},
+                                      {'type': 'concat_bi_interaction_cell',
+                                       'cell_kwargs': dict(config=('a', 'c'),
+                                                           embed_dim=3)},
+                                      ]
+        deep_fm_1 = DeepFM(model_kwargs)
+
+        model_kwargs['base_cells'] = [{'type': 'concat_bi_interaction_cell',
+                                       'cell_kwargs': dict(config=('a', 'c'),
+                                                           embed_dim=4)},
+                                      deep_fm_1.children_dict['concat_bi_interaction_cell_1'],
+                                      deep_fm_1.children_dict['concat_bi_interaction_cell_0'],
+                                      ]
+        deep_fm_2 = DeepFM(model_kwargs)
+        self.assertEqual(['concat_bi_interaction_cell_0', 'ConcatBiInteractionCell_1', 'ConcatBiInteractionCell_2'],
+                         deep_fm_2.base_cells.keys())
+        self.assertEqual(id(deep_fm_1.base_cells['concat_bi_interaction_cell_0']),
+                         id(deep_fm_2.base_cells['ConcatBiInteractionCell_2']))
+        self.assertEqual(('a',), deep_fm_2.base_cells['ConcatBiInteractionCell_1'].left)
+        self.assertEqual(('c',), deep_fm_2.base_cells['ConcatBiInteractionCell_1'].right)
+        self.assertEqual(2 + 3 + 4, deep_fm_2.children_dict['deep_layers'].sizes[0])
+
+        model_kwargs['deep_layer'] = deep_fm_2.deep_layers
+        deep_fm_3 = DeepFM(model_kwargs)
+        self.assertEqual(id(deep_fm_2.deep_layers), id(deep_fm_3.deep_layers))
+
+    def test_base_cells_dict(self):
+        model_kwargs = deepcopy(self.model_kwargs)
+        model_kwargs['base_cells'] = {'ab': {'type': 'concat_bi_interaction_cell',
+                                             'cell_kwargs': dict(config=('a', 'b'), embed_dim=2)},
+                                      'ac': {'type': 'concat_bi_interaction_cell',
+                                             'cell_kwargs': dict(config=('a', 'c'), embed_dim=3)}}
+        deep_fm = DeepFM(model_kwargs)
+        self.assertEqual(['ac', 'ab', 'deep_layers', 'linear'], deep_fm.children_dict.keys())
+
+    def test_very_custom_deep_layer(self):
+        model_kwargs = deepcopy(self.model_kwargs)
+        model_kwargs['deep_layer'] = Linear(5, 1)
+        deep_fm = DeepFM(model_kwargs)
+        _ = self.df.copy().with_karmacode(deep_fm.to_karmacode(out='out_deepfm'))
