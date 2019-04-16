@@ -3,7 +3,7 @@
 #
 import numpy as np
 
-from karma import KarmaSetup
+from karma.runtime import KarmaSetup
 
 __all__ = ['ntf']
 

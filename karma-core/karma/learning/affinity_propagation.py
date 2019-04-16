@@ -3,7 +3,7 @@
 #
 
 import numpy as np
-from karma import KarmaSetup
+from karma.runtime import KarmaSetup
 from cyperf.tools import parallel_unique
 from cyperf.clustering.sparse_affinity_propagation import SAFP
 from cyperf.matrix.karma_sparse import is_karmasparse

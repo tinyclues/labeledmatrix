@@ -10,7 +10,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from cyperf.tools import take_indices, logit_inplace, argsort, parallel_sort
 
-from karma import KarmaSetup
+from karma.runtime import KarmaSetup
 
 from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
 from karma.core.utils.array import is_binary
