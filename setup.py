@@ -32,12 +32,10 @@ SOURCE_FILE = [
     'tools/curve.pyx',
     'indexing/column_index.pyx',
     'indexing/indexed_list.pyx',
-    'where/cy_filter.pyx',
-    ]
+    'where/cy_filter.pyx']
 
 TEMPLATE_SOURCE = ['tools/vector.pyx.in',
-                   'tools/parallel_sort_routine.pyx.in'
-                   ]
+                   'tools/parallel_sort_routine.pyx.in']
 
 basic_cargs = ['-O3', '-std=c++11', '-fopenmp', '-lgomp', '-msse4.2',
                '-Wno-unused-function', '-Wno-maybe-uninitialized', '-Wno-unused-variable']
@@ -45,7 +43,7 @@ largs = ['-fopenmp', '-lgomp']
 
 
 def cargs(f):
-    if 'parallel_sort_routine' in f:
+    if 'parallel_sort_routine' in f or 'karma_sparse' in f:
         # we need to remove flag '-ffast-math' flag to deal with nan
         # see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25975 and https://github.com/cython/cython/issues/550
         return basic_cargs

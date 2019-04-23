@@ -192,18 +192,13 @@ cdef bool check_shape_comptibility(x1, x2) except 0:
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
-                                                     ITYPE_t[::1] cols,
-                                                     floating[::1] values,
-                                                     shape=None,
-                                                     str aggregator=DEFAULT_AGG,
-                                                     DTYPE_t default=0):
+cpdef np.ndarray[dtype=A, ndim=2] dense_pivot(integral[:] rows, integral[:] cols, A[:] values,
+                                              shape=None, str aggregator=DEFAULT_AGG, DTYPE_t default=0):
     if not (rows.shape[0] == cols.shape[0] == values.shape[0]):
         raise ValueError("Incompatible size of coordinates and/or data : {}, ({}, {})"
                          .format(values.shape[0], rows.shape[0], cols.shape[0]))
 
-    cdef LTYPE_t n, nnz = rows.shape[0]
-    cdef ITYPE_t x, y, maxx = 0, maxy = 0
+    cdef LTYPE_t n, nnz = rows.shape[0], x, y, maxx = 0, maxy = 0
 
     with nogil:
         for n in range(nnz):
@@ -223,9 +218,9 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
         shape = (maxx + 1, maxy + 1)
 
     cdef DTYPE_t_binary_func reducer = get_reducer(aggregator)
-    cdef floating[:,::1] result = np.full(shape, default, dtype=np.array(values).dtype)
+    cdef A[:,::1] result = np.full(shape, default, dtype=np.asarray(values).dtype)
     cdef BOOL_t[:,::1] mask = np.zeros(shape, dtype=BOOL)
-    cdef DTYPE_t val
+    cdef A val
 
     with nogil:
         for n in range(nnz):
@@ -233,7 +228,7 @@ cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows,
             if val == val:  # val is not np.nan
                 x, y = rows[n], cols[n]
                 if mask[x, y]:
-                    result[x, y] = reducer(result[x, y], val)
+                    result[x, y] = <A>reducer(result[x, y], val)
                 else:
                     result[x, y] = val
                     mask[x, y] = 1

@@ -6,7 +6,7 @@
 cimport cython
 cimport numpy as np
 from cython.parallel cimport parallel, prange
-from cython cimport floating
+from cython cimport floating, integral
 
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.string cimport memcpy
@@ -364,9 +364,8 @@ cdef inline DTYPE_t complement(DTYPE_t a, DTYPE_t b) nogil:
         return 0
 
 
-cpdef np.ndarray[dtype=floating, ndim=2] dense_pivot(ITYPE_t[::1] rows, ITYPE_t[::1] cols,
-                                                     floating[::1] values, shape=*,
-                                                     str aggregator=*, DTYPE_t default=*)
+cpdef np.ndarray[dtype=A, ndim=2] dense_pivot(integral[:] rows, integral[:] cols, A[:] values,
+                                              shape=*, str aggregator=*, DTYPE_t default=*)
 
 
 cdef class KarmaSparse:

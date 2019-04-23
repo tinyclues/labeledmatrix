@@ -971,6 +971,17 @@ class TestKarmaSparse(unittest.TestCase):
                 res_sparse = KarmaSparse((val, (x, y)), shape=shape, format="csr", aggregator=agg)
                 np_almost_equal(res_dense, res_sparse)
 
+    def test_dense_pivot3(self):
+        mat = dense_pivot(np.arange(6) % 3, np.arange(6) % 2, np.arange(6).astype(np.int32))
+        self.assertEqual(mat.dtype, np.int32)
+        np_almost_equal(mat, np.array([[0, 3], [4, 1], [2, 5]]))
+
+        val = np.arange(6).astype(np.float32)
+        val[-1] = np.nan
+        mat = dense_pivot(np.arange(6) % 3, np.arange(6) % 2, val)
+        self.assertEqual(mat.dtype, np.float32)
+        np_almost_equal(mat, np.array([[0, 3.], [4, 1], [2, 0]], dtype=np.float32))
+
     def test_dot_vector(self):
         for a, dtype in itertools.product(self.mf.iterator(dense=True),
                                           [np.float, np.float32, np.int, np.int32]):
