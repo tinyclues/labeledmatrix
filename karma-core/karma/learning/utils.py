@@ -682,8 +682,8 @@ def create_basic_virtual_hstack(dataframe, inputs):
     def find_dp(inp):
         # a bit dirty hack
         backend = dataframe[inp]._backend
-        if KarmaSetup.vdp_active and hasattr(backend, 'dependencies') and hasattr(backend, 'instruction') and \
-                        backend.instruction.name == "direct_product" and len(backend.dependencies) == 2:
+        if hasattr(backend, 'dependencies') and hasattr(backend, 'instruction') and \
+                backend.instruction.name == "direct_product" and len(backend.dependencies) == 2:
             return tuple([x[0] for x in backend.dependencies])  # this returns names
         else:
             return inp
