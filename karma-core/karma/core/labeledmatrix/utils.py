@@ -2,17 +2,23 @@
 # Copyright tinyclues, All rights reserved
 #
 from itertools import izip
+from warnings import warn
 
 import numpy as np
 from cytoolz import merge as dict_merge
 
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
+
+from karma.core.column import WriteValuesOnDiskException
 from karma.core.utils.collaborative_tools import simple_counter
 from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
+from karma.types import is_exceptional_mask, generic_ndarray_safe_cast
+
+PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
 
-def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True):
+def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True, default=0):
     """
     :param dataframe: DataFrame
     :param key: str columnName corresponding to the index
@@ -20,6 +26,7 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
     :param values: str columns on which the aggregator will be used
     :param aggregator: str (min, max, sum, first, last)
     :param sparse: bool returns sparse result
+    :param default : float64 : default value for dense pivot.
     :return: LabeledMatrix
 
     This can be used as routine to compute pivot matrices with associative aggregators (#, sum, min, max, !, last)
@@ -60,8 +67,8 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
-        1      80.0     33.0
-        2      60.0     30.0
+        1      80      33
+        2      60      30
 
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'max').to_dense()\
             .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
@@ -72,6 +79,7 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         2      60.0     35.0
 
     """
+    from karma.core.column import safe_dtype_cast
     aggregator_map = {'sum': 'add',
                       'min': 'min',
                       'max': 'max',
@@ -81,28 +89,54 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
                       'mean': _lm_aggregate_pivot_mean,
                       'std': _lm_aggregate_pivot_std
                       }
+    if len(dataframe) == 0:
+        raise ValueError('empty dataframe provided to lm aggregate pivot')
     if aggregator not in aggregator_map.keys():
         raise ValueError('aggregator {} does not exist'.format(aggregator))
     aggregator = aggregator_map[aggregator]
-
+    vectorial_cols = set([key, axis, values]).intersection(dataframe.vectorial_column_names)
+    if len(vectorial_cols) != 0:
+        raise TypeError("Some columns are vectorials not compatible {}".format(vectorial_cols))
     if values is not None:
-        val = np.asarray(dataframe[values][:])
-        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
+        data = dataframe[values][:]
+        if sparse:
+            val = safe_dtype_cast(data, np.float32)
+        else:
+            if isinstance(data, np.ndarray):
+                val = generic_ndarray_safe_cast(data)
+            else:
+                # case where its not ndarray
+                if np.any(is_exceptional_mask(data)):
+                    # we NEED na we have to use float, we choose 32
+                    try:
+                        val = safe_dtype_cast(data, np.float32)
+                    except WriteValuesOnDiskException:
+                        raise TypeError('Some values to aggregate are not numeric')
+                else:
+                    val = np.asarray(data)
+            if val.dtype not in [np.float64, np.float32, np.int64, np.int32, np.uint8]:
+                # the dtype is not numeric
+                raise TypeError('Error the dtype {} is not compatible w/ lm pivot'.format(val.dtype))
     else:
-        val = np.ones(len(dataframe), dtype=np.float32)
+        # count aggregator so the values should be integer if not sparse
+        if not sparse:
+            val = np.ones(len(dataframe), dtype=np.int64)
+        else:
+            val = np.ones(len(dataframe), dtype=np.float32)
 
     ri_key = dataframe[key].reversed_index()
     ri_axis = dataframe[axis].reversed_index()
 
     if callable(aggregator):
-        return aggregator(val, ri_key, ri_axis, sparse)
+        return aggregator(val, ri_key, ri_axis, sparse, default)
     else:
-        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse)
+        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default)
 
 
-def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse):
+def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
     """
     private method called by lm_aggregate
+
     :param val: np array
     :param ri_key: tuple (unique values, reverse index) for key
     :param ri_axis: tuple (unique values, reverse index) for axis
@@ -119,11 +153,11 @@ def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse):
     if sparse:
         matrix = KarmaSparse((val, (ind_key, ind_axis)), shape=shape, format="csr", aggregator=aggregator)
     else:
-        matrix = dense_pivot(ind_key, ind_axis, val, shape=shape, aggregator=aggregator, default=0)
+        matrix = dense_pivot(ind_key, ind_axis, val, shape=shape, aggregator=aggregator, default=default)
     return LabeledMatrix((val_key, val_axis), matrix)
 
 
-def _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=True):
+def _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=True, default=0):
     """
     private method called by lm_aggregate_pivot
 
@@ -133,13 +167,18 @@ def _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=True):
     :param sparse: bool
     :return: LabeledMatrix
     """
-    lm_sum = _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator='add', sparse=sparse)
-    lm_cardinality = _lm_aggregate_pivot(np.ones(len(val), dtype=np.float32),
-                                         ri_key, ri_axis, aggregator='add', sparse=sparse)
+    # Now sparse matrix ignore nan values :
+    # So now when calculating the mean you should divide by the number of element without nan values.
+    # To do so we replace 1 by nan so that KarmaSparse will ignore its value.
+    ones = np.ones(len(val), dtype=np.float32)
+    ones[np.isnan(val)] = np.nan
+    lm_sum = _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator='add', sparse=sparse, default=default)
+    lm_cardinality = _lm_aggregate_pivot(ones,
+                                         ri_key, ri_axis, aggregator='add', sparse=sparse, default=default)
     return lm_sum.divide(lm_cardinality)
 
 
-def _lm_aggregate_pivot_std(val, ri_key, ri_axis, sparse=True):
+def _lm_aggregate_pivot_std(val, ri_key, ri_axis, sparse=True, default=0):
     """
         private method called by lm_aggregate_pivot
 
@@ -149,8 +188,8 @@ def _lm_aggregate_pivot_std(val, ri_key, ri_axis, sparse=True):
         :param sparse: bool
         :return: LabeledMatrix
         """
-    lm_mean = _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=sparse)
-    lm_sum_square = _lm_aggregate_pivot_mean(val ** 2, ri_key, ri_axis, sparse=sparse)
+    lm_mean = _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=sparse, default=default)
+    lm_sum_square = _lm_aggregate_pivot_mean(val ** 2, ri_key, ri_axis, sparse=sparse, default=default)
     lm_var = lm_sum_square - lm_mean.power(2)
     return lm_var.power(0.5)
 
