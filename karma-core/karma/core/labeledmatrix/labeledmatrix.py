@@ -148,8 +148,9 @@ class LabeledMatrix(object):
     ['x', 'y', 'z']
     """
 
-    def __init__(self, (row, column), matrix, deco=({}, {})):
-        self.check_format((row, column), matrix)
+    def __init__(self, label, matrix, deco=({}, {})):
+        self.check_format(label, matrix)
+        row, column = label
         if is_scipysparse(matrix):
             matrix = KarmaSparse(matrix)
         self.is_sparse = is_karmasparse(matrix)
@@ -194,14 +195,13 @@ class LabeledMatrix(object):
         return self.matrix.dtype
 
     @staticmethod
-    def check_format((row, column), matrix):
+    def check_format(label, matrix):
         """
         Used to check a number of assertion on the content of a LabeledMatrix.
 
-        :param row: row labels, labels should be unique and of the correct
-                    shape, with respect to the given matrix
-        :param column: column labels, labels should be unique and of the correct
-                       shape, with respect to the given matrix
+        :param label: tuple (row, column) with
+            row labels, labels should be unique and of the correct shape, with respect to the given matrix
+            column labels, labels should be unique and of the correct shape, with respect to the given matrix
         :param matrix: a numpy or scipy two dimensional array
         :return: None
         :raise: LabeledMatrixException
@@ -232,7 +232,7 @@ class LabeledMatrix(object):
             ...                            np.array([[0, 1, 0], [1, 0, 1]]))  # doctest: +ELLIPSIS
 
         """
-
+        row, column = label
         if not (is_scipysparse(matrix) or is_karmasparse(matrix) or isinstance(matrix, np.ndarray)):
             raise LabeledMatrixException("Unacceptable matrix type: %s" % (type(matrix),))
         if matrix.ndim != 2:
