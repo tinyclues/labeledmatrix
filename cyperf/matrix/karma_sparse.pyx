@@ -29,20 +29,61 @@ cdef str DEFAULT_AGG = 'add'
 def logit(x, shift=0., width=1.):
     return expit((x - shift) / width)
 
+cdef A_binary_func get_reducer_dense(str x, A sample) except *:
+    """
+    returns the correct aggregator given a str and sample value of the type you want to use. 
+    Casting in fused dtypes is only autorized in a few specific cases, most of them only possible at call time. 
+    see https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#casting-fused-functions for explanation.
+    """
+    # to choose which of the fused types signature cython needs to compile Cython uses input signature.
+    # we defined a sample value that can have any type in A (long , float etc.. see in types).
+    # we first define a function as a pointer of function (A, A)-> A
+    cdef A_binary_func function
+    # we then define all the functions specific for each dtype
+    cdef BOOL_t_binary_func bool_function
+    cdef ITYPE_t_binary_func int_function
+    cdef LTYPE_t_binary_func long_function
+    cdef FTYPE_t_binary_func float_func
+    cdef DTYPE_t_binary_func dtype_func
+
+    # now given the type of A we cast function to the good dtype using an equality.
+    if A is DTYPE_t:
+        function = dtype_func
+    elif A is BOOL_t:
+        function = bool_function
+    elif A is ITYPE_t:
+        function = int_function
+    elif A is LTYPE_t:
+        function = long_function
+    elif A is FTYPE_t:
+        function = float_func
+    # we can now select which function to call since function is not anymore a pointer of (A, A)-> A
+    # but a specific signature function
+    if x == 'max':
+        function = mmax
+    elif x == 'min':
+        function = mmin
+    elif x == 'add':
+        function = cadd
+    elif x == 'multiply':
+        function = mult
+    elif x == 'divide':
+        function = save_division
+    elif x == 'subtract':
+        function = cminus
+    elif x == 'first':
+        function = first
+    elif x == 'last':
+        function = last
+    elif x == 'complement':
+        function = complement
+    else:
+        raise ValueError('Unknown reducer : {}'.format(x))
+    return function
+
 
 cdef DTYPE_t_binary_func get_reducer(str x) except *:
-    if x == 'max': return mmax
-    if x == 'min': return mmin
-    if x == 'add': return cadd
-    if x == 'multiply': return mult
-    if x == 'divide': return save_division
-    if x == 'subtract': return cminus
-    if x == 'first': return first
-    if x == 'last': return last
-    if x == 'complement': return complement
-
-    raise ValueError('Unknown reducer : {}'.format(x))
-
+    return <DTYPE_t_binary_func> get_reducer_dense(x, <DTYPE_t> 0)
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
@@ -217,10 +258,10 @@ cpdef np.ndarray[dtype=A, ndim=2] dense_pivot(integral[:] rows, integral[:] cols
             raise ValueError('Cannot derive shape value from empty data')
         shape = (maxx + 1, maxy + 1)
 
-    cdef DTYPE_t_binary_func reducer = get_reducer(aggregator)
     cdef A[:,::1] result = np.full(shape, default, dtype=np.asarray(values).dtype)
     cdef BOOL_t[:,::1] mask = np.zeros(shape, dtype=BOOL)
     cdef A val
+    cdef A_binary_func reducer = <A_binary_func> get_reducer_dense(aggregator, values[0])
 
     with nogil:
         for n in range(nnz):
@@ -3269,8 +3310,8 @@ cdef class KarmaSparse:
                         other = np.repeat(other, self.shape[1], axis=1)
                     if other.shape == (1, self.shape[1]):
                         other = np.repeat(other, self.shape[0], axis=0)
-                return (<KarmaSparse?>self).generic_dense_binary_operation(other.astype(DTYPE, copy=False),
-                                                                           get_reducer('add'))
+                return (<KarmaSparse?> self).generic_dense_binary_operation(other.astype(DTYPE, copy=False),
+                                                                            get_reducer('add'))
             else:
                 raise ValueError('operands could not be broadcast together with shapes {} {}'
                                  .format(self.shape, other.shape))

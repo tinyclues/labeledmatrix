@@ -969,7 +969,20 @@ class TestKarmaSparse(unittest.TestCase):
             for agg in ['add', 'min', 'max', 'last', 'first']:
                 res_dense = dense_pivot(x, y, val, shape=shape, aggregator=agg, default=0.)
                 res_sparse = KarmaSparse((val, (x, y)), shape=shape, format="csr", aggregator=agg)
-                np_almost_equal(res_dense, res_sparse)
+                np_almost_equal(res_dense.astype(np.float32), res_sparse)
+
+    def test_dense_pivot_keep_same_dtype(self):
+        for _ in range(5):
+            size = np.random.randint(0, 10 ** 3)
+            shape = (np.random.randint(1, 100), np.random.randint(1, 100))
+            x = np.random.randint(0, shape[0], size).astype(np.int32)
+            y = np.random.randint(0, shape[1], size).astype(np.int32)
+            val = np.random.rand(size)
+            for type in [np.float32, np.int32, np.float64, np.int64]:
+                val = val.astype(type)
+                for agg in ['add', 'min', 'max', 'last', 'first']:
+                    res_dense = dense_pivot(x, y, val, shape=shape, aggregator=agg, default=0.)
+                    self.assertEqual(res_dense.dtype, type)
 
     def test_dense_pivot3(self):
         mat = dense_pivot(np.arange(6) % 3, np.arange(6) % 2, np.arange(6).astype(np.int32))

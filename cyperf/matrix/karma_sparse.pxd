@@ -11,7 +11,7 @@ from cython cimport floating, integral
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.string cimport memcpy
 from libc.math cimport pow as _cpow
-from cyperf.tools.types cimport ITYPE_t, LTYPE_t, BOOL_t, bool, A, B
+from cyperf.tools.types cimport ITYPE_t, LTYPE_t, BOOL_t, bool, A, B, FTYPE_t
 from cyperf.tools.sort_tools cimport partial_sort, inplace_reordering, partial_unordered_sort
 
 ctypedef np.float32_t DTYPE_t
@@ -319,45 +319,54 @@ cdef inline DTYPE_t computed_quantile(DTYPE_t* data, DTYPE_t quantile, LTYPE_t s
     free(temp)
     return res
 
+# define function pointers with each signature
+ctypedef A (*A_binary_func)(A, A) nogil
 
+ctypedef BOOL_t (*BOOL_t_binary_func)(BOOL_t, BOOL_t) nogil
+ctypedef ITYPE_t (*ITYPE_t_binary_func)(ITYPE_t, ITYPE_t) nogil
+ctypedef LTYPE_t (*LTYPE_t_binary_func)(LTYPE_t, LTYPE_t) nogil
+ctypedef FTYPE_t (*FTYPE_t_binary_func)(FTYPE_t, FTYPE_t) nogil
 ctypedef DTYPE_t (*DTYPE_t_binary_func)(DTYPE_t, DTYPE_t) nogil
 
 
+# defining the function as A(*)(A, A) will allow the compiler to compile 5 add function w/ all the
+# different signature automatically.
+
 @cython.cdivision(True)
-cdef inline DTYPE_t save_division(DTYPE_t x, DTYPE_t y) nogil:
+cdef inline A save_division(A x, A y) nogil:
     if y == 0:
         return 0
     else:
         return x / y
 
-cdef inline DTYPE_t mult(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A mult(A a, A b) nogil:
     return a * b
 
-cdef inline DTYPE_t mmin(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A mmin(A a, A b) nogil:
     if a > b:
         return b
     else:
         return a
 
-cdef inline DTYPE_t mmax(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A mmax(A a, A b) nogil:
     if a > b:
         return a
     else:
         return b
 
-cdef inline DTYPE_t cadd(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A cadd(A a, A b) nogil:
     return a + b
 
-cdef inline DTYPE_t cminus(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A cminus(A a, A b) nogil:
     return a - b
 
-cdef inline DTYPE_t first(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A first(A a, A b) nogil:
     return a
 
-cdef inline DTYPE_t last(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A last(A a, A b) nogil:
     return b
 
-cdef inline DTYPE_t complement(DTYPE_t a, DTYPE_t b) nogil:
+cdef inline A complement(A a, A b) nogil:
     if b == 0:
         return a
     else:
