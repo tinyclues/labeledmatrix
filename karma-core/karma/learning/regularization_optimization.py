@@ -1,4 +1,5 @@
 from copy import deepcopy
+from six.moves import zip
 from functools import partial
 from itertools import chain
 

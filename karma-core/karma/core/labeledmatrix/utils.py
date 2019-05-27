@@ -1,7 +1,7 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-from itertools import izip
+from six.moves import zip
 from warnings import warn
 
 import numpy as np
@@ -356,7 +356,7 @@ def zipmerge(d1, d2):
     >>> zipmerge((aa, bb), (bb, aa))
     ({'a': 5, 'c': 4, 'b': 4}, {'a': 3, 'c': 4, 'b': 4})
     """
-    return tuple([dict_merge(x, y) for x, y in izip(d1, d2)])
+    return tuple([dict_merge(x, y) for x, y in zip(d1, d2)])
 
 
 def hstack(list_of_lm, dense_output=False):

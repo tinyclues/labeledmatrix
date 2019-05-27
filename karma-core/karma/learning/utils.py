@@ -1,4 +1,5 @@
-from itertools import izip, imap, product
+from six.moves import zip
+from itertools import imap, product
 from multiprocessing.pool import ThreadPool
 
 import torch
@@ -221,7 +222,7 @@ class BasicVirtualHStack(object):
             elif len(arr) == self.shape[1]:
                 return np.asarray(arr)
             elif self.is_block and len(arr) == len(self.X):
-                exp_arr = [np.full(x.shape[1], elt) if not is_iterable(elt) else elt for elt, x in izip(arr, self.X)]
+                exp_arr = [np.full(x.shape[1], elt) if not is_iterable(elt) else elt for elt, x in zip(arr, self.X)]
                 res = np.concatenate(exp_arr)
                 assert (len(res) == self.shape[1])
                 return res
@@ -461,7 +462,7 @@ class CrossValidationWrapper(object):
 
     @property
     def fold_indices_iter(self):
-        return izip(self.test_indices_by_fold, self.test_y_hat_by_fold)
+        return zip(self.test_indices_by_fold, self.test_y_hat_by_fold)
 
     def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
         X_stacked = VirtualHStack(blocks_x,
