@@ -3,6 +3,7 @@
 #
 
 import string
+from six.moves import range
 
 DEFAULT_DEPTH = 3
 DEFAULT_EXCLUDE = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
@@ -11,16 +12,16 @@ DEFAULT_EXCLUDE = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
 def ngrams(phrase, depth=DEFAULT_DEPTH):
     """
     returns a list of grams from the list of words
-    >>> ngrams(range(6), depth=2)
+    >>> ngrams(list(range(6)), depth=2)
     [(0,), (1,), (0, 1), (2,), (1, 2), (3,), (2, 3), (4,), (3, 4), (5,), (4, 5)]
-    >>> len(ngrams(range(100), depth=2))
+    >>> len(ngrams(list(range(100)), depth=2))
     199
-    >>> ngrams(range(4), depth=6)
+    >>> ngrams(list(range(4)), depth=6)
     [(0,), (1,), (0, 1), (2,), (1, 2), (0, 1, 2), (3,), (2, 3), (1, 2, 3), (0, 1, 2, 3)]
     """
     res = []
-    for i in xrange(len(phrase)):
-        for j in xrange(depth):
+    for i in range(len(phrase)):
+        for j in range(depth):
             if i >= j:
                 res.append(tuple(phrase[i - j: i + 1]))
     return res

@@ -3,6 +3,8 @@ from copy import deepcopy
 from functools import wraps
 from time import time
 
+from six.moves import range
+
 import numexpr as ne
 import numpy as np
 from numpy.linalg import norm
@@ -395,7 +397,7 @@ def hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
     >>> _, Hlambda = _logistic_grad_hess(w, X.X[0], y, alpha)
     >>> HH_old = np.zeros((11, 11), dtype=np.float32)
     >>> s = np.eye(11, dtype=np.float32)
-    >>> for i in xrange(11): HH_old[i] = Hlambda(s[i])
+    >>> for i in range(11): HH_old[i] = Hlambda(s[i])
     >>> np.max(np.abs(HH_old - HH_new)) < 1e-5
     True
 
@@ -476,7 +478,7 @@ def diag_hessian(w, X, y, alpha, sample_weight=None, alpha_intercept=0.):
     >>> _, Hlambda = _logistic_grad_hess(w, X.X[0], y, alpha)
     >>> HH_old = np.zeros((11, 11), dtype=np.float32)
     >>> s = np.eye(11, dtype=np.float32)
-    >>> for i in xrange(11): HH_old[i] = Hlambda(s[i])
+    >>> for i in range(11): HH_old[i] = Hlambda(s[i])
     >>> np.max(np.abs(np.diag(HH_old) - HH_diag)) < 1e-5
     True
 

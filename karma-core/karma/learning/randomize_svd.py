@@ -5,6 +5,7 @@
 import numpy as np
 from karma.learning.matrix_utils import safe_dot
 from sklearn.utils.extmath import norm
+from six.moves import range
 
 
 def randomized_range_finder(A, size, n_iter):
@@ -14,7 +15,7 @@ def randomized_range_finder(A, size, n_iter):
     R = np.random.normal(size=(A.shape[1], size))
     Y = safe_dot(A, R)
     del R
-    for i in xrange(n_iter):
+    for i in range(n_iter):
         Y = safe_dot(A, safe_dot(A.transpose(), Y))
     Q, _ = np.linalg.qr(Y, mode='reduced')
     return Q

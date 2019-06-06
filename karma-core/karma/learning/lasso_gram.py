@@ -10,6 +10,7 @@ rebuilt from  scikit-learn/sklearn/linear_model/least_angle.py
 import numpy as np
 from scipy.linalg import get_lapack_funcs, get_blas_funcs, solve_triangular
 from sklearn.utils.arrayfuncs import cholesky_delete, min_pos
+from six.moves import range
 
 
 def lasso_gram(Xy, XX, max_features=None, max_iter=500, min_alpha=0, method='lasso'):

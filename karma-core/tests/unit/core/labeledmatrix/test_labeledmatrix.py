@@ -6,6 +6,7 @@ from cyperf.matrix.karma_sparse import DTYPE
 from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
 from karma.core.labeledmatrix.utils import lm_aggregate_pivot
 from karma import DataFrame, Column
+from six.moves import range
 
 
 class LabeledMatrixTestCase(unittest.TestCase):
@@ -153,7 +154,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
     def test_rank_dispatch(self):
         matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
-        lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
+        lm = LabeledMatrix((list(range(4)), ['a', 'b', 'c']), matrix)
 
         np.testing.assert_array_equal(np.asarray(lm.rank_dispatch(1).matrix), [[10, 0, 0],
                                                                                [0, 5, 0],
@@ -191,7 +192,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
     def test_argmax_dispatch(self):
         """Testing argmax dispatch."""
         matrix = np.array([[0.2, 0.5, 0.7], [0.1, 0.4, 0.3], [0.8, 0.3, 0.75], [0.2, 0.7, 0.9]])
-        lm = LabeledMatrix((range(matrix.shape[0]), ['a', 'b', 'c']), matrix)
+        lm = LabeledMatrix((list(range(matrix.shape[0])), ['a', 'b', 'c']), matrix)
         lm_sparse = lm.to_sparse()
 
         np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1).matrix,
@@ -223,7 +224,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         self.assertEqual(np.count_nonzero(lm_sparse.argmax_dispatch(maximum_pressure=4, max_ranks=0).matrix), 0)
 
         matrix = np.random.rand(1000, 10)
-        lm_sparse = LabeledMatrix((range(matrix.shape[0]), range(matrix.shape[1])), matrix).to_sparse()
+        lm_sparse = LabeledMatrix((list(range(matrix.shape[0])), list(range(matrix.shape[1]))), matrix).to_sparse()
         max_volume, maximum_pressure, max_rank = (300, 4, 100)
         dispatched_lm = lm_sparse.argmax_dispatch(maximum_pressure=maximum_pressure,
                                                   max_volumes=max_volume,

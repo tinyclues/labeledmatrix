@@ -14,6 +14,7 @@ from karma.core.utils import use_seed
 from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
 from karma.learning.randomize_svd import nmf_svd_init
 from karma.runtime import KarmaSetup
+from six.moves import range
 
 ADD_TIME = 20
 EPSILON = 10 ** (-10)
@@ -130,7 +131,7 @@ class NMF(object):
             self.iterate(init_iter)
             dist = self.dist()
             w, h = self.w.copy(), self.h.copy()
-            for _ in xrange(init_runs):
+            for _ in range(init_runs):
                 self.factorisation_initial()
                 self.iterate(init_iter)
                 dist_cand = self.dist()
@@ -168,10 +169,10 @@ class NMF(object):
 
     def iterate(self, maxiter):
         if self.metric == 'KL':
-            for i in xrange(maxiter):
+            for i in range(maxiter):
                 self.brunet_update()
         elif self.metric == 'euclid':
-            for i in xrange(maxiter):
+            for i in range(maxiter):
                 self.euclid_update()
 
     def brunet_update(self):
@@ -325,7 +326,7 @@ class NMF_P(NMF):
             t1 = time.time()
             self.brunet_update()
             maxiter = MAX_ITER + int(ADD_TIME / (max(time.time() - t1, 1)))
-        for i in xrange(maxiter):
+        for i in range(maxiter):
             self.brunet_update()
             self.add_rank_estimate()
             if i > MAX_ITER / 2 and self.check_convergence():
@@ -369,7 +370,7 @@ def nmf_fold(matrix, right_factor, max_iter=30):
     elif not is_karmasparse(matrix):
         matrix = KarmaSparse(matrix)
 
-    for _ in xrange(max_iter):
+    for _ in range(max_iter):
         error = safe_dot(left_factor, right_factor, matrix, mask_mode="divide")
         left_factor *= safe_dot(error, right_factor.transpose(), dense_output=True)
         left_factor /= right_margin

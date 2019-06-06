@@ -14,6 +14,7 @@ from karma.learning.bayesian_constants import (BAYES_PRIOR_COEF_VAR_NAME, BAYES_
                                                BAYES_POST_COEF_MEAN_NAME)
 from karma.core.utils.utils import Parallel
 from karma.core.utils.utils import coerce_to_tuple_and_check_all_strings
+from six.moves import range
 
 CV_KEYS = ['cv', 'cv_n_splits', 'seed', 'cv_groups']
 PRED_COL_NAME = 'predictions'
@@ -143,7 +144,7 @@ class CVSampler(object):
                                                self.meta[BAYES_POST_INTERCEPT_MEAN_NAME]])
         full_betas = map(tuple, np.repeat(train_betas_and_intercept.reshape(1, -1), len(train_metric_results), axis=0))
         train_metric_results['full_betas'] = full_betas
-        train_metric_results['features'] = [str(features) for _ in xrange(len(train_metric_results))]
+        train_metric_results['features'] = [str(features) for _ in range(len(train_metric_results))]
 
         test_metric_results = DataFrame()
         test_betas_and_intercept = map(np.hstack, zip(map(np.hstack, self.meta['cv'].feat_coefs),
@@ -156,7 +157,7 @@ class CVSampler(object):
             full_betas = map(tuple, np.repeat(test_betas_and_intercept[i].reshape(1, -1), len(test_fold_metric_results),
                                               axis=0))
             test_fold_metric_results['full_betas'] = full_betas
-            test_fold_metric_results['features'] = [str(features) for _ in xrange(len(test_fold_metric_results))]
+            test_fold_metric_results['features'] = [str(features) for _ in range(len(test_fold_metric_results))]
             test_metric_results = squash(test_metric_results, test_fold_metric_results)
 
         final_metric_results = squash({'train': train_metric_results.copy(*test_metric_results.column_names),
@@ -253,7 +254,7 @@ class GridGenerator(object):
         """
         one_dim_grid = np.linspace(-1, 1, num=granularity)
         grid_correction = width * self.initial_point
-        corrected_grid = cartesian([one_dim_grid for _ in xrange(len(self.initial_point))]).dot(
+        corrected_grid = cartesian([one_dim_grid for _ in range(len(self.initial_point))]).dot(
             np.diag(grid_correction))
         local_linear_grid = self.initial_point + corrected_grid
         local_linear_grid = np.clip(local_linear_grid, a_min=1e-6, a_max=None)  # bring grid back to positive orthant
@@ -282,7 +283,7 @@ class GridGenerator(object):
                [10. ]])
         """
         one_dim_grid = np.logspace(downscale, upscale, num=np.abs(downscale) + np.abs(upscale) + 1)
-        return self.initial_point * cartesian([one_dim_grid for _ in xrange(len(self.initial_point))])
+        return self.initial_point * cartesian([one_dim_grid for _ in range(len(self.initial_point))])
 
     def gaussian_grid(self, n_samples=10, var_factor=1.):
         gaussian_grid = self.initial_point + var_factor * np.random.randn(n_samples, self.initial_point.shape[0])
@@ -484,7 +485,7 @@ class GridSearch(CVSampler):
 
         if n_jobs > 1:
             n = int(len(penalty_grid) / float(n_jobs))
-            penalty_grid_chunks = [penalty_grid[i:i + n] for i in xrange(0, len(penalty_grid), n)]
+            penalty_grid_chunks = [penalty_grid[i:i + n] for i in range(0, len(penalty_grid), n)]
             par_summary_df = squash(Parallel(n_jobs, backend='multiprocessing').map(partial_search,
                                                                                     penalty_grid_chunks))  # broken with threading backend
             self.evaluated_reguls = squash(self.evaluated_reguls, par_summary_df)

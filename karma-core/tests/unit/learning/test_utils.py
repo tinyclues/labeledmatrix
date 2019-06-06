@@ -16,6 +16,7 @@ from karma.learning.utils import (CrossValidationWrapper, validate_regression_mo
                                   BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX, _prepare_and_check_classes)
 from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
 from karma.lib.logistic_regression import logistic_regression
+from six.moves import range
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):

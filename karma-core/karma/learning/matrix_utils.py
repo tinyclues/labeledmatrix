@@ -17,6 +17,7 @@ from cyperf.matrix.karma_sparse import (KarmaSparse, is_karmasparse,
 from cyperf.matrix.routine import idiv_2d, idiv_flat
 
 from karma.thread_setter import blas_threads, open_mp_threads
+from six.moves import range
 
 
 class SparseUtilsException(Exception):
@@ -178,7 +179,7 @@ def complement(matrix, other):
     ...                 [1, 0, 5]])
     >>> ks = KarmaSparse(mat)
     >>> spmat = sp.csr_matrix(mat)
-    >>> diag_idx = range(min(mat.shape))
+    >>> diag_idx = np.arange(min(mat.shape))
     >>> mask = np.zeros(mat.shape)
     >>> mask[diag_idx, diag_idx] = 1
     >>> complement(mat, (diag_idx, diag_idx))
@@ -566,16 +567,16 @@ def safe_argmax(matrix, axis=None):
     >>> a[safe_argmax(a.toarray())] == a[safe_argmax(a.tocsc())]
     True
     >>> ac(safe_max(a.toarray(), axis=1),
-    ...    a.toarray()[np.array(range(n)),safe_argmax(a.tocsr(), axis=1)])
+    ...    a.toarray()[np.arange(n),safe_argmax(a.tocsr(), axis=1)])
     True
     >>> ac(safe_max(a.toarray(), axis=0),
-    ...     a.toarray()[safe_argmax(a.tocsr(), axis=0), np.array(range(2*n))])
+    ...     a.toarray()[safe_argmax(a.tocsr(), axis=0), np.arange(2*n)])
     True
     >>> ac(safe_max(a.toarray(), axis=0),
-    ...     a.toarray()[safe_argmax(a.tocsc(), axis=0), np.array(range(2*n))])
+    ...     a.toarray()[safe_argmax(a.tocsc(), axis=0), np.arange(2*n)])
     True
     >>> ac(safe_max(a.toarray(), axis=1),
-    ...    a.toarray()[np.array(range(n)), safe_argmax(a.tocsc(), axis=1)])
+    ...    a.toarray()[np.arange(n), safe_argmax(a.tocsc(), axis=1)])
     True
     >>> m = np.array([[-1., 0, -1], [0, 2, 1]])
     >>> m = KarmaSparse(m, format="csr")
@@ -656,16 +657,16 @@ def safe_argmin(matrix, axis=None):
     >>> a[safe_argmin(a.toarray())] == a[safe_argmin(a.tocsc())]
     True
     >>> ac(safe_min(a.toarray(), axis=1),
-    ...    a.toarray()[np.array(range(n)), safe_argmin(a.tocsr(), axis=1)])
+    ...    a.toarray()[np.arange(n), safe_argmin(a.tocsr(), axis=1)])
     True
     >>> ac(safe_min(a.toarray(), axis=1),
-    ...    a.toarray()[np.array(range(n)), safe_argmin(a.tocsc(), axis=1)])
+    ...    a.toarray()[np.arange(n), safe_argmin(a.tocsc(), axis=1)])
     True
     >>> ac(safe_min(a.toarray(), axis=0),
-    ...    a.toarray()[safe_argmin(a.tocsr(), axis=0), np.array(range(2*n))])
+    ...    a.toarray()[safe_argmin(a.tocsr(), axis=0), np.arange(2*n)])
     True
     >>> ac(safe_min(a.toarray(), axis=0),
-    ...    a.toarray()[safe_argmin(a.tocsc(), axis=0), np.array(range(2*n))])
+    ...    a.toarray()[safe_argmin(a.tocsc(), axis=0), np.arange(2*n)])
     True
     >>> m = np.array([[-2, 0., -1], [0, 2, 1]])
     >>> m = KarmaSparse(m, format="csr")
@@ -828,8 +829,8 @@ def safe_var(matrix, axis=None):
 def safe_multiply(x, y, dense_output=False):
     """
     >>> import scipy.sparse as sp
-    >>> x = np.array(range(6)).reshape((2,3))
-    >>> y = np.array(range(2,8)).reshape((2,3))
+    >>> x = np.arange(6).reshape((2,3))
+    >>> y = np.arange(2,8).reshape((2,3))
     >>> ac = np.allclose
     >>> ac(x * y, safe_multiply(x, y))
     True
@@ -1036,7 +1037,7 @@ def mask_dot(x, y, mat_mask, mask_mode="last", dense_output=False):
     True
     >>> np.allclose(mask_dot(x, y, x.dot(y).toarray()), x.toarray().dot(y.toarray()))
     True
-    >>> x_d = np.array(range(9)).reshape(3,3)
+    >>> x_d = np.arange(9).reshape(3,3)
     >>> x = sp.csr_matrix(x_d)
     >>> y_d = np.array([[0, 0, 0], [1, 0., 0], [0., 1, 0]])
     >>> y = sp.csc_matrix(y_d)
@@ -1188,7 +1189,7 @@ def sparse_quantiles(matrix, nb, axis):
 
     data = np.hstack([np.digitize(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]],
                                   mquantiles(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]], bins))
-                      for i in xrange(matrix.indptr.shape[0] - 1)])
+                      for i in range(matrix.indptr.shape[0] - 1)])
     if axis == 0:
         return KarmaSparse((data, matrix.indices, matrix.indptr),
                            shape=matrix.shape, format="csc")

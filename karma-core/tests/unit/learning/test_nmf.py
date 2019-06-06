@@ -8,11 +8,12 @@ from numpy.testing import assert_allclose
 from karma.learning.matrix_utils import kl_div
 from karma.learning.nmf import nmf, nmf_fold, NMF, GNMF
 from karma.core.utils.utils import use_seed
+from six.moves import range
 
 
 def shuffle_indices(sp_matrix):
     mat = sp_matrix.copy()
-    for i in xrange(mat.indptr.shape[0] - 1):
+    for i in range(mat.indptr.shape[0] - 1):
         r = np.arange(mat.indptr[i], mat.indptr[i + 1])
         np.random.shuffle(r)
         mat.indices[mat.indptr[i]: mat.indptr[i + 1]] = mat.indices[r]

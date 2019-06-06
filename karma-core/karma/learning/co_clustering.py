@@ -7,6 +7,7 @@ from scipy.sparse import isspmatrix as is_scipy_sparse
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
 from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
 from numexpr import evaluate
+from six.moves import range
 
 __all__ = ['co_clustering']
 
@@ -96,7 +97,7 @@ class CoClustering(object):
         best_w, best_h = self.w, self.h
         best_dist = idiv(self.matrix, self.approximate_matrix())  # To fix the common mask
 
-        for _ in xrange(nb_preruns):
+        for _ in range(nb_preruns):
             self.initial_clustering()
             self.iterate(pre_iter)
             cand_dist = idiv(self.matrix, self.approximate_matrix())
@@ -128,7 +129,7 @@ class CoClustering(object):
         self.h_old = self.h
 
     def iterate(self, max_iter):
-        for _ in xrange(max_iter):
+        for _ in range(max_iter):
             self.idiv_update_right()
             self.idiv_update_left()
             if self.check_convergence():

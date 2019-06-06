@@ -14,6 +14,7 @@ from karma.core.column import WriteValuesOnDiskException
 from karma.core.utils.collaborative_tools import simple_counter
 from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
 from karma.types import is_exceptional_mask, generic_ndarray_safe_cast
+from six.moves import range
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 

@@ -6,6 +6,7 @@ import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_kron
 
 from karma.learning.matrix_utils import pairwise_buddy
+from six.moves import range
 
 __all__ = ['sparse_tail_clustering']
 
@@ -35,7 +36,7 @@ def sparse_tail_clustering(matrix, mults, k, min_density=0.):
         sp_matrix = matrix.tocsc()
 
     clusters = {}
-    for _ in xrange(n - k):
+    for _ in range(n - k):
         absolute_j = indices.compress(mults)[mults.compress(mults).argmin()]
         m = mults[absolute_j]
         v = sp_matrix[absolute_j].tocsr()
@@ -61,7 +62,7 @@ def sparse_tail_clustering(matrix, mults, k, min_density=0.):
                 pos[absolute_jj] = 1
                 sp_matrix = sp_matrix + ks_kron(update, pos, format="csc")
     res = []
-    for each in xrange(n):
+    for each in range(n):
         a = each
         while a in clusters:
             a = clusters[a]

@@ -8,6 +8,7 @@ from cyperf.tools import parallel_unique
 from cyperf.clustering.sparse_affinity_propagation import SAFP
 from cyperf.matrix.karma_sparse import is_karmasparse
 from scipy.sparse import isspmatrix as is_scipy_sparse
+from six.moves import range
 
 
 def affinity_propagation(similarity, preference=None, max_iter=200, damping=0.6):
@@ -89,7 +90,7 @@ def dense_affinity_propagation(similarity, preference=None,
     same_exemplar_iter = 0
     min_eps = np.max(np.abs(np.diff(similarity, axis=1))) * eps
     # Main loop
-    for it in xrange(max_iter):
+    for it in range(max_iter):
         damping_rand = damping + (0.5 - np.random.rand()) * 0.1
         # Compute responsibility
         responsibility_old = responsibility.copy()

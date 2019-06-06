@@ -4,6 +4,7 @@
 
 import numpy as np
 from cyperf.clustering.hierarchical import TailTree
+from six.moves import range
 
 
 def tail_clustering(vectors, multiplicities, k):
@@ -16,7 +17,7 @@ def tail_clustering(vectors, multiplicities, k):
 
     Outputs:
       - the list of assignments of vectors to clusters
-        (clusters are labelled by elements in xrange(k))
+        (clusters are labelled by elements in range(k))
 
     Examples: ::
 
@@ -54,18 +55,18 @@ def old_tail_clustering(vectors, multiplicities, k):
         >>> nb = 100
         >>> k = 8
         >>> v = rand(nb,10)
-        >>> m = xrange(nb)
+        >>> m = range(nb)
         >>> c = old_tail_clustering(v, m, k)
         >>> len(c)
         100
-        >>> set(c) == set(xrange(k))
+        >>> set(c) == set(range(k))
         True
         >>> # uncomment this for benchmarking with nosetests
         >>> # import time
         >>> # import numpy as np
         >>> # t = time.time()
         >>> # n = 1000
-        >>> # x = old_tail_clustering(np.random.rand(n,20), range(n), 20)
+        >>> # x = old_tail_clustering(np.random.rand(n,20), list(range(n)), 20)
         >>> # time.time() - t
     """
     vecs = np.array([1.0 * x for x in vectors])
@@ -74,8 +75,8 @@ def old_tail_clustering(vectors, multiplicities, k):
     mults = np.array([1.0 * x for x in multiplicities])
     clusters = {}
     if k >= n:
-        return range(n)
-    for each in xrange(n - k):
+        return list(range(n))
+    for each in range(n - k):
         # print '---'
         activemults = mults.compress(mults)
         activeindices = indices.compress(mults)
@@ -96,7 +97,7 @@ def old_tail_clustering(vectors, multiplicities, k):
         vecs[absolute_jj] = (m * v + mm * vv) / (m + mm)
         mults[absolute_jj] = m + mm
     res = []
-    for each in xrange(n):
+    for each in range(n):
         a = each
         while a in clusters:
             a = clusters[a]

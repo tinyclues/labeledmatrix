@@ -22,6 +22,7 @@ from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float
 from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
 from karma.thread_setter import blas_level_threads
 from karma.core.utils.utils import LOGGER
+from six.moves import range
 
 NB_THREADS_MAX = 16
 NB_CV_GROUPS_MAX = 10 ** 5
@@ -169,7 +170,7 @@ class BasicVirtualHStack(object):
 
             integer_entries = []
             common_shape0 = None
-            for i in xrange(len(X)):
+            for i in range(len(X)):
                 if not hasattr(X[i], 'shape') or X[i].shape is None or X[i].shape == ():
                     try:
                         X[i] = int(X[i])
@@ -211,7 +212,7 @@ class BasicVirtualHStack(object):
     def split_by_dims(self, w):
         assert w.shape[0] == self.shape[1]
         if self.is_block:
-            return [w[self.dims[i]:self.dims[i + 1]] for i in xrange(len(self.X))]
+            return [w[self.dims[i]:self.dims[i + 1]] for i in range(len(self.X))]
         else:
             return w
 

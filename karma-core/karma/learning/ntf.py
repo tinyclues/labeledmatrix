@@ -4,6 +4,7 @@
 import numpy as np
 
 from karma.runtime import KarmaSetup
+from six.moves import range
 
 __all__ = ['ntf']
 
@@ -100,6 +101,6 @@ class NTF(object):
 
     def iterate(self, maxiter):
         if self.metric == 'KL':
-            for i in xrange(maxiter):
+            for i in range(maxiter):
                 self.kl_update()
         return self.a, self.b, self.c

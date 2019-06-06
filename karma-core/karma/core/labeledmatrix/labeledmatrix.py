@@ -1,7 +1,7 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-from six.moves import zip
+from six.moves import zip, range
 from numbers import Integral
 
 from cytoolz.dicttoolz import keymap
@@ -847,7 +847,7 @@ class LabeledMatrix(object):
         >>> mat = np.array([[1, 2, 4, 3],
         ...                 [0, 0, 0, 0],
         ...                 [2, 1, 3, 4]])
-        >>> lm = LabeledMatrix([range(3), range(4)], mat)
+        >>> lm = LabeledMatrix((range(3), range(4)), mat)
         >>> lm.rank().matrix
         array([[0, 1, 3, 2],
                [0, 1, 2, 3],
