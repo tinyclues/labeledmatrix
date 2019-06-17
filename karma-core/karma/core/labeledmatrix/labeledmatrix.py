@@ -7,6 +7,7 @@ from numbers import Integral
 from cytoolz.dicttoolz import keymap
 from collections import OrderedDict
 import random
+import numpy as np
 
 from scipy.sparse.linalg import svds
 from scipy.sparse.csgraph import connected_components
@@ -257,7 +258,7 @@ class LabeledMatrix(object):
         repr_ += "\n * dimension {}".format(self.matrix.shape)
         nnz = self.nnz()
         repr_ += "\n * number of non-zero elements {} ".format(nnz)
-        repr_ += "\n * density of non-zero elements {} ".format(round(self.density(), 7))
+        repr_ += "\n * density of non-zero elements {} ".format(np.round(self.density(), 7))
         if nnz:
             min_ = np.min(self.matrix.data) if self.is_sparse else np.min(self.matrix)
             repr_ += "\n * min element {}".format(min_)

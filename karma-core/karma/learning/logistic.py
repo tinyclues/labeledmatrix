@@ -354,7 +354,7 @@ def logistic_coefficients_and_posteriori(X, y,
             else:
                 raise AssertionError
             end_lbfgs = time()
-            lbfgs_timing = round(end_lbfgs - start_lbfgs, 2)
+            lbfgs_timing = np.round(end_lbfgs - start_lbfgs, 2)
 
         conv_dict = _conv_dict_format(conv_dict, obj_value, n_samples, nb_threads, nb_inner_threads, lbfgs_timing,
                                       row_nnz, verbose, convergence_logs, double_design_width=l1_coeff > 0)

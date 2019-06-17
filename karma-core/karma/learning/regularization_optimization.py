@@ -377,8 +377,8 @@ class GridSearch(CVSampler):
     fold_type | penalty_hr | features    | mean_auc | sd_auc
     --------------------------------------------------------
     test        [0.1 0.1]    ['aa', 'b']   -0.1979    0.1354
-    test        [1 1]        ['aa', 'b']   -0.1563    0.1145
-    test        [2 2]        ['aa', 'b']   -0.1459    0.1041
+    test        [1 1]        ['aa', 'b']   -0.1562    0.1146
+    test        [2 2]        ['aa', 'b']   -0.1458    0.1042
     train       [0.1 0.1]    ['aa', 'b']   0.0837     0.0
     train       [1 1]        ['aa', 'b']   0.0878     0.0
     train       [2 2]        ['aa', 'b']   0.0862     0.0
