@@ -4,6 +4,7 @@ from glob import glob
 import multiprocessing
 
 from setuptools import find_packages, setup
+from setuptools.extern import packaging
 from pip._internal.req import parse_requirements
 from Cython.Build import cythonize
 from Cython import Tempita as tempita
@@ -88,13 +89,22 @@ EXTENSIONS = [Extension(root_path + '.' + f.replace('.pyx', '').replace('/', '.'
 
 requirements = [str(i.req) for i in parse_requirements("requirements.txt", session=False)]
 
-VERSION = "1"
-NB_COMPILE_JOBS = multiprocessing.cpu_count()
+def get_version():
+    tag = os.getenv('CIRCLE_TAG', None)
+    if tag is None:
+        return "0.local"
 
+    ver = packaging.version.Version(tag)  # To force to be a valid tag version
+    normalized_version = str(ver)
+    if normalized_version != tag:
+        raise packaging.version.InvalidVersion("Should probably be {}".format(normalized_version))
+    return normalized_version
+
+NB_COMPILE_JOBS = 2 if os.getenv('CIRCLECI', False) else multiprocessing.cpu_count()
 
 def setup_given_extensions(extensions):
     setup(name='karma-perf',
-          version=str(VERSION),
+          version=get_version(),
           packages=find_packages(exclude=['tests*']),
           ext_modules=cythonize(extensions, compiler_directives=compiler_directives, nthreads=NB_COMPILE_JOBS),
           include_dirs=[np.get_include()],
