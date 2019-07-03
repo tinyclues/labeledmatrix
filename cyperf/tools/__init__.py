@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-from __future__ import division   # see https://www.python.org/dev/peps/pep-0238/#abstract
+from __future__ import division  # see https://www.python.org/dev/peps/pep-0238/#abstract
 from six.moves import map, range
 
 from warnings import warn
@@ -169,10 +169,10 @@ def argsort(arr, nb=-1, reverse=False):
 def logit(x, shift=0., width=1.):
     """
     >>> import numpy as np
-    >>> np.allclose(logit(1, 0, 1), logistic(1, 0, 1))
-    True
-    >>> np.allclose(logit(3, -3, 2), logistic(3, -3, 2))
-    True
+    >>> logit(1, 0, 1)
+    0.7310585786300049
+    >>> logit(3, -3, 2)
+    0.9525741268224334
     """
     return expit((x - shift) / width)
 
@@ -200,7 +200,7 @@ def take_indices(iterable, indices, length=None):
     >>> take_indices(slice(0, 7, 2), 3, 15)
     6
     >>> take_indices(x, ind)
-    array([ 4.,  3.,  4.,  5.])
+    array([4., 3., 4., 5.])
     >>> take_indices(x.tolist(), ind)
     [4.0, 3.0, 4.0, 5.0]
     >>> take_indices(tuple(x), ind)
@@ -214,12 +214,14 @@ def take_indices(iterable, indices, length=None):
     >>> take_indices(list(x), bool_ind)
     [3.0, 5.0]
     >>> take_indices(x, bool_ind)
-    array([ 3.,  5.])
+    array([3., 5.])
     >>> take_indices(slice(0, 3), bool_ind, 3)
     array([0, 2])
     >>> take_indices('reree', [0,3])
     ['r', 'e']
-    >>> take_indices(range(5), slice(0, 3))
+    >>> take_indices(list(range(5)), slice(0, 3))
+    [0, 1, 2]
+    >>> list(take_indices(range(5), slice(0, 3)))
     [0, 1, 2]
     >>> take_indices(np.arange(5), slice(0, 3))
     array([0, 1, 2])
@@ -240,7 +242,6 @@ def take_indices(iterable, indices, length=None):
     Traceback (most recent call last):
     ...
     IndexError: index 8 is out of bounds for size 3
-
     >>> take_indices(set('reree'), [0,3])
     Traceback (most recent call last):
     ...
@@ -253,10 +254,10 @@ def take_indices(iterable, indices, length=None):
     Traceback (most recent call last):
     ...
     IndexError: list index out of range
-    >>> take_indices(x.tolist(), 'reree')
+    >>> take_indices(x.tolist(), 'reree') #doctest: +ELLIPSIS
     Traceback (most recent call last):
     ...
-    TypeError: list indices must be integers, not str
+    TypeError: list indices must be integers..., not str
     >>> take_indices({0: 5}, [5])
     Traceback (most recent call last):
     ...
@@ -323,7 +324,7 @@ def take_on_slice(slice_, indices, length):
         assert len(indices) == inner_length
         indices = np.nonzero(indices)[0]
     else:
-        indices = np.array(indices, copy=True, dtype=np.int32 if length < 2**32 else None)
+        indices = np.array(indices, copy=True, dtype=np.int32 if length < 2 ** 32 else None)
     slice_ = slice(*slice_.indices(length))
     indices[indices < 0] += inner_length
     indices *= slice_.step
@@ -334,11 +335,19 @@ def take_on_slice(slice_, indices, length):
 def is_trivial_slice(slice_, length):
     """
     Checks whether x[slice_] is the same as x for length=len(x)
+    >>> is_trivial_slice(slice(None, None, None), 10)
+    True
+    >>> is_trivial_slice(slice(0, 11), 10)
+    True
+    >>> is_trivial_slice(slice(0, 9), 10)
+    False
+    >>> is_trivial_slice(slice(0, 11, 2), 10)
+    False
     """
     return isinstance(slice_, slice) and \
-        (slice_.start == 0 or slice_.start is None)\
-        and (slice_.stop >= length or slice_.stop is None)\
-        and (slice_.step == 1 or slice_.step is None)
+           (slice_.start is None or slice_.start == 0) \
+           and (slice_.stop is None or slice_.stop >= length) \
+           and (slice_.step is None or slice_.step == 1)
 
 
 def slice_length(slice_, length):
