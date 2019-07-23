@@ -154,6 +154,13 @@ class GetterTestCase(unittest.TestCase):
                 indices = np.random.randint(-inner_length + 1, inner_length, size=10)
                 np.testing.assert_equal(arr[slice1][indices], arr[take_indices(slice1, indices, length)])
 
+        selection_int64_res = take_indices(slice(2 ** 31, 2 ** 31 + 10000), [0, 1, 2], 2 ** 31 + 10000)
+        self.assertEqual(np.dtype('int64'), selection_int64_res.dtype)
+        np.testing.assert_array_equal([2 ** 31, 2 ** 31 + 1, 2 ** 31 + 2], selection_int64_res)
+
+        np.testing.assert_array_equal(take_indices(slice(2150000000, 2160000000, None), [0], length=3782366988),
+                                      [2150000000])
+
     def test_coerse_float(self):
         np.testing.assert_equal(cast_to_float_array([]), [])
 

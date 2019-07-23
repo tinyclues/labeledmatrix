@@ -324,7 +324,7 @@ def take_on_slice(slice_, indices, length):
         assert len(indices) == inner_length
         indices = np.nonzero(indices)[0]
     else:
-        indices = np.array(indices, copy=True, dtype=np.int32 if length < 2 ** 32 else None)
+        indices = np.array(indices, copy=True, dtype=np.int32 if length < np.iinfo(np.int32).max else None)
     slice_ = slice(*slice_.indices(length))
     indices[indices < 0] += inner_length
     indices *= slice_.step

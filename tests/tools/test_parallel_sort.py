@@ -102,7 +102,7 @@ class ParallelSortCase(unittest.TestCase):
 
     def test_unique_parallel(self):
         for _ in range(20):
-            x = np.random.randint(-np.random.randint(100), np.random.randint(100), np.random.randint(1, 1000))
+            x = np.random.randint(-np.random.randint(100), np.random.randint(1, 100), np.random.randint(1, 1000))
             x //= 7
             for dtype in SupportedNumericalDtype:
                 y = x.astype(dtype)
