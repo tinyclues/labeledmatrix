@@ -7,7 +7,7 @@ from cyperf.tools import (parallel_unique, parallel_sort, cy_parallel_sort, para
                           argsort_fallback, sort_fallback, take_indices)
 from cyperf.tools.parallel_sort_routine import (inplace_string_parallel_sort, inplace_numerical_parallel_sort,
                                                 parallel_argsort_object_int, parallel_argsort_object_long,
-                                                parallel_argsort_float64_int_nan)
+                                                parallel_argsort_float64_int_nan, parallel_argsort_numpy_strings_int)
 
 SupportedNumericalDtype = [np.int8, np.int16, np.int32, np.int64,
                            np.uint8, np.uint16, np.uint32, np.uint64,
@@ -188,6 +188,11 @@ class ParallelSortCase(unittest.TestCase):
             a = np.array(a, dtype='S302')
             assert_equal(parallel_argsort(a, reverse=False), np.argsort(a, kind="merge"))
             assert_equal(parallel_argsort(a, reverse=True), argsort_fallback(a, reverse=True))
+
+    def test_sort_argsort_long_numpy_string_explicit(self):
+        a = np.array(['aaa' * 101, 'aaa' * 101], dtype='S302')
+        for reverse in [True, False]:
+            assert_equal(parallel_argsort_numpy_strings_int(a, reverse=reverse), [0, 1])
 
     def _check_float(self, a):
         assert_equal(parallel_sort(a), np.sort(a))
