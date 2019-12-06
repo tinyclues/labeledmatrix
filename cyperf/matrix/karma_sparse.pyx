@@ -1956,9 +1956,9 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_count_nonzero(self):
+    cdef np.ndarray[dtype=LTYPE_t, ndim=1] aligned_count_nonzero(self):
         cdef:
-            np.ndarray[dtype=ITYPE_t, ndim=1, mode="c"] res = np.zeros(self.nrows, dtype=LTYPE)
+            LTYPE_t[::1] res = np.zeros(self.nrows, dtype=LTYPE)
             ITYPE_t i
 
         for i in prange(self.nrows, nogil=True, schedule='static'):
@@ -1967,9 +1967,9 @@ cdef class KarmaSparse:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_count_nonzero(self):
+    cdef np.ndarray[dtype=LTYPE_t, ndim=1] misaligned_count_nonzero(self):
         cdef:
-            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=LTYPE)
+            LTYPE_t[::1] res = np.zeros(self.ncols, dtype=LTYPE)
             LTYPE_t i
 
         self.eliminate_zeros()
