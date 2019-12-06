@@ -1969,7 +1969,7 @@ cdef class KarmaSparse:
     @cython.boundscheck(False)
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_count_nonzero(self):
         cdef:
-            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=DTYPE)
+            DTYPE_t[::1] res = np.zeros(self.ncols, dtype=ITYPE)
             LTYPE_t i
 
         self.eliminate_zeros()
