@@ -535,9 +535,9 @@ cdef class KarmaSparse:
 
     cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_sum_power(self, DTYPE_t p)
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] aligned_count_nonzero(self)
+    cdef np.ndarray[dtype=LTYPE_t, ndim=1] aligned_count_nonzero(self)
 
-    cdef np.ndarray[dtype=DTYPE_t, ndim=1] misaligned_count_nonzero(self)
+    cdef np.ndarray[dtype=LTYPE_t, ndim=1] misaligned_count_nonzero(self)
 
     cdef sum_abs(self, axis=*)
 
