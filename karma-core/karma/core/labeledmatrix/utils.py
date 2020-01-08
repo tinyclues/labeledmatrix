@@ -465,3 +465,28 @@ def lm_product(list_of_lm):
         result = safe_multiply(matrix, result)
     return LabeledMatrix((total_rows, total_columns),
                          result, deco=(row_deco, column_deco))
+
+
+def lm_compute_vol_at_cutoff(lm, potential_cutoff):
+    """
+    Compute the number of lines required to reach a share of the total potential
+
+    :param lm: labeled_matrix. scores_as_labeled_matrix
+    :param potential_cutoff: float.
+    :return: dict. Key will be a topic, value is the volume of users required to reach a given share of the  total
+    potential
+    """
+    scores_array = lm.to_dense().matrix
+    # Get total potential
+    total_potential = scores_array.sum(axis=0)
+
+    # Sort scores_array per topic
+    scores_ordered_array = np.sort(scores_array, axis=0)[::-1]
+
+    # Compute array of users part of the potential cutoff
+    in_potential_cutoff_array = ((scores_ordered_array.cumsum(axis=0) / total_potential) < potential_cutoff)
+    # Compute users-in-potential-cutoff volume share
+    vol_at_cutoff = in_potential_cutoff_array.sum(axis=0).astype('float32') / scores_array.shape[0]
+
+    return dict(zip(lm.column, vol_at_cutoff))
+

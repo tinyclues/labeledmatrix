@@ -4,7 +4,7 @@ import numpy as np
 from cyperf.matrix.karma_sparse import DTYPE
 
 from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
-from karma.core.labeledmatrix.utils import lm_aggregate_pivot
+from karma.core.labeledmatrix.utils import lm_aggregate_pivot, lm_compute_vol_at_cutoff
 from karma import DataFrame, Column
 from six.moves import range
 
@@ -367,3 +367,16 @@ class LabeledMatrixTestCase(unittest.TestCase):
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False)
         self.assertEqual(lm.matrix.dtype, np.float64)
+
+    def test_lm_compute_vol_at_cutoff(self):
+        # Test parameters initialization
+        matrix = np.array([[0.2, 0.1], [0.02, 0.5], [0.1, 0.57], [0.05, 0.4], [0.4, 0.2]])
+        row, column = ['user_a', 'user_b', 'user_c', 'user_d', 'user_e'], ['topic_1', 'topic_2']
+        lm = LabeledMatrix((row, column), matrix.copy())
+        potential_cutoff = 0.8
+        expected = {'topic_1': np.float32(0.4), 'topic_2': np.float32(0.4)}
+
+        actual = lm_compute_vol_at_cutoff(lm, potential_cutoff)
+
+        # Assertion
+        self.assertDictEqual(actual, expected)
