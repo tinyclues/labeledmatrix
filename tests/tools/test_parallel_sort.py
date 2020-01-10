@@ -141,6 +141,9 @@ class ParallelSortCase(unittest.TestCase):
     def test_sort_other_types(self):
         for b in self.get_other_type_generator():
             bb = b.copy()
+            # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
+            if bb.dtype.kind == 'M' and np.__version__.startswith('1.18'):
+                break
             assert_equal(cy_parallel_sort(b), np.sort(b))
             assert_equal(bb, b)
             self.assertEqual(b.dtype, bb.dtype)
@@ -237,6 +240,9 @@ class ParallelSortCase(unittest.TestCase):
     def test_argsort_numeric(self):
         for b in chain(self.get_numerical_data_generator(), self.get_other_type_generator()):
             bb = b.copy()
+            # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
+            if bb.dtype.kind == 'M' and np.__version__.startswith('1.18'):
+                break
             assert_equal(parallel_argsort(b), np.argsort(b, kind="merge"))
             assert_equal(cy_parallel_argsort(b), np.argsort(b, kind="merge"))
             assert_equal(parallel_argsort(b[::2]), np.argsort(b[::2], kind="merge"))  # non contiguous case
