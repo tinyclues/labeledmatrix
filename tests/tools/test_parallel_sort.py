@@ -13,6 +13,8 @@ SupportedNumericalDtype = [np.int8, np.int16, np.int32, np.int64,
                            np.uint8, np.uint16, np.uint32, np.uint64,
                            np.float32, np.float64]
 
+NUMPY_VERSION_POST_1_18 = np.__version__ >= '1.18'
+
 
 class ParallelSortCase(unittest.TestCase):
 
@@ -142,7 +144,7 @@ class ParallelSortCase(unittest.TestCase):
         for b in self.get_other_type_generator():
             bb = b.copy()
             # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
-            if bb.dtype.kind == 'M' and np.__version__.startswith('1.18'):
+            if bb.dtype.kind == 'M' and NUMPY_VERSION_POST_1_18:
                 break
             assert_equal(cy_parallel_sort(b), np.sort(b))
             assert_equal(bb, b)
@@ -241,7 +243,7 @@ class ParallelSortCase(unittest.TestCase):
         for b in chain(self.get_numerical_data_generator(), self.get_other_type_generator()):
             bb = b.copy()
             # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
-            if bb.dtype.kind == 'M' and np.__version__.startswith('1.18'):
+            if bb.dtype.kind == 'M' and NUMPY_VERSION_POST_1_18:
                 break
             assert_equal(parallel_argsort(b), np.argsort(b, kind="merge"))
             assert_equal(cy_parallel_argsort(b), np.argsort(b, kind="merge"))
