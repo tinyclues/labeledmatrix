@@ -145,7 +145,7 @@ class ParallelSortCase(unittest.TestCase):
             bb = b.copy()
             # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
             if bb.dtype.kind == 'M' and NUMPY_VERSION_POST_1_18:
-                break
+                continue
             assert_equal(cy_parallel_sort(b), np.sort(b))
             assert_equal(bb, b)
             self.assertEqual(b.dtype, bb.dtype)
@@ -244,7 +244,7 @@ class ParallelSortCase(unittest.TestCase):
             bb = b.copy()
             # https://numpy.org/devdocs/release/1.18.0-notes.html#nat-now-sorts-to-the-end-of-arrays
             if bb.dtype.kind == 'M' and NUMPY_VERSION_POST_1_18:
-                break
+                continue
             assert_equal(parallel_argsort(b), np.argsort(b, kind="merge"))
             assert_equal(cy_parallel_argsort(b), np.argsort(b, kind="merge"))
             assert_equal(parallel_argsort(b[::2]), np.argsort(b[::2], kind="merge"))  # non contiguous case
