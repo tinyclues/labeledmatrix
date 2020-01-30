@@ -2,7 +2,6 @@
 # Copyright tinyclues, All rights reserved
 #
 from six.moves import zip
-from warnings import warn
 
 import numpy as np
 from cytoolz import merge as dict_merge
@@ -467,14 +466,14 @@ def lm_product(list_of_lm):
                          result, deco=(row_deco, column_deco))
 
 
-def lm_compute_vol_at_cutoff(lm, potential_cutoff):
+def lm_compute_volume_at_cutoff(lm, potential_cutoff):
     """
     Compute the number of lines required to reach a share of the total potential
 
     :param lm: labeled_matrix. scores_as_labeled_matrix
     :param potential_cutoff: float.
-    :return: dict. Key will be a topic, value is the volume of users required to reach a given share of the  total
-    potential
+    :return: dict. Keys are topics (columns in the input lm), values are the volume of users (rows in the input lm)
+                   required to reach a given share of the total potential (sum of the lm values for each column).
     """
     scores_array = lm.to_dense().matrix
     # Get total potential
