@@ -1,0 +1,36 @@
+
+cimport numpy as np
+from libcpp cimport bool
+from libcpp.vector cimport vector
+
+
+{{py:
+
+dtypes = (
+    ('int32', 'np.int32_t'),
+    ('int64', 'np.int64_t'),
+    ('float32', 'np.float32_t'),
+    ('float64', 'np.float64_t'),
+)
+
+# type_name, c_type, dtype
+def get_dispatch(dtypes):
+    for name, c_type in dtypes:
+        yield name, c_type
+}}
+
+
+
+{{for name, c_type in get_dispatch(dtypes)}}
+
+
+cdef class {{name}}Vector:
+    cdef:
+        readonly bool exported
+    cdef vector[{{c_type}}] vector_buffer
+    cdef size_t size(self) nogil
+    cdef inline void append(self, {{c_type}} x) nogil
+    cpdef np.ndarray[dtype={{c_type}}, ndim=1, mode="c"] asarray(self)
+
+
+{{endfor}}
