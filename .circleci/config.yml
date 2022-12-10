@@ -1,0 +1,37 @@
+---
+version: 2.1
+
+orbs:
+  python: tinyclues/python@3.5.8
+
+executors:
+  python:
+    docker:
+      - image: circleci/python:3.7
+
+aliases:
+  filters:
+    all_branches_and_tags: &all_branches_and_tags
+      tags:
+        only: /.*/
+        branches:
+          only: /.*/
+
+# when should we run `command: ./setup.py build_ext -i -j2` ? or `-if` ?
+
+workflows:
+  build:
+    jobs:
+      - python/run_in_pipenv_env:
+          name: unit_tests
+          executor: python
+          command: pipenv run pytest tests --durations=10
+          <<: *all_branches_and_tags
+
+      - python/pipenv_deploy:  # TODO do we need sdist in setup.py command ?
+          name: deploy_wheel
+          requires:
+            - unit_tests
+          context: artifactory
+          executor: python
+          <<: *all_branches_and_tags

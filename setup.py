@@ -4,9 +4,15 @@ from glob import glob
 import os
 import sys
 
-from pip._internal.req import parse_requirements
 from setuptools import setup
 from distutils.dist import Distribution
+
+from pipenv.utils.dependencies import convert_deps_to_pip  # TODO consider pyproject.toml
+from pipenv.project import Project
+
+from numpy.distutils.misc_util import get_info
+from Cython.Build import cythonize
+from Cython.Build.Dependencies import default_create_extension
 
 
 def render_tempita():
@@ -41,28 +47,24 @@ if "build_ext" in sys.argv:
     render_tempita()
 
 try:
-    from numpy.distutils.misc_util import get_info
-    from Cython.Build import cythonize
-    from Cython.Build.Dependencies import default_create_extension
-except ImportError:  # for conda _load_setup_py_data jinja template
-    ext_modules = []
-else:
-    try:
-        dist = Distribution()
-        dist.parse_command_line()
-        nthreads = int(dist.command_options['build_ext']['parallel'][1])
-    except Exception:
-        nthreads = 1
+    dist = Distribution()
+    dist.parse_command_line()
+    nthreads = int(dist.command_options['build_ext']['parallel'][1])
+except Exception:
+    nthreads = 1
 
-    ext_modules = cythonize(
-        "cyperf/**/*.pyx",
-        create_extension=create_extension,
-        compiler_directives={'language_level': sys.version_info[0], 'embedsignature': True},
-        language='c++',
-        nthreads=nthreads,
-    )
+# TODO Warning: passing language='c++' to cythonize() is deprecated.
+#      Instead, put "# distutils: language=c++" in your .pyx or .pxd file(s)
+ext_modules = cythonize(
+    "cyperf/**/*.pyx",
+    create_extension=create_extension,
+    compiler_directives={'language_level': sys.version_info[0], 'embedsignature': True},
+    language='c++',
+    nthreads=nthreads,
+)
 
+pfile = Project(chdir=False).parsed_pipfile
 setup(
     ext_modules=ext_modules,
-    install_requires=[str(i.req) for i in parse_requirements("requirements.txt", session=False)]
+    install_requires=convert_deps_to_pip(pfile['packages'], r=False)
 )

@@ -1,0 +1,16 @@
+version: "3.7"
+
+services:
+  labeledmatrix:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    volumes:
+      - ./:/src/
+
+  lock:  # this image is used to run pipenv lock
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.lock
+    volumes:
+      - ./:/src/
