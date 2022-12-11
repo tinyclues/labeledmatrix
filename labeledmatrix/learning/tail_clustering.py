@@ -1,10 +1,9 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-
 import numpy as np
+
 from cyperf.clustering.hierarchical import TailTree
-from six.moves import range
 
 
 def tail_clustering(vectors, multiplicities, k):
@@ -66,7 +65,7 @@ def old_tail_clustering(vectors, multiplicities, k):
         >>> # import numpy as np
         >>> # t = time.time()
         >>> # n = 1000
-        >>> # x = old_tail_clustering(np.random.rand(n,20), list(range(n)), 20)
+        >>> # x = old_tail_clustering(np.random.rand(n,20), range(n), 20)
         >>> # time.time() - t
     """
     vecs = np.array([1.0 * x for x in vectors])
@@ -77,7 +76,6 @@ def old_tail_clustering(vectors, multiplicities, k):
     if k >= n:
         return list(range(n))
     for each in range(n - k):
-        # print '---'
         activemults = mults.compress(mults)
         activeindices = indices.compress(mults)
         j = activemults.argmin()

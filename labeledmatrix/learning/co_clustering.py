@@ -1,13 +1,12 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-
 import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
+
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, DTYPE
-from karma.learning.matrix_utils import safe_dot, idiv, normalize, truncate_by_count, nonzero_mask
-from numexpr import evaluate
-from six.moves import range
+
+from .matrix_utils import safe_dot, idiv, normalize
 
 __all__ = ['co_clustering']
 
@@ -58,7 +57,7 @@ def co_clustering(matrix, ranks=(2, 2), max_iter=50, nb_preruns=20, pre_iter=4):
     return clust.w.indices, clust.h.indices
 
 
-class CoClustering(object):
+class CoClustering():
     def __init__(self, matrix, ranks):
         self._epsilon = 1e-10
 
@@ -74,7 +73,7 @@ class CoClustering(object):
 
         self.n, self.m = matrix.shape
         if ranks[0] > self.n or ranks[1] > self.m:
-            print('ranks {0} is large than matrix shape {1}'.format(ranks, (self.n, self.m)))
+            print(f'ranks {ranks} is large than matrix shape {(self.n, self.m)}')
 
         self.ranks = (min(ranks[0], self.n), min(ranks[1], self.m))
         self.matrix = matrix.clip(self._epsilon)
@@ -146,14 +145,14 @@ class CoClustering(object):
         self.get_hat_matrix()
         self.get_cond_y_vs_haty()
         logg = self.pcond_y_vs_haty.dot(normalize(self.hat_matrix, norm='l1', axis=1).transpose())
-        evaluate('log(logg)', out=logg)
+        logg = np.log(logg, out=logg)
         self.w.indices[:] = np.argmax(self.pcond_y_vs_x.dot(logg), axis=1)
 
     def idiv_update_left(self):
         self.get_hat_matrix()
         self.get_cond_x_vs_hatx()
         logg = self.pcond_x_vs_hatx.dot(normalize(self.hat_matrix, norm='l1', axis=0))
-        evaluate('log(logg)', out=logg)
+        logg = np.log(logg, out=logg)
         self.h.indices[:] = np.argmax(self.pcond_x_vs_y.transpose().dot(logg), axis=1)
 
     def get_hat_matrix(self):

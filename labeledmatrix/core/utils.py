@@ -1,24 +1,16 @@
-#
-# Copyright tinyclues, All rights reserved
-#
-from six.moves import zip
-
 import numpy as np
-from cytoolz import merge as dict_merge
+from toolz import merge as dict_merge
 
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
 
-from karma.core.column import WriteValuesOnDiskException
-from karma.core.utils.collaborative_tools import simple_counter
-from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
-from karma.types import is_exceptional_mask, generic_ndarray_safe_cast
-from six.moves import range
+from labeledmatrix.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
+
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
 
-def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True, default=0):
+def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True):
     """
     :param dataframe: DataFrame
     :param key: str columnName corresponding to the index
@@ -26,18 +18,17 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
     :param values: str columns on which the aggregator will be used
     :param aggregator: str (min, max, sum, first, last)
     :param sparse: bool returns sparse result
-    :param default : float64 : default value for dense pivot.
     :return: LabeledMatrix
 
     This can be used as routine to compute pivot matrices with associative aggregators (#, sum, min, max, !, last)
     # TODO : iterate over different values/aggregators and to use in df.pivot
     Compare with the example from dataframe.pivot :
 
-        >>> from karma import DataFrame, Column
-        >>> d = DataFrame()
-        >>> d['gender'] = Column(['1', '1', '2', '2', '1', '2', '1'])
-        >>> d['revenue'] = Column([100,  42,  60,  30,  80,  35,  33])
-        >>> d['csp'] = Column(['+', '-', '+', '-', '+', '-', '-'])
+        >>> import pandas as pd
+        >>> d = pd.DataFrame()
+        >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
+        >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
+        >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum').to_dense()\
             .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
@@ -67,8 +58,8 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
-        1      80      33
-        2      60      30
+        1      80.0     33.0
+        2      60.0     30.0
 
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'max').to_dense()\
             .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
@@ -79,7 +70,6 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         2      60.0     35.0
 
     """
-    from karma.core.column import safe_dtype_cast
     aggregator_map = {'sum': 'add',
                       'min': 'min',
                       'max': 'max',
@@ -89,48 +79,23 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
                       'mean': _lm_aggregate_pivot_mean,
                       'std': _lm_aggregate_pivot_std
                       }
-    if len(dataframe) == 0:
-        raise ValueError('empty dataframe provided to lm aggregate pivot')
-    if aggregator not in aggregator_map.keys():
+    if aggregator not in list(aggregator_map.keys()):
         raise ValueError('aggregator {} does not exist'.format(aggregator))
     aggregator = aggregator_map[aggregator]
-    vectorial_cols = set([key, axis, values]).intersection(dataframe.vectorial_column_names)
-    if len(vectorial_cols) != 0:
-        raise TypeError("Some columns are vectorials not compatible {}".format(vectorial_cols))
+
     if values is not None:
-        data = dataframe[values][:]
-        if sparse:
-            val = safe_dtype_cast(data, np.float32)
-        else:
-            if isinstance(data, np.ndarray):
-                val = generic_ndarray_safe_cast(data)
-            else:
-                # case where its not ndarray
-                if np.any(is_exceptional_mask(data)):
-                    # we NEED na we have to use float, we choose 32
-                    try:
-                        val = safe_dtype_cast(data, np.float32)
-                    except WriteValuesOnDiskException:
-                        raise TypeError('Some values to aggregate are not numeric')
-                else:
-                    val = np.asarray(data)
-            if val.dtype not in [np.float64, np.float32, np.int64, np.int32, np.uint8]:
-                # the dtype is not numeric
-                raise TypeError('Error the dtype {} is not compatible w/ lm pivot'.format(val.dtype))
+        val = np.asarray(dataframe[values][:])
+        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
     else:
-        # count aggregator so the values should be integer if not sparse
-        if not sparse:
-            val = np.ones(len(dataframe), dtype=np.int64)
-        else:
-            val = np.ones(len(dataframe), dtype=np.float32)
+        val = np.ones(len(dataframe), dtype=np.float32)
 
     ri_key = dataframe[key].reversed_index()
     ri_axis = dataframe[axis].reversed_index()
 
     if callable(aggregator):
-        return aggregator(val, ri_key, ri_axis, sparse, default)
+        return aggregator(val, ri_key, ri_axis, sparse)
     else:
-        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default)
+        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse)
 
 
 def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
@@ -196,6 +161,38 @@ def _lm_aggregate_pivot_std(val, ri_key, ri_axis, sparse=True, default=0):
 
 def aeq(matrix1, matrix2):
     return np.allclose(matrix1, matrix2, rtol=1e-7)
+
+
+def simple_counter(values, sparse=None):
+    """
+        >>> from karma.synthetic.basic import basic_dataframe
+        >>> from karma.core.labeledmatrix import LabeledMatrix
+        >>> df = basic_dataframe(100)
+        >>> lm = LabeledMatrix(*simple_counter((df['a'][:], df['b'][:])))
+        >>> lm.matrix.sum() == 100
+        True
+        >>> lm.row == df.deduplicate_by('a')['a'][:]
+        True
+        >>> lm.column == df.deduplicate_by('b')['b'][:]
+        True
+        >>> df1 = df.shuffle()
+        >>> lm1 = LabeledMatrix(*simple_counter((df1['a'][:], df1['b'][:])))
+        >>> lm1.sort() == lm.sort()
+        True
+        >>> for i in range(len(df)):
+        ...     a, b = df['a'][i], df['b'][i]
+        ...     assert lm1[a, b] == df.counts(('a', 'b'))[(a,b)]
+
+    """
+    assert len(values) == 2
+    assert len(values[0]) == len(values[1])
+    ul1, ind1 = reversed_index(values[0])
+    ul2, ind2 = reversed_index(values[1])
+    uu_tuple = (ul1, ul2)
+    matrix = KarmaSparse((ind1, ind2), shape=(len(ul1), len(ul2)), format="csr")
+    if (sparse is None and not keep_sparse(matrix)) or (sparse is False):
+        matrix = matrix.toarray()
+    return uu_tuple, matrix
 
 
 def lm_occurence(val0, val1, dense_output=False):
@@ -488,4 +485,3 @@ def lm_compute_volume_at_cutoff(lm, potential_cutoff):
     vol_at_cutoff = in_potential_cutoff_array.sum(axis=0).astype('float32') / scores_array.shape[0]
 
     return dict(zip(lm.column, vol_at_cutoff))
-

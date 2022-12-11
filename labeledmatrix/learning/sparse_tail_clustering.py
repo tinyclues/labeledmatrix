@@ -5,8 +5,7 @@
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_kron
 
-from karma.learning.matrix_utils import pairwise_buddy
-from six.moves import range
+from .matrix_utils import pairwise_buddy
 
 __all__ = ['sparse_tail_clustering']
 

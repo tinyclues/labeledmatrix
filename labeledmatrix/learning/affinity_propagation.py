@@ -1,14 +1,12 @@
 #
 # Copyright tinyclues, All rights reserved
 #
-
 import numpy as np
-from karma.runtime import KarmaSetup
+from scipy.sparse import isspmatrix as is_scipy_sparse
+
 from cyperf.tools import parallel_unique
 from cyperf.clustering.sparse_affinity_propagation import SAFP
 from cyperf.matrix.karma_sparse import is_karmasparse
-from scipy.sparse import isspmatrix as is_scipy_sparse
-from six.moves import range
 
 
 def affinity_propagation(similarity, preference=None, max_iter=200, damping=0.6):
@@ -66,7 +64,7 @@ def affinity_propagation(similarity, preference=None, max_iter=200, damping=0.6)
 
 
 def sparse_affinity_propagation(similarity, preference=None, max_iter=200, damping=0.6):
-    return SAFP(similarity, preference).build(max_iter=max_iter, damping=damping, verbose=KarmaSetup.verbose)
+    return SAFP(similarity, preference).build(max_iter=max_iter, damping=damping, verbose=1)
 
 
 def dense_affinity_propagation(similarity, preference=None,
@@ -109,7 +107,7 @@ def dense_affinity_propagation(similarity, preference=None,
         responsibility_pos = np.maximum(responsibility, 0)
         responsibility_pos.flat[::n + 1] = responsibility.flat[::n + 1]
 
-        availability = np.sum(responsibility_pos, axis=0)[np.newaxis, :] - responsibility_pos
+        availability = np.sum(responsibility_pos, axis=0)[np.newaxis,:] - responsibility_pos
         diag_av = np.diag(availability)
         availability = np.minimum(availability, 0)
         availability.flat[::n + 1] = diag_av
@@ -125,8 +123,7 @@ def dense_affinity_propagation(similarity, preference=None,
         err = np.max(np.abs(responsibility - responsibility_old)
                      + np.abs(availability - availability_old)) / damping
         if (same_exemplar_iter > max_repeated_iter) or (err < min_eps):
-            if KarmaSetup.verbose:
-                print "Early stopping condition after {} iterations".format(it)
+            # print("Early stopping condition after {} iterations".format(it))
             break
 
     # recomute clusters

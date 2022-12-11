@@ -2,7 +2,6 @@
 # Copyright tinyclues, All rights reserved
 #
 
-
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import pdist
 
