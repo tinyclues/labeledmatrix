@@ -6,7 +6,6 @@
 cimport cython
 import scipy.sparse as sp
 from scipy.special import expit
-from six import PY3
 
 import numpy as np
 from cython.parallel import parallel, prange
@@ -447,10 +446,7 @@ cdef class KarmaSparse:
         if format is not None:
             # py2->py3 adapter
             if not isinstance(format, str):
-                if PY3:
-                    format = format.decode('utf8')
-                else:
-                    format = format.encode('utf8')
+                format = format.decode('utf8')
 
             check_acceptable_format(format)
         if shape is not None:

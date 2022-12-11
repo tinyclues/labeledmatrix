@@ -12,9 +12,6 @@ from cyperf.matrix import linear_error
 
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
-from six.moves import range
-from six.moves import zip
-from six import PY3
 warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
 
 
@@ -813,12 +810,8 @@ class TestKarmaSparse(unittest.TestCase):
         ks32 = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
         path = './tests/matrix/karma_sparse_64.pickle'
 
-        if PY3:
-            with open(path, "rb") as _f:
-                ks64 = loads(_f.read(), encoding='bytes')
-        else:
-            with open(path, "r") as _f:
-                ks64 = loads(_f.read())
+        with open(path, "rb") as _f:
+            ks64 = loads(_f.read(), encoding='bytes')
 
         self.assertEqual(ks32.dtype, ks64.dtype)
         np_almost_equal(ks32, ks64)
@@ -831,12 +824,8 @@ class TestKarmaSparse(unittest.TestCase):
         ks_expected = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
         path = './tests/matrix/karma_sparse_py3.pickle'
 
-        if PY3:
-            with open(path, "rb") as _f:
-                ks_got = loads(_f.read())
-        else:
-            with open(path, "r") as _f:
-                ks_got = loads(_f.read())
+        with open(path, "rb") as _f:
+            ks_got = loads(_f.read())
         np_almost_equal(ks_got, ks_expected)
 
     # TODO : we need to reanimate those test

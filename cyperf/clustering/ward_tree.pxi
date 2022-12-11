@@ -10,7 +10,7 @@ def labels_builder(np.ndarray full_link not None, ITYPE_t n):
     build labels from (possibly partial) linkage matrix.
     """
     cdef ITYPE_t u
-    cdef np.ndarray[ITYPE_t, ndim=1] aux = np.hstack([np.arange(n, dtype=ITYPE), -np.ones(n, dtype=ITYPE)])
+    cdef np.ndarray[ITYPE_t, ndim=1] aux = np.lm_hstack([np.arange(n, dtype=ITYPE), -np.ones(n, dtype=ITYPE)])
     cdef ITYPE_t[:,::1] link = full_link[:, :2].astype(ITYPE)
 
     if link.shape[0] > 0:

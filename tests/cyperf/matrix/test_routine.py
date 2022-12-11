@@ -6,9 +6,6 @@ import numpy as np
 from cyperf.matrix.routine import (bisect_left, batch_contains_mask, batch_is_exceptional_mask,
                                    cy_safe_slug, cy_domain_from_email_lambda, indices_lookup)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
-import six
-from six.moves import range
-from six import PY2
 
 
 def kronii(left, right):
@@ -26,8 +23,6 @@ class RoutineTestCase(unittest.TestCase):
         self.assertEqual(cy_safe_slug(b't\xb0st'), b't?st'),
         self.assertEquals(cy_safe_slug(u'foo\xe8@_-'), b'fooe@_-')
 
-        if PY2:
-            self.assertTrue(cy_safe_slug(b'foo!intern') is cy_safe_slug(b'foo!intern'))
         self.assertEquals(cy_safe_slug(b'`Error!'), b'`error!')
         self.assertEquals(cy_safe_slug(b'5454'), b'5454')
 
@@ -45,7 +40,7 @@ class RoutineTestCase(unittest.TestCase):
         self.assertEqual(cy_domain_from_email_lambda('x@y.com'), 'y.com')
         self.assertEqual(cy_domain_from_email_lambda('qdfd@rrr@x@y.com'), 'y.com')
         self.assertEqual(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), u'y.com')
-        self.assertEqual(type(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com')), six.text_type)
+        self.assertIsInstance(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), str)
 
         with self.assertRaises(AttributeError) as e:
             _ = cy_domain_from_email_lambda(33)

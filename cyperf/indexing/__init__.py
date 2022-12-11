@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division   # see https://www.python.org/dev/peps/pep-0238/#abstract
-from six import PY3
 import numpy as np
 from cyperf.tools import take_indices, parallel_sort
 
@@ -16,7 +13,6 @@ from cyperf.indexing.column_index import (positions_select_inplace, count_select
 
 from cyperf.indexing.column_index import (get_positions_multiindex, key_indices_multiindex,
                                           compact_multiindex, dispatch_tupled_values)
-from six.moves import range
 
 
 def get_index_dtype(size):
@@ -353,7 +349,7 @@ class ColumnIndex(object):
         >>> sorted(ColumnIndex(['b', 'a', 'a', 'c', 'b', 'd']).keys())
         ['a', 'b', 'c', 'd']
         """
-        return list(self.position.keys()) if PY3 else self.position.keys()
+        return list(self.position.keys())
 
     def sorted_indices(self, reverse=False):
         """

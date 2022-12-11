@@ -1222,7 +1222,7 @@ def align_along_axis(matrix, indices, axis, extend=False):
     """
     indices can be either a number of lines to add (if extend) or indices to extract after adding a single line
 
-    >>> from karma.core.labeledmatrix.utils import aeq
+    >>> from labeledmatrix.core.utils import aeq
     >>> matrix = np.random.rand(10, 5)
     >>> aeq(matrix[[3,2]], align_along_axis(matrix, [3,2], 1))
     True
@@ -1507,7 +1507,7 @@ def matrix_group_by(matrix, group_by_key_column, aggregator='mean'):
     array([[-6.5      ,  0.8000001, -3.1999996],
            [-2.       ,  5.6      ,  0.1      ]], dtype=float32)
     """
-    from karma.core.column import Column, AliasColumn
+    from karma.core.column import Column, AliasColumn  # FIXME
     if isinstance(group_by_key_column, (Column, AliasColumn)):
         initial_order_indices = group_by_key_column.deduplicate_indices(take='first')
         if aggregator == 'first':
@@ -1600,7 +1600,7 @@ def gram_quantiles(matrix, q=0.1):
     Args:
         matrix: rectangular matrix, sparse or not
         q: float between 0 and 1, or list of floats, which quantile(s) to compute
-    >>> from karma.core.utils.utils import use_seed
+    >>> from labeledmatrix.core.utils import use_seed
     >>> with use_seed(42):
     ...    G = np.random.randn(100, 10)
     >>> gram_quantiles(G, 0.1)
@@ -1687,7 +1687,7 @@ def direct_product_second_moment(left, right):
 
 
 def default_row(matrix, default):
-    from karma.core.labeledmatrix.labeledmatrix import LabeledMatrixException
+    from labeledmatrix.core.labeledmatrix import LabeledMatrixException
     if is_karmasparse(matrix):
         raise LabeledMatrixException("Creating a default row is not supported on sparse")
     if isinstance(default, np.ndarray) and default.shape == (matrix.shape[1],):

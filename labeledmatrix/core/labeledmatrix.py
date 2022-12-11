@@ -1,11 +1,8 @@
 import random
 import pandas as pd
-import numpy as np
-import scipy.sparse as sp
 
 from toolz.dicttoolz import keymap
 from toolz import merge as dict_merge
-from collections import OrderedDict
 from numbers import Integral
 
 from scipy.sparse.linalg import svds
@@ -15,10 +12,10 @@ from sklearn.cluster import SpectralClustering
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
 from cyperf.matrix.karma_sparse import ks_diag
-from cyperf.tools import logit_inplace, take_indices, argsort
+from cyperf.tools import take_indices
 from cyperf.tools.getter import apply_python_dict
 
-from labeledmatrix.core.utils import co, aeq, zipmerge, simple_counter
+from labeledmatrix.core.utils import co, aeq, zipmerge, lm_occurence, lmdiag, lm_hstack
 
 from labeledmatrix.learning.matrix_utils import *
 from labeledmatrix.learning.tail_clustering import tail_clustering
@@ -33,120 +30,6 @@ from labeledmatrix.learning.utils import use_seed
 
 def is_integer(arg):
     return isinstance(arg, Integral)
-
-
-def lm_occurence(val0, val1, dense_output=False):
-    """
-    >>> lm = lm_occurence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
-    >>> lm.to_dense().matrix
-    array([[2., 0.],
-           [1., 1.]], dtype=float32)
-    """
-    return LabeledMatrix(*simple_counter((val0, val1), sparse=not dense_output))
-
-
-def lmdiag(key, values, sdeco={}, dense_output=False):
-    """
-    >>> lm = lmdiag(["b", "c"], [3, 50000000]).sort()
-    >>> lm.label
-    (['b', 'c'], ['b', 'c'])
-    >>> aeq(lm.matrix, np.array([[3, 0], [0, 50000000]]))
-    True
-    >>> lm.matrix.format
-    'csr'
-    """
-    matrix = ks_diag(np.asarray(values))
-    if dense_output:
-        return LabeledMatrix((key, key), matrix.toarray(), deco=(sdeco, sdeco))
-    else:
-        return LabeledMatrix((key, key), matrix, deco=(sdeco, sdeco))
-
-
-def lm_hstack(list_of_lm, dense_output=False):
-    """
-    >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]])).sort()
-    >>> lm2 = LabeledMatrix((['c'], ['x', 'z', 'y']), np.array([[7, 9, 8]])).sort()
-    >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]])).sort()
-    >>> lm = lm_hstack([lm1, lm2, lm3])
-    >>> df = lm.to_dense().sort().to_vectorial_dataframe()
-    >>> df #doctest: +NORMALIZE_WHITESPACE
-         0    1    2    3    4     5    6
-    a  7.0  0.0  0.0  0.0  5.0  20.0  1.0
-    b  4.0  0.0  0.0  0.0  0.0   0.0  0.0
-    c  0.0  7.0  8.0  9.0  0.0   0.0  0.0
-    d  0.0  0.0  0.0  0.0  4.0 -20.0 -1.0
-    >>> mat_before = lm.matrix.copy()
-    >>> x = lm.sum(axis=0)
-    >>> aeq(mat_before, lm.matrix)
-    True
-    """
-    total_rows = list_of_lm[0].row
-    row_deco = {}
-    for lm in list_of_lm[1:]:
-        total_rows = total_rows.union(lm.row)[0]
-        row_deco.update(lm.row_deco)
-    aligned_matrix_list = []
-    for lm in list_of_lm:
-        row_index = lm.row.align(total_rows)[1]
-        aligned_matrix_list.append(align_along_axis(lm.matrix, row_index, 1, extend=True))
-    result = ks_hstack(aligned_matrix_list)
-    if dense_output:
-        result = result.toarray()
-    return LabeledMatrix((total_rows, list(range(result.shape[1]))), result, deco=(row_deco, {}))
-
-
-def lm_rand(shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
-    """
-    Returns a randomized LabeledMatrix.
-
-    :param shape: the shape of the `LabeledMatrix` (rows, columns)
-    :param density: ratio of non-zero elements
-    :param sparse: determines if the inner container will be sparse or not
-    :param seed: seed that could be used to seed the random generator
-    :return: A randomized LabeledMatrix
-
-    Exemples: ::
-
-        >>> lm = lm_rand(seed=12).sort()
-        >>> lm.row
-        ['lemal', 'piuzo', 'pivqv', 'wthra']
-        >>> lm.column
-        ['fkgbs', 'gcqvk', 'vteol']
-        >>> lm.matrix.toarray().shape
-        (4, 3)
-        >>> lm_rand(shape=(10, 10)).nnz()
-        50
-    """
-    import string
-    def _random_words(length):
-        while True:
-            yield ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
-
-    def _generate_words(nb, length):
-        random_word = _random_words(length)
-        words = []
-        words_set = set()
-        while len(words) < nb:
-            word = next(random_word)
-            if word not in words_set:
-                words_set.add(word)
-                words.append(word)
-        return words
-
-    if square:
-        shape = (shape[0], shape[0])
-    matrix = KarmaSparse(sp.rand(shape[0], shape[1], density,
-                                 format="csr", random_state=seed))
-    random.seed(seed)
-    row = _generate_words(shape[0], 5)
-    if square:
-        column = row
-    else:
-        column = _generate_words(shape[1], 5)
-    random.seed(None)
-
-    lm = LabeledMatrix((row, column), matrix)
-    return lm.to_sparse() if sparse else lm
 
 
 __all__ = ["LabeledMatrix", "LabeledMatrixException"]
@@ -193,7 +76,7 @@ class LabeledMatrix():
         >>> LabeledMatrix((row, np.array(['x', 'y', 'z'])), matrix.copy()).column
         ['x', 'y', 'z']
         """
-        (row, column) = xxx_todo_changeme1
+        (row, column) = xxx_todo_changeme1  # FIXME
         self.check_format((row, column), matrix)
         if is_scipysparse(matrix):
             matrix = KarmaSparse(matrix)

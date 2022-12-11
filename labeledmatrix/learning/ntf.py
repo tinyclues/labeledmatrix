@@ -3,9 +3,6 @@
 #
 import numpy as np
 
-from karma.runtime import KarmaSetup
-from six.moves import range
-
 __all__ = ['ntf']
 
 
@@ -17,8 +14,7 @@ def ntf(tensor, rank=2, max_iter=150):
 
     Examples: ::
 
-        >>> from karma.learning.matrix_utils import kl_div
-        >>> KarmaSetup.verbose = False
+        >>> from labeledmatrix.learning.matrix_utils import kl_div
         >>> import numpy as np
         >>> tensor = np.random.rand(15, 10, 6)
         >>> a, b, c = ntf(tensor, rank=4, max_iter=400)
@@ -33,9 +29,8 @@ def ntf(tensor, rank=2, max_iter=150):
         >>> kl_div(tensor, scalar_tensor_dot(a, b, c)) < 1
         True
     """
-    if KarmaSetup.verbose:
-        print "NMF : Tensor dimensions are {}".format(tensor.shape)
-        print "NMF : Used rank is equal to {}".format(rank)
+    # print("NMF : Tensor dimensions are {}".format(tensor.shape))
+    # print("NMF : Used rank is equal to {}".format(rank))
     result = NTF(tensor, rank)
     result.initial(rank)
     return result.iterate(max_iter)

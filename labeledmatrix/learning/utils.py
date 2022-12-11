@@ -1,5 +1,5 @@
 from collections import Hashable
-from functools import wraps
+from functools import wraps, reduce
 
 from numpy.random.mtrand import seed as np_seed
 from numpy.random.mtrand import get_state as np_get_state
@@ -11,26 +11,19 @@ from random import setstate as py_set_state
 from itertools import imap, product
 from multiprocessing.pool import ThreadPool
 
-import torch
+import torch  # TODO keep or drop ?
 import numpy as np
-from math import ceil
 from cyperf.tools import parallel_unique
 
-from sklearn.model_selection import StratifiedShuffleSplit
+from cyperf.tools import take_indices
 
-from cyperf.tools import take_indices, logit_inplace, argsort, parallel_sort
-
-from karma.runtime import KarmaSetup
-
+# TODO VirtualHStack keep or drop ?
 from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
-from karma.core.utils.array import is_binary
-from karma.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
-                                         direct_product, direct_product_dot,
-                                         direct_product_dot_transpose,
-                                         direct_product_second_moment, cast_2dim_float32_transpose, safe_min, safe_max)
-from karma.learning.regression import create_meta_of_regression, create_summary_of_regression
-from karma.thread_setter import blas_level_threads
-from karma.core.utils.utils import LOGGER
+from labeledmatrix.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
+                                                 direct_product, direct_product_dot,
+                                                 direct_product_dot_transpose, direct_product_second_moment,
+                                                 cast_2dim_float32_transpose, safe_min, safe_max)
+from labeledmatrix.learning.thread_setter import blas_level_threads
 
 NB_THREADS_MAX = 16
 NB_CV_GROUPS_MAX = 10 ** 5
@@ -94,13 +87,13 @@ class VirtualDirectProduct(object):
 
     def min(self, axis=None):
         if axis is None:
-            return min(map(lambda (x, y): (x * y).min(), self._extreme_values()))
+            return min(map(lambda *args: (args[0] * args[1]).min(), self._extreme_values()))
         else:
             raise NotImplementedError('VirtualDirectProduct.min supports only axis=None')
 
     def max(self, axis=None):
         if axis is None:
-            return max(map(lambda (x, y): (x * y).max(), self._extreme_values()))
+            return max(map(lambda *args: (args[0] * args[1]).max(), self._extreme_values()))
         else:
             raise NotImplementedError('VirtualDirectProduct.max supports only axis=None')
 
@@ -366,326 +359,11 @@ class VirtualHStack(BasicVirtualHStack):
                 return number_nonzero(self.X) * 1. / self.X.shape[0]
 
 
-def validate_regression_model(blocks_x, y, cv, method, warmup_key=None, cv_groups=None, cv_n_splits=1, cv_seed=None,
-                              **kwargs):
-    if not isinstance(cv, CrossValidationWrapper):
-        cv = CrossValidationWrapper(cv, y, cv_groups, cv_n_splits, cv_seed)
-    cv.validate(blocks_x, y, method, warmup_key, **kwargs)
-    return cv
-
-
-def _prepare_and_check_classes(y, groups):
-    if groups is not None:
-        assert len(groups) == len(y)
-    y = np.asarray(y)
-    if is_binary(y):
-        classes = y
-    else:
-        # in case the response is not binary, stratify by quantile
-        # at most 10, but never less than 100 lines per quantile
-        y_boundaries = quantile_boundaries(y, nb=min(max(len(y) / 100, 1), 10))
-        classes = y_boundaries.searchsorted(y)
-
-    if groups is not None:
-        groups = np.char.asarray(groups)
-        classes = np.char.asarray(classes) + '_' + groups
-        unique, counts = np.unique(classes, return_counts=True)
-
-        groups_to_clean = set()
-        for _class in unique[counts == 1]:
-            groups_to_clean.add(groups[classes == _class][0])
-        for group in groups_to_clean:
-            classes[groups == group] = group
-
-    _, counts = np.unique(classes, return_counts=True)
-    if not np.all(counts > 1):
-        raise ValueError("StratifiedShuffleSplit doesn't support classes of size 1")
-    return classes
-
-
-class CrossValidationWrapper(object):
-    """Cross-validation.
-
-    General Karma wrapper for the creation of shuffled cross-validation (possibly stratified).
-
-    Parameters
-    ----------
-    cv : float : Between 0 and 1, proportion of the data to use in each test set.
-    y : array : Targets for the classification task.
-    groups : array, default None : Values of the stratification variable.
-    n_splits : int, default 1 : Number of splits to create.
-    seed: int, default None : To use a specific seed.
-
-    Attributes
-    ----------
-    test_indices : int array : Rows indices used in test sets.
-    test_y_hat : float array : Predictions on the different test sets.
-    intercepts : list : Intercepts on each fold.
-    feat_coefs : list of arrays : List of the feature coefficients on each fold.
-    test_fraction : float : Proportion of data in each test set.
-    test_size : int : Number of observations in each test set.
-    _classes : array : Stratified targets.
-    n_splits : int : Number of splits.
-    seed : int : Random seed used.
-    """
-    method_output = None
-    meta = None
-
-    def __init__(self, cv, y, groups=None, n_splits=1, seed=None, kept_indices=None):
-        if not (isinstance(cv, float) and 0 < cv < 1):
-            raise ValueError('CvIterator only support cv to be a float in (0, 1)')
-        self.test_fraction = cv
-        self.test_size = int(ceil(cv * len(y)))  # sklearn/model_selection/_split.py l.1379
-
-        self._classes = _prepare_and_check_classes(y, groups)
-        self._kept_indices = kept_indices
-
-        self.n_splits = n_splits
-        self.seed = seed if seed is not None else len(y)
-
-        self.test_indices = np.zeros(self.test_size * self.n_splits, dtype=int)
-        self.test_y_hat = np.zeros(self.test_size * self.n_splits, dtype=np.float64)
-        self.test_indices_by_fold = [np.zeros(self.test_size, dtype=int)] * self.n_splits
-        self.test_y_hat_by_fold = [np.zeros(self.test_size, dtype=np.float64)] * self.n_splits
-        self.intercepts, self.feat_coefs = [None] * self.n_splits, [None] * self.n_splits
-
-        from karma.core.dataframe import DataFrame
-        self.summary = DataFrame()
-
-    @property
-    def cv(self):
-        return StratifiedShuffleSplit(self.n_splits, test_size=self.test_fraction, random_state=self.seed)
-
-    def split(self, X=None, y=None, groups=None):
-        # X=None, y=None, groups=None signature matches ShuffleSplit.split signature that allow to use
-        # CrossValidationWrapper as ShuffleSplit on predefined dataset
-        # (usage example: lasso for bayesian_logistic_regression)
-        for (train_idx, test_idx) in self.cv.split(self._classes, self._classes):
-            if self._kept_indices is not None:
-                train_idx, test_idx = self._kept_indices[train_idx], self._kept_indices[test_idx]
-            train_idx, test_idx = map(parallel_sort, (train_idx, test_idx))
-            yield train_idx, test_idx
-
-    def get_n_splits(self, X=None, y=None, groups=None):
-        return self.n_splits
-
-    @property
-    def fold_indices_iter(self):
-        return zip(self.test_indices_by_fold, self.test_y_hat_by_fold)
-
-    def validate(self, blocks_x, y, method, warmup_key=None, **kwargs):
-        X_stacked = VirtualHStack(blocks_x,
-                                  nb_threads=kwargs.get('nb_threads', 1),
-                                  nb_inner_threads=kwargs.get('nb_inner_threads'))
-        i, j = 0, 0
-        compute_gaincurves = kwargs.pop('compute_gaincurves', True)
-        compute_summary = kwargs.pop('compute_summary', False)
-        metrics = kwargs.pop('metrics', 'auc')
-        metric_groups = kwargs.pop('metric_groups', None)
-        kc_formatter = kwargs.pop('kc_formatter', None)
-
-        for (train_idx, test_idx) in self.split():
-            train_kwargs = {k: v[train_idx] if isinstance(v, np.ndarray) and v.shape == y.shape else v
-                            for k, v in kwargs.items()}
-            self.method_output = method(X_stacked[train_idx], y[train_idx], **train_kwargs)
-            intercept, betas = self.method_output[1:3]
-            self.intercepts[j] = intercept
-            self.feat_coefs[j] = betas
-
-            if kc_formatter is None:
-                y_hat = np.asarray(X_stacked.dot(np.hstack(betas), row_indices=test_idx) + intercept)
-                if method.func_name in KNOWN_LOGISTIC_METHODS:
-                    logit_inplace(y_hat)
-            else:
-                from karma.core.karmacode.utils import RegressionKarmaCodeFormatter
-                assert isinstance(kc_formatter, RegressionKarmaCodeFormatter)
-                kc = kc_formatter.format(*self.method_output)
-                y_hat = kc.bulk_call(X_stacked[test_idx].X)[0]
-
-            self.test_y_hat[i:i + self.test_size] = y_hat
-            self.test_indices[i:i + self.test_size] = test_idx
-            self.test_y_hat_by_fold[j] = y_hat
-            self.test_indices_by_fold[j] = test_idx
-
-            if compute_summary and method.func_name in KNOWN_LOGISTIC_METHODS:
-                fold_summary = create_summary_of_regression(prediction=y_hat, y=y[test_idx],
-                                                            metrics=metrics, metric_groups=metric_groups)
-                from karma.dataframe_squash import squash
-                self.summary = squash(self.summary, fold_summary)
-
-            i += self.test_size
-            j += 1
-            if warmup_key is not None:
-                kwargs[warmup_key] = np.hstack(betas + [intercept])
-        X_stacked._close_pool()  # Warning should called manually at the exit from class
-
-        argsort_idx = argsort(self.test_indices)
-        self.test_indices = self.test_indices[argsort_idx]
-        self.test_y_hat = self.test_y_hat[argsort_idx]
-
-        if compute_gaincurves:
-            self.meta = create_meta_of_regression(self.test_y_hat, y[self.test_indices], with_guess=False)
-
-    def calculate_train_test_metrics(self, trained_dataframe, group_by_cols, pred_col, response_col):
-        from karma.core.column import create_column_from_data
-        from karma.dataframe_squash import squash
-
-        test_dataframe = trained_dataframe.copy(response_col, *group_by_cols)[self.test_indices]
-        test_dataframe[pred_col] = create_column_from_data(self.test_y_hat)
-
-        dataframe = squash({'train': trained_dataframe.copy(response_col, pred_col, *group_by_cols),
-                            'test': test_dataframe}, label='label')
-        res = {}
-        for col in group_by_cols:
-            res[col] = calculate_train_test_metrics(dataframe, col, pred_col, response_col, split_col='label')
-            renaming_dict = {'# train': '#', '# positive train': '# positive'}
-            exclude = ['# test', '# positive test']
-            cols = [name if name not in renaming_dict else '{} as {}'.format(name, renaming_dict[name])
-                    for name in res[col].column_names if name not in exclude]
-            res[col] = res[col].copy(*cols)
-        return res
-
-    @staticmethod
-    def create_cv_from_data_and_params(dataframe, **parameters):
-        cv = parameters['cv']
-        if not isinstance(cv, CrossValidationWrapper):
-            cv_params_dict = {
-                'cv': parameters['cv'],
-                'n_splits': parameters.get('cv_n_splits', 1),
-                'seed': parameters.get('seed', len(dataframe))
-            }
-            if 'y' in parameters:
-                y = parameters['y']
-            else:
-                y = np.asarray(dataframe[parameters['axis']][:])
-
-            groups = CrossValidationWrapper.get_cv_groups_from_columns(dataframe,
-                                                                       parameters.get('cv_groups'),
-                                                                       cv_params_dict['seed'])
-            if groups is not None:
-                groups = np.asarray(groups)
-                unique, counts = np.unique(groups, return_counts=True)
-                if np.any(counts == 1):
-                    drop_mask = np.zeros(len(dataframe), dtype=bool)
-                    for g in unique[counts == 1]:
-                        drop_mask += groups == g
-                    kept_indices = np.arange(len(groups))[~drop_mask]
-                    groups, y = groups[kept_indices], y[kept_indices]
-                    cv_params_dict['kept_indices'] = kept_indices
-
-            cv = CrossValidationWrapper(y=y, groups=groups, **cv_params_dict)
-        return cv
-
-    @staticmethod
-    def get_cv_groups_from_columns(dataframe, cv_groups_col=None, seed=783942):
-        """
-        Given iterable of columns, returns unlazy data array using feature_randomizer
-        Given one column, returns it unlazied
-        Filters out columns not available in dataframe from input
-        :param dataframe
-        :param cv_groups_col: string or list/tuple
-        :param seed: integer
-        :return: data array
-        """
-
-        if cv_groups_col is None:
-            return None
-        else:
-            cv_groups_col = coerce_to_tuple_and_check_all_strings(cv_groups_col, 'cv_groups')
-            cv_groups_col_filtered = filter(lambda col: col in dataframe, cv_groups_col)
-
-            if len(cv_groups_col_filtered) < len(cv_groups_col):
-                LOGGER.warn('Filtered out missing columns in get_cv_groups, keeping: {}'.format(cv_groups_col_filtered))
-                if KarmaSetup.verbose:
-                    print('Filtered out missing columns, keeping: {}'.format(cv_groups_col_filtered))
-
-            if len(cv_groups_col_filtered) == 0:
-                return None
-            elif len(cv_groups_col_filtered) == 1:
-                cv_groups_col_filtered = cv_groups_col_filtered[0]
-            else:
-                cv_groups_col_filtered = 'feature_randomizer({}, vector_size={},' \
-                                         ' seed={})'.format(', '.join(cv_groups_col_filtered), NB_CV_GROUPS_MAX, seed)
-            return dataframe[cv_groups_col_filtered][:]
-
-
 def check_axis_values(y):
     axis_unique_values = parallel_unique(y)
     if axis_unique_values.tolist() not in ([0.], [1.], [0., 1.]):
         raise ValueError('Set of values taken by axis, {}, is not a subset of [0, 1]'
                          .format(axis_unique_values))
-
-
-def calculate_train_test_metrics(dataframe, group_by_col, pred_col, response_col, split_col=None):
-    """
-    Return a DataFrame with AUC, RMSE/RIG and Calibration metrics
-    Args:
-        dataframe: input DataFrame with data samples
-        group_by_col: group of events for which we want to calculate metrics (example: 'topic_id', 'universe')
-        pred_col: prediction column
-        response_col: response column
-        split_col: columns to split groups into subgroup and to pivot in respect to them (example: Train/Test 'label')
-    >>> from karma.core.dataframe import DataFrame
-    >>> from karma.core.utils.utils import use_seed
-    >>> with use_seed(1515):
-    ...     df = DataFrame({'topic': np.random.randint(0, 5, 1000), 'pred': np.random.rand(1000),
-    ...         'obs': np.random.randint(0, 2, 1000), 'label': ['Train'] * 800 + ['Test'] * 200})
-    >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs', 'label').preview() #doctest: +NORMALIZE_WHITESPACE
-    --------------------------------------------------------------------------------------------------------------------------------------
-    topic | # Train | # Test | # positive Train | # positive Test | AUC Train | AUC Test | RIG Train | RIG Test | Calib Train | Calib Test
-    --------------------------------------------------------------------------------------------------------------------------------------
-    0       168       39       96                 22                -0.1117     -0.0053    -0.6616     -0.3572     1.1391        1.03
-    1       140       47       76                 25                -0.1439     -0.0945    -0.5192     -0.6478     0.945         1.0744
-    2       160       47       76                 22                0.1419      -0.1164    -0.3041     -0.5429     0.9598        0.9852
-    3       163       34       78                 20                -0.0042     -0.0929    -0.4236     -0.5821     0.9673        1.0748
-    4       169       33       92                 14                -0.026      -0.2707    -0.4532     -0.674      1.0984        0.8872
-    >>> calculate_train_test_metrics(df, 'topic', 'pred', 'obs').preview() #doctest: +NORMALIZE_WHITESPACE
-    -----------------------------------------------------
-    topic | #   | # positive | AUC     | RIG     | Calib
-    -----------------------------------------------------
-    0       207   118          -0.091    -0.6041   1.117
-    1       187   101          -0.117    -0.5515   0.974
-    2       207   98           0.0813    -0.3582   0.9654
-    3       197   98           -0.0155   -0.4433   0.9875
-    4       202   106          -0.0631   -0.4804   1.0649
-    >>> calculate_train_test_metrics(df.with_column('z', 'multiply(map(topic, mapping=dict({2: 1}), default=0), obs)'),
-    ...                              'topic', 'pred', 'z').preview()  #doctest: +NORMALIZE_WHITESPACE
-    ----------------------------------------------------
-    topic | #   | # positive | AUC    | RIG     | Calib
-    ----------------------------------------------------
-    2       207   98           0.0813   -0.3582   0.9654
-    """
-    is_resp_binary = is_binary(dataframe[response_col][:])
-    if is_resp_binary:
-        err_agg, err_agg_name = ('relative_information_gain', 'RIG')
-    else:
-        err_agg, err_agg_name = ('rmse', 'RMSE')
-
-    group_by = (group_by_col, split_col) if split_col is not None else group_by_col
-    agg_args = '{}, {}'.format(pred_col, response_col)
-    agg_tuple = ('#',
-                 'sum({}) as # positive'.format(response_col),
-                 'auc({}) as AUC'.format(agg_args),
-                 '{}({}) as {}'.format(err_agg, agg_args, err_agg_name),
-                 'calibration_ratio({}) as Calib'.format(agg_args))
-    metrics = dataframe.group_by(group_by, agg_tuple)
-    if is_resp_binary:
-        metrics = metrics.where_gt('# positive', 0)
-    cols = metrics.column_names[len(group_by):]
-    if split_col is not None:
-        res_df = dataframe.deduplicate_by(group_by_col, take='first').sort_by(group_by_col).copy(group_by_col)
-        metrics_by_label = metrics.split_by(split_col)
-        for col in cols:
-            for label in sorted(metrics_by_label.keys())[::-1]:
-                df = metrics_by_label[label].copy(group_by_col, col)
-                _name = df.temporary_column_name()
-                df[_name] = df['alias({})'.format(col)]
-                res_df.add_relation('rel', df, group_by_col, group_by_col)
-                res_df['{} {}'.format(col, label)] = \
-                    res_df['round(replace_exceptional(!rel.{}, constant=-1), precision=4)'.format(_name)]
-    else:
-        res_df = metrics
-    return res_df
 
 
 def create_basic_virtual_hstack(dataframe, inputs):

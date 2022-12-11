@@ -3,10 +3,9 @@ import unittest
 import numpy as np
 from cyperf.matrix.karma_sparse import DTYPE
 
-from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
-from karma.core.labeledmatrix.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
-from karma import DataFrame, Column
-from six.moves import range
+from labeledmatrix.core.labeledmatrix import to_flat_dataframe, LabeledMatrix
+from labeledmatrix.core.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
+from karma import DataFrame, Column  # FIXME
 
 
 class LabeledMatrixTestCase(unittest.TestCase):

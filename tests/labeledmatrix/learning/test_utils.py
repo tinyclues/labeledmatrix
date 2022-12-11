@@ -16,7 +16,6 @@ from karma.learning.utils import (CrossValidationWrapper, validate_regression_mo
                                   BasicVirtualHStack, VirtualHStack, NB_THREADS_MAX, _prepare_and_check_classes)
 from karma.lib.bayesian_logistic_regression import bayesian_logistic_regression
 from karma.lib.logistic_regression import logistic_regression
-from six.moves import range
 
 
 class CrossValidationWrapperTestCase(unittest.TestCase):
@@ -73,17 +72,6 @@ class CrossValidationWrapperTestCase(unittest.TestCase):
 
         self.assertGreater(min(count_ratios), cv.test_fraction - 0.0010)
         self.assertLess(max(count_ratios), cv.test_fraction + 0.0010)
-
-    def test_metrics(self):
-        df = self.df.copy()
-        df['dummy'] = create_column_from_data(np.random.rand(len(df), 2))
-        cv = CrossValidationWrapper(0.2, df['y'][:], n_splits=2, seed=123)
-        df += logistic_regression(df, ['x'], 'pred_y', {'axis': 'y', 'cv': cv})
-
-        metrics = cv.calculate_train_test_metrics(df, ['group'], 'pred_y', 'y')
-        self.assertEquals(metrics.keys(), ['group'])
-        self.assertEquals(metrics['group'].column_names, ['group', '#', '# positive', 'AUC train', 'AUC test',
-                                                          'RIG train', 'RIG test', 'Calib train', 'Calib test'])
 
     def test_classes(self):
         cv = CrossValidationWrapper(0.2,
