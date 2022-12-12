@@ -5,8 +5,8 @@ from cyperf.matrix.karma_sparse import DTYPE
 from numpy.testing import assert_almost_equal, assert_allclose
 from scipy.sparse import rand, csr_matrix
 
-from labeledmatrix.core.utils import use_seed
 from labeledmatrix.learning.matrix_utils import *
+from labeledmatrix.core.random import use_seed
 
 
 class MatrixUtilsTestCase(unittest.TestCase):

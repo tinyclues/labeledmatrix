@@ -83,14 +83,14 @@ jobs:
           steps:
             - persist_to_workspace:
                 paths:
-                  - << parameters.persist_directory >>/*
+                  - << parameters.persist_directory >>
                 root: .
       - when:
           condition: << parameters.persist_directory2 >>
           steps:
             - persist_to_workspace:
                 paths:
-                  - << parameters.persist_directory2 >>/*
+                  - << parameters.persist_directory2 >>
                 root: .
 
 workflows:
@@ -103,6 +103,14 @@ workflows:
           persist_directory: build
           persist_directory2: cyperf
           command: ./setup.py build_ext -i -j2
+          <<: *all_branches_and_tags
+      - run_in_pipenv:
+          name: ls
+          pipenv_env_type: dev
+          executor: python
+          command: ls
+          requires:
+            - cython_setup
           <<: *all_branches_and_tags
       - run_in_pipenv:
           name: run_lint

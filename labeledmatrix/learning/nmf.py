@@ -10,7 +10,7 @@ from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
 from .matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
 from .randomize_svd import nmf_svd_init
-from .utils import use_seed
+from labeledmatrix.core.random import use_seed
 
 
 ADD_TIME = 20

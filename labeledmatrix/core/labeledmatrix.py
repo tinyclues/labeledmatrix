@@ -1,5 +1,4 @@
 import random
-import pandas as pd
 
 from toolz.dicttoolz import keymap
 from toolz import merge as dict_merge
@@ -15,17 +14,18 @@ from cyperf.matrix.karma_sparse import ks_diag
 from cyperf.tools import take_indices
 from cyperf.tools.getter import apply_python_dict
 
+from labeledmatrix.core.random import use_seed
 from labeledmatrix.core.utils import co, aeq, zipmerge, lm_occurence, lmdiag, lm_hstack
 
 from labeledmatrix.learning.matrix_utils import *
-from labeledmatrix.learning.tail_clustering import tail_clustering
+
 from labeledmatrix.learning.affinity_propagation import affinity_propagation
-from labeledmatrix.learning.hierarchical import clustering_dispatcher
-from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.co_clustering import co_clustering
+from labeledmatrix.learning.hierarchical import clustering_dispatcher
 from labeledmatrix.learning.nmf import nmf, nmf_fold
 from labeledmatrix.learning.randomize_svd import randomized_svd
-from labeledmatrix.learning.utils import use_seed
+from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
+from labeledmatrix.learning.tail_clustering import tail_clustering
 
 
 def is_integer(arg):

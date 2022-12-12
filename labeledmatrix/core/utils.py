@@ -9,8 +9,8 @@ from toolz import merge as dict_merge
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
 
+from labeledmatrix.core.random import use_seed
 from labeledmatrix.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
-from labeledmatrix.learning.utils import use_seed
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
