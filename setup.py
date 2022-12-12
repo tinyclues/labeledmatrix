@@ -44,7 +44,6 @@ def create_extension(template, kwds):
 
 
 if "build_ext" in sys.argv:
-    print('build tempita')
     render_tempita()
 
 try:
@@ -54,13 +53,10 @@ try:
 except Exception:
     nthreads = 1
 
-# TODO Warning: passing language='c++' to cythonize() is deprecated.
-#      Instead, put "# distutils: language=c++" in your .pyx or .pxd file(s)
 ext_modules = cythonize(
     "cyperf/**/*.pyx",
     create_extension=create_extension,
     compiler_directives={'language_level': sys.version_info[0], 'embedsignature': True},
-    language='c++',
     nthreads=nthreads,
 )
 
