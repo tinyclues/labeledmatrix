@@ -85,18 +85,12 @@ cpdef object TRANSLATION_TABLE = defaultdict(lambda :63,
                                              244: 111, 245: 111, 246: 111, 249: 117, 250: 117, 251: 117,
                                              252: 117, 253: 121, 255: 121, 65533: 63, 3333333333: 63})
 
-from six import PY2
-cdef BOOL_t cpy2 = PY2
-# TODO : add switch for py3
 def cy_safe_slug(object x, unify=True):
     if PyUnicode_Check(x):
         x_u = x
     else:
         x_u = PyUnicode_FromEncodedObject(x, 'utf-8', 'replace')
-    slug = PyUnicode_AsUTF8String(x_u.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE))
-    if cpy2 and unify:
-        slug = intern(slug)
-    return slug
+    return PyUnicode_AsUTF8String(x_u.strip(ESCAPE_CHARS).lower().translate(TRANSLATION_TABLE))
 
 
 @cython.wraparound(False)

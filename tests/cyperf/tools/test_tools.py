@@ -10,10 +10,6 @@ from cyperf.tools.getter import (apply_python_dict, cy_safe_intern,
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort)
 from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
 
-import six
-from six.moves import map
-from six.moves import range
-
 
 class GetterTestCase(unittest.TestCase):
 
@@ -216,6 +212,7 @@ class GetterTestCase(unittest.TestCase):
         self.assertEqual(cast_to_ascii(arr), ['camelCase', 'copge', b'copge', '1', 'nan', '()'])
 
         def py_ascii(x):
+            import six  # FIXME
             return x.encode('ascii', errors='ignore') \
                 if isinstance(x, six.text_type) \
                 else str(six.text_type(x, 'ascii', errors='ignore')) \
@@ -226,9 +223,10 @@ class GetterTestCase(unittest.TestCase):
         arr = [b'camelCase', b'\xe8cO\xa8e\xc3\xa9', b'\xc3\xa90e', 1, np.nan, ()]
         self.assertEqual(cast_to_unicode(arr),
                          [b'camelCase', b'cOe\xc3\xa9', b'\xc3\xa90e', u'1', 'nan', '()'])
-        self.assertEqual(type(cast_to_unicode([1])[0]), six.text_type)
+        self.assertEqual(type(cast_to_unicode([1])[0]), str)
 
         def py_uni(x):
+            import six  # FIXME
             return (six.text_type(x, 'utf-8', errors='ignore') if isinstance(x, bytes) else x)\
                     .encode('utf-8', errors='ignore') if isinstance(x, bytes) else six.text_type(x)
 

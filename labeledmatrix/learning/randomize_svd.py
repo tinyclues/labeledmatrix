@@ -3,9 +3,9 @@
 #
 
 import numpy as np
-from karma.learning.matrix_utils import safe_dot
-from sklearn.utils.extmath import norm
-from six.moves import range
+from scipy.linalg import norm
+
+from .matrix_utils import safe_dot
 
 
 def randomized_range_finder(A, size, n_iter):
@@ -55,9 +55,9 @@ def randomized_svd(M, n_components, n_iter=2):
 
     if transpose:
         # transpose back the results according to the input convention
-        return V[:n_components, :].T, S[:n_components], U[:, :n_components].T
+        return V[:n_components,:].T, S[:n_components], U[:, :n_components].T
     else:
-        return U[:, :n_components], S[:n_components], V[:n_components, :]
+        return U[:, :n_components], S[:n_components], V[:n_components,:]
 
 
 def nmf_svd_init(matrix, rank, eps):
@@ -66,9 +66,9 @@ def nmf_svd_init(matrix, rank, eps):
     U, S, V = randomized_svd(matrix, rank, n_iter=1)
     W, H = np.zeros(U.shape), np.zeros(V.shape)
     W[:, 0] = np.sqrt(S[0]) * np.abs(U[:, 0])
-    H[0, :] = np.sqrt(S[0]) * np.abs(V[0, :])
+    H[0,:] = np.sqrt(S[0]) * np.abs(V[0,:])
     for j in range(1, rank):
-        x, y = U[:, j], V[j, :]
+        x, y = U[:, j], V[j,:]
         x_p, y_p = np.maximum(x, 0), np.maximum(y, 0)
         x_n, y_n = np.abs(np.minimum(x, 0)), np.abs(np.minimum(y, 0))
         x_p_nrm, y_p_nrm = norm(x_p), norm(y_p)
@@ -84,7 +84,7 @@ def nmf_svd_init(matrix, rank, eps):
             sigma = m_n
         lbd = np.sqrt(S[j] * sigma)
         W[:, j] = lbd * u
-        H[j, :] = lbd * v
+        H[j,:] = lbd * v
     W[W < eps] = 0
     H[H < eps] = 0
     avg = matrix.mean()

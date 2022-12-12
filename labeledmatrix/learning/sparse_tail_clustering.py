@@ -5,15 +5,14 @@
 import numpy as np
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_kron
 
-from karma.learning.matrix_utils import pairwise_buddy
-from six.moves import range
+from .matrix_utils import pairwise_buddy
 
 __all__ = ['sparse_tail_clustering']
 
 
 def sparse_tail_clustering(matrix, mults, k, min_density=0.):
     """
-    >>> from karma.learning.matrix_utils import normalize
+    >>> from labeledmatrix.learning.matrix_utils import normalize
     >>> import scipy.sparse as sp
     >>> mat = normalize(KarmaSparse(sp.rand(20, 10**3, 0.5)), norm="l1", axis=1)
     >>> mults = np.sort(np.random.rand(20))

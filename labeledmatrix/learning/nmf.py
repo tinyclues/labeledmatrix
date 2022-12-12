@@ -6,15 +6,12 @@ import time
 import numpy as np
 from scipy.sparse import isspmatrix as is_scipy_sparse
 from scipy.sparse.linalg import cg
-
-from connect.logging import initialize_logger
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
-from karma.core.utils import use_seed
-from karma.learning.matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
-from karma.learning.randomize_svd import nmf_svd_init
-from karma.runtime import KarmaSetup
-from six.moves import range
+from .matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
+from .randomize_svd import nmf_svd_init
+from .utils import use_seed
+
 
 ADD_TIME = 20
 EPSILON = 10 ** (-10)
@@ -23,7 +20,7 @@ __all__ = ['nmf', 'nmf_fold']
 
 
 @use_seed()
-def nmf(matrix, rank=None, max_model_rank=None, max_iter=None, svd_init=None):
+def nmf(matrix, rank=20, max_model_rank=100, max_iter=150, svd_init=False, verbose=False):
     """
     matrix should be non-negative numpy.array (dim = 2) with non-zero columns.
     if n,m = matrix.shape then nmf(matrix, rank)
@@ -40,26 +37,13 @@ def nmf(matrix, rank=None, max_model_rank=None, max_iter=None, svd_init=None):
         >>> h.shape
         (10, 4)
     """
-    RankGuesserConfig = KarmaSetup.nmf_rank_guesser_config
-    if RankGuesserConfig:
-        LOGGER = initialize_logger('nmf_rank_gusser')
-        LOGGER.info('NMF is configured with following settings: {}'.format(RankGuesserConfig))
-
-    MAX_ITER = RankGuesserConfig.get('max_iter', 150)
-    MAX_RANK = RankGuesserConfig.get('max_rank', 20)
-    SVD_INIT = RankGuesserConfig.get('svd_init', False)
-    RANK = RankGuesserConfig.get('rank', None)
-
     if is_scipy_sparse(matrix):
         matrix = KarmaSparse(matrix)
-    if KarmaSetup.verbose:
-        print "NMF : Matrix dimensions are {}".format(matrix.shape)
+    if verbose:
+        print(f"NMF : Matrix dimensions are {matrix.shape}")
         if is_karmasparse(matrix):
-            print "NMF will use KarmaSparse Matrix with density={}".format(matrix.density)
-    max_model_rank = min(max_model_rank or MAX_RANK, min(matrix.shape))
-    rank = rank or RANK  # to force to use rank from KarmaSetup
-    max_iter = max_iter or MAX_ITER
-    svd_init = svd_init or SVD_INIT
+            print(f"NMF will use KarmaSparse Matrix with density={matrix.density}")
+    max_model_rank = min(max_model_rank or 100, min(matrix.shape))
 
     if rank is None:
         # nmf with coordinate selection via poisson AIC
@@ -68,8 +52,8 @@ def nmf(matrix, rank=None, max_model_rank=None, max_iter=None, svd_init=None):
         result.smart_init(svd_init=svd_init)
         result.iterate()
         rank = result.get_estimate()
-        if RankGuesserConfig:
-            LOGGER.info('NMF Guesser detected **rank** == {}'.format(rank))
+        if verbose:
+            print(f'NMF Guesser detected **rank** == {rank}')
         ind = np.argsort(result.beta)[:rank]
         # Change updates and reduce factors
         result.rank = rank
@@ -79,14 +63,14 @@ def nmf(matrix, rank=None, max_model_rank=None, max_iter=None, svd_init=None):
         result.brunet_update = super(NMF_P, result).brunet_update
         result.brunet_left = super(NMF_P, result).brunet_left
         result.brunet_right = super(NMF_P, result).brunet_right
-        result.iterate(max_iter / 3)
+        result.iterate(max_iter // 3)
     else:
         result = NMF(matrix, rank=rank)
         result.smart_init(svd_init=svd_init)
         result.iterate(max_iter)
 
-    if KarmaSetup.verbose:
-        print "NMF : Used rank is equal to {}".format(result.rank)
+    if verbose:
+        print(f"NMF : Used rank is equal to {result.rank}")
 
     # renormalizing
     diag = np.atleast_2d(result.h.sum(axis=1))
@@ -95,8 +79,8 @@ def nmf(matrix, rank=None, max_model_rank=None, max_iter=None, svd_init=None):
     return w, h
 
 
-class NMF(object):
-    def __init__(self, matrix, rank, metric="KL", renorm=False):
+class NMF():
+    def __init__(self, matrix, rank, metric="KL", renorm=False, verbose=False):
         self.epsilon = EPSILON
         if is_scipy_sparse(matrix):
             matrix = KarmaSparse(matrix)
@@ -106,8 +90,8 @@ class NMF(object):
         self.n, self.m = matrix.shape
         min_dim = min(self.n, self.m)
         if rank > min_dim:
-            if KarmaSetup.verbose:
-                print 'NMF WARNING : Given rank {0} is too large and will be truncated to {}'.format(rank, min_dim)
+            if verbose:
+                print(f'NMF WARNING : Given rank {rank} is too large and will be truncated to {min_dim}')
             rank = min_dim
 
         if is_karmasparse(matrix):
@@ -269,16 +253,13 @@ class NMF_P(NMF):
     def _mean(self):
         return self.matrix_csr.mean() if self.is_sparse else self.matrix.mean()
 
-    def precision_initial(self, a=5000., b=20., beta='random'):
-        RankGuesserConfig = KarmaSetup.nmf_rank_guesser_config
-        noise = RankGuesserConfig.get('noise', None)
+    def precision_initial(self, a=5000., b=20., beta='random', strength=1., noise=None, one_side=True):
         if noise is not None:  # overwriting parameters principle parameter and using normalization
             a = noise
             b = 1.5 * (a - 1) * self._mean() / self.rank
         self.a, self.b, self.rank_list = a, b, []
 
-        strength = RankGuesserConfig.get('strength', 1.)
-        if RankGuesserConfig.get('one_side', None):
+        if one_side:
             self.cost = strength * (self.n + 2 * (self.a - 1.))
         else:
             self.cost = strength * (self.n + self.m + 2 * (self.a - 1.))
@@ -320,8 +301,8 @@ class NMF_P(NMF):
         self.brunet_right()
         self.brunet_beta()
 
-    def iterate(self, maxiter=None):
-        MAX_ITER = KarmaSetup.nmf_rank_guesser_config.get('max_iter', 150)
+    def iterate(self, maxiter=150):
+        MAX_ITER = 150
         if maxiter is None:
             t1 = time.time()
             self.brunet_update()
@@ -329,7 +310,7 @@ class NMF_P(NMF):
         for i in range(maxiter):
             self.brunet_update()
             self.add_rank_estimate()
-            if i > MAX_ITER / 2 and self.check_convergence():
+            if i > MAX_ITER // 2 and self.check_convergence():
                 break
 
     def get_estimate(self):

@@ -1,24 +1,21 @@
-#
-# Copyright tinyclues, All rights reserved
-#
-from six.moves import zip
+from random import random
+import string
 
 import numpy as np
-from cytoolz import merge as dict_merge
+import pandas as pd
+import scipy.sparse as sp
+from toolz import merge as dict_merge
 
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
 
-from karma.core.column import WriteValuesOnDiskException
-from karma.core.utils.collaborative_tools import simple_counter
-from karma.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
-from karma.types import is_exceptional_mask, generic_ndarray_safe_cast
-from six.moves import range
+from labeledmatrix.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
+from labeledmatrix.learning.utils import use_seed
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
 
-def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True, default=0):
+def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", sparse=True):
     """
     :param dataframe: DataFrame
     :param key: str columnName corresponding to the index
@@ -26,18 +23,16 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
     :param values: str columns on which the aggregator will be used
     :param aggregator: str (min, max, sum, first, last)
     :param sparse: bool returns sparse result
-    :param default : float64 : default value for dense pivot.
     :return: LabeledMatrix
 
     This can be used as routine to compute pivot matrices with associative aggregators (#, sum, min, max, !, last)
     # TODO : iterate over different values/aggregators and to use in df.pivot
     Compare with the example from dataframe.pivot :
 
-        >>> from karma import DataFrame, Column
-        >>> d = DataFrame()
-        >>> d['gender'] = Column(['1', '1', '2', '2', '1', '2', '1'])
-        >>> d['revenue'] = Column([100,  42,  60,  30,  80,  35,  33])
-        >>> d['csp'] = Column(['+', '-', '+', '-', '+', '-', '-'])
+        >>> d = pd.DataFrame()
+        >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
+        >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
+        >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum').to_dense()\
             .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
@@ -67,8 +62,8 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
-        1      80      33
-        2      60      30
+        1      80.0     33.0
+        2      60.0     30.0
 
         >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'max').to_dense()\
             .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
@@ -79,7 +74,6 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
         2      60.0     35.0
 
     """
-    from karma.core.column import safe_dtype_cast
     aggregator_map = {'sum': 'add',
                       'min': 'min',
                       'max': 'max',
@@ -89,48 +83,23 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
                       'mean': _lm_aggregate_pivot_mean,
                       'std': _lm_aggregate_pivot_std
                       }
-    if len(dataframe) == 0:
-        raise ValueError('empty dataframe provided to lm aggregate pivot')
-    if aggregator not in aggregator_map.keys():
+    if aggregator not in list(aggregator_map.keys()):
         raise ValueError('aggregator {} does not exist'.format(aggregator))
     aggregator = aggregator_map[aggregator]
-    vectorial_cols = set([key, axis, values]).intersection(dataframe.vectorial_column_names)
-    if len(vectorial_cols) != 0:
-        raise TypeError("Some columns are vectorials not compatible {}".format(vectorial_cols))
-    if values is not None:
-        data = dataframe[values][:]
-        if sparse:
-            val = safe_dtype_cast(data, np.float32)
-        else:
-            if isinstance(data, np.ndarray):
-                val = generic_ndarray_safe_cast(data)
-            else:
-                # case where its not ndarray
-                if np.any(is_exceptional_mask(data)):
-                    # we NEED na we have to use float, we choose 32
-                    try:
-                        val = safe_dtype_cast(data, np.float32)
-                    except WriteValuesOnDiskException:
-                        raise TypeError('Some values to aggregate are not numeric')
-                else:
-                    val = np.asarray(data)
-            if val.dtype not in [np.float64, np.float32, np.int64, np.int32, np.uint8]:
-                # the dtype is not numeric
-                raise TypeError('Error the dtype {} is not compatible w/ lm pivot'.format(val.dtype))
-    else:
-        # count aggregator so the values should be integer if not sparse
-        if not sparse:
-            val = np.ones(len(dataframe), dtype=np.int64)
-        else:
-            val = np.ones(len(dataframe), dtype=np.float32)
 
-    ri_key = dataframe[key].reversed_index()
-    ri_axis = dataframe[axis].reversed_index()
+    if values is not None:
+        val = dataframe[values].values
+        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
+    else:
+        val = np.ones(len(dataframe), dtype=np.float32)
+
+    ri_key = pd.factorize(dataframe[key])
+    ri_axis = pd.factorize(dataframe[axis])
 
     if callable(aggregator):
-        return aggregator(val, ri_key, ri_axis, sparse, default)
+        return aggregator(val, ri_key, ri_axis, sparse)
     else:
-        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default)
+        return _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse)
 
 
 def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
@@ -144,8 +113,6 @@ def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
     :param sparse: bool
     :return: LabeledMatrix
     """
-    from karma.core.labeledmatrix import LabeledMatrix
-
     val_key, ind_key = ri_key
     val_axis, ind_axis = ri_axis
 
@@ -154,6 +121,7 @@ def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
         matrix = KarmaSparse((val, (ind_key, ind_axis)), shape=shape, format="csr", aggregator=aggregator)
     else:
         matrix = dense_pivot(ind_key, ind_axis, val, shape=shape, aggregator=aggregator, default=default)
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix((val_key, val_axis), matrix)
 
 
@@ -198,6 +166,38 @@ def aeq(matrix1, matrix2):
     return np.allclose(matrix1, matrix2, rtol=1e-7)
 
 
+def simple_counter(values, sparse=None):
+    """
+        >>> from karma.synthetic.basic import basic_dataframe  # FIXME
+        >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
+        >>> df = basic_dataframe(100)
+        >>> lm = LabeledMatrix(*simple_counter((df['a'].values, df['b'].values)))
+        >>> lm.matrix.sum() == 100
+        True
+        >>> lm.row == df.drop_duplicates('a')['a'].values
+        True
+        >>> lm.column == df.drop_duplicates('b')['b'].values
+        True
+        >>> df1 = df.shuffle()
+        >>> lm1 = LabeledMatrix(*simple_counter((df1['a'].values, df1['b'].values)))
+        >>> lm1.sort() == lm.sort()
+        True
+        >>> for i in range(len(df)):
+        ...     a, b = df['a'][i], df['b'][i]
+        ...     assert lm1[a, b] == df.counts(('a', 'b'))[(a,b)]
+
+    """
+    assert len(values) == 2
+    assert len(values[0]) == len(values[1])
+    ul1, ind1 = reversed_index(values[0])
+    ul2, ind2 = reversed_index(values[1])
+    uu_tuple = (ul1, ul2)
+    matrix = KarmaSparse((ind1, ind2), shape=(len(ul1), len(ul2)), format="csr")
+    if (sparse is None and not keep_sparse(matrix)) or (sparse is False):
+        matrix = matrix.toarray()
+    return uu_tuple, matrix
+
+
 def lm_occurence(val0, val1, dense_output=False):
     """
     >>> lm = lm_occurence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
@@ -209,7 +209,7 @@ def lm_occurence(val0, val1, dense_output=False):
     1      a      1.0
     1      b      1.0
     """
-    from karma.core.labeledmatrix import LabeledMatrix
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix(*simple_counter((val0, val1), sparse=not dense_output))
 
 
@@ -233,25 +233,24 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     The values in the cells of the returned LabeledMatrix represents the number
     of occurences of an axis instance for a key. If the event occured before
     the most recent event its weight is reduced.
-    >>> from karma.core.dataframe import DataFrame
-    >>> data = DataFrame([['abc@fr', 1, 'first', '2015-02-12'],
-    ...                   ['jkl@uk', 1, 'first', '2015-03-12'],
-    ...                   ['abc@fr', 4, 'fourth', '2015-04-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-05-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-06-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2012-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2013-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2014-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-02-13'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-14'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-15'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-16'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-17'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-18'],
-    ...                   ['bcd@de', 3, 'third', '2015-02-19']],
-    ...                   ['name', 'cat', 'long_cat', 'date'])
+    >>> data = pd.DataFrame([['abc@fr', 1, 'first', '2015-02-12'],
+    ...                      ['jkl@uk', 1, 'first', '2015-03-12'],
+    ...                      ['abc@fr', 4, 'fourth', '2015-04-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-05-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-06-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2012-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2013-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2014-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-02-13'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-14'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-15'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-16'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-17'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-18'],
+    ...                      ['bcd@de', 3, 'third', '2015-02-19']],
+    ...                     columns=['name', 'cat', 'long_cat', 'date'])
     >>> res1 = lm_decayed_pivot_from_dataframe(data, key='name', axis='cat')
-    >>> from karma.core.labeledmatrix import LabeledMatrix
+    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
     >>> isinstance(res1, LabeledMatrix)
     True
     >>> res1.matrix.toarray()
@@ -274,13 +273,13 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     >>> res3.deco
     ({1: 'first', 3: 'third', 4: 'fourth'}, {})
     """
-    from karma.core.labeledmatrix import LabeledMatrix
     deco = axis_deco if axis_deco else {}
     date_arr = np.array(dataframe[date_column][:], dtype='datetime64[D]')
     decayed_series = 2 ** (-(date_arr.max() - date_arr).astype(DTYPE) / half_life)
-    key_values, key_ind = reversed_index(dataframe[key][:])
-    axis_values, axis_ind = reversed_index(dataframe[axis][:])
+    key_values, key_ind = reversed_index(dataframe[key].values)
+    axis_values, axis_ind = reversed_index(dataframe[axis].values)
 
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     pivot_lm = LabeledMatrix((axis_values, key_values),
                              KarmaSparse((decayed_series, (axis_ind, key_ind)), format="csr"),
                              (deco, {}))
@@ -300,8 +299,9 @@ def lmdiag(key, values, sdeco={}, dense_output=False):
     'csr'
     """
     # XXX : we must get rid of this circular import
-    from karma.core.labeledmatrix import LabeledMatrix
     matrix = ks_diag(np.asarray(values))
+
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     if dense_output:
         return LabeledMatrix((key, key), matrix.toarray(), deco=(sdeco, sdeco))
     else:
@@ -359,13 +359,13 @@ def zipmerge(d1, d2):
     return tuple([dict_merge(x, y) for x, y in zip(d1, d2)])
 
 
-def hstack(list_of_lm, dense_output=False):
+def lm_hstack(list_of_lm, dense_output=False):
     """
-    >>> from karma.core.labeledmatrix import LabeledMatrix
+    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
     >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]])).sort()
     >>> lm2 = LabeledMatrix((['c'], ['x', 'z', 'y']), np.array([[7, 9, 8]])).sort()
     >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]])).sort()
-    >>> lm = hstack([lm1, lm2, lm3])
+    >>> lm = lm_hstack([lm1, lm2, lm3])
     >>> df = lm.to_dense().sort().to_vectorial_dataframe()
     >>> df['col1'] = df['dtype(col1, dtype=np.int)']
     >>> df.preview() #doctest: +NORMALIZE_WHITESPACE
@@ -381,7 +381,6 @@ def hstack(list_of_lm, dense_output=False):
     >>> aeq(mat_before, lm.matrix)
     True
     """
-    from karma.core.labeledmatrix import LabeledMatrix
     total_rows = list_of_lm[0].row
     row_deco = {}
     for lm in list_of_lm[1:]:
@@ -394,12 +393,13 @@ def hstack(list_of_lm, dense_output=False):
     result = ks_hstack(aligned_matrix_list)
     if dense_output:
         result = result.toarray()
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix((total_rows, range(result.shape[1])), result, deco=(row_deco, {}))
 
 
 def lm_sum(list_of_lm):
     """
-    >>> from karma.core.labeledmatrix import LabeledMatrix
+    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
     >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]]))
     >>> lm2 = LabeledMatrix((['c'], ['x', 'z', 'y']), np.array([[7, 9, 8]])).to_sparse()
     >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5., 20], [-1, 4, -20]]))
@@ -412,7 +412,6 @@ def lm_sum(list_of_lm):
            [  0.,   7.,   8.,   9.],
            [  4., -20.,   0.,  -1.]], dtype=float32)
     """
-    from karma.core.labeledmatrix import LabeledMatrix
     if not list_of_lm:
         raise ValueError('Empty list')
     total_rows, total_columns = list_of_lm[0].row, list_of_lm[0].column
@@ -429,13 +428,14 @@ def lm_sum(list_of_lm):
         matrix = align_along_axis(lm.matrix, row_index, 1, extend=True)
         matrix = align_along_axis(matrix, column_index, 0, extend=True)
         result = safe_add(matrix, result)
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix((total_rows, total_columns),
                          result, deco=(row_deco, column_deco))
 
 
 def lm_product(list_of_lm):
     """
-    >>> from karma.core.labeledmatrix import LabeledMatrix
+    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
     >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]])).to_sparse()
     >>> lm2 = LabeledMatrix((['a'], ['x', 'z', 'y']), np.array([[7, 9, 8]]))
     >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]]))
@@ -445,7 +445,6 @@ def lm_product(list_of_lm):
     >>> aeq(res.matrix, np.array([[980]]))
     True
     """
-    from karma.core.labeledmatrix import LabeledMatrix
     if not list_of_lm:
         raise ValueError('Empty list')
 
@@ -462,6 +461,7 @@ def lm_product(list_of_lm):
         matrix = align_along_axis(lm.matrix, row_index, 1, extend=False)
         matrix = align_along_axis(matrix, column_index, 0, extend=False)
         result = safe_multiply(matrix, result)
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix((total_rows, total_columns),
                          result, deco=(row_deco, column_deco))
 
@@ -489,3 +489,54 @@ def lm_compute_volume_at_cutoff(lm, potential_cutoff):
 
     return dict(zip(lm.column, vol_at_cutoff))
 
+
+def lm_rand(shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
+    """
+    Returns a randomized LabeledMatrix.
+
+    :param shape: the shape of the `LabeledMatrix` (rows, columns)
+    :param density: ratio of non-zero elements
+    :param sparse: determines if the inner container will be sparse or not
+    :param seed: seed that could be used to seed the random generator
+    :return: A randomized LabeledMatrix
+
+    Exemples: ::
+
+        >>> lm = lm_rand(seed=12).sort()
+        >>> lm.row
+        ['lemal', 'piuzo', 'pivqv', 'wthra']
+        >>> lm.column
+        ['fkgbs', 'gcqvk', 'vteol']
+        >>> lm.matrix.toarray().shape
+        (4, 3)
+        >>> lm_rand(shape=(10, 10)).nnz()
+        50
+    """
+    def _random_words(length):
+        while True:
+            yield ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
+
+    def _generate_words(nb, length):
+        random_word = _random_words(length)
+        words = []
+        words_set = set()
+        while len(words) < nb:
+            word = next(random_word)
+            if word not in words_set:
+                words_set.add(word)
+                words.append(word)
+        return words
+
+    if square:
+        shape = (shape[0], shape[0])
+    with use_seed(seed):
+        matrix = KarmaSparse(sp.rand(shape[0], shape[1], density, format="csr", random_state=seed))
+        row = _generate_words(shape[0], 5)
+        if square:
+            column = row
+        else:
+            column = _generate_words(shape[1], 5)
+
+    from labeledmatrix.core.labeledmatrix import LabeledMatrix
+    lm = LabeledMatrix((row, column), matrix)
+    return lm.to_sparse() if sparse else lm

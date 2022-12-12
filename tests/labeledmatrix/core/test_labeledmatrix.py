@@ -3,10 +3,9 @@ import unittest
 import numpy as np
 from cyperf.matrix.karma_sparse import DTYPE
 
-from karma.core.labeledmatrix.labeledmatrix import to_flat_dataframe, LabeledMatrix
-from karma.core.labeledmatrix.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
-from karma import DataFrame, Column
-from six.moves import range
+from labeledmatrix.core.labeledmatrix import to_flat_dataframe, LabeledMatrix
+from labeledmatrix.core.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
+from karma import DataFrame, Column  # FIXME
 
 
 class LabeledMatrixTestCase(unittest.TestCase):
@@ -327,10 +326,9 @@ class LabeledMatrixTestCase(unittest.TestCase):
         self.assertEqual('aggregator dummyAggregator does not exist', str(e.exception))
 
     def test_lm_pivot_missing(self):
-        from karma.types import Missing
         d = DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20, Missing]
+        d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20, None]
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean')
         np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[90, 37.5],
@@ -338,12 +336,10 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                                    [20, 0]])
 
     def test_lm_pivot_dtypes_strategy(self):
-        from karma.types import Missing
-        from karma.core.column import safe_dtype_cast
         d = DataFrame()
         # safe_dtye_cast should transform Missing -> -Maxint and pivot should put it back to Missing
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = safe_dtype_cast([100, 42, 60, 30, 80, 35, 33, 20, Missing], np.int32)
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, -np.iinfo(np.int32)], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],
@@ -353,7 +349,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
         d = DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = list(safe_dtype_cast([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32))
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],
@@ -363,7 +359,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
         d = DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = list(safe_dtype_cast([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32))
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False)
         self.assertEqual(lm.matrix.dtype, np.float64)
