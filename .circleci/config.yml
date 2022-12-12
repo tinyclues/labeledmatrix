@@ -68,7 +68,7 @@ jobs:
       - when:
           condition: << parameters.command >>
           steps:
-            - run:
+            - run: # FIXME why do we need to install pipenv again ?
                 command: |
                   pipenv run pip install --upgrade pipenv
                   export PYTHONPATH=/home/circleci/project/

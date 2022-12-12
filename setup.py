@@ -66,5 +66,5 @@ ext_modules = cythonize(
 pfile = Project(chdir=False).parsed_pipfile
 setup(
     ext_modules=ext_modules,
-    install_requires=convert_deps_to_pip(pfile['packages'], r=False)
+    install_requires=convert_deps_to_pip(pfile['packages'])
 )
