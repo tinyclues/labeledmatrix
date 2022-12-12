@@ -23,6 +23,13 @@ workflows:
   build:
     jobs:
       - python/run_in_pipenv_env:
+          name: run_lint
+          pipenv_env_type: dev
+          executor: python
+          context: artifactory
+          command: pylint labeledmatrix cyperf --rcfile=setup.cfg
+          <<: *all_branches_and_tags
+      - python/run_in_pipenv_env:
           name: unit_tests
           executor: python
           command: pipenv run pytest tests --durations=10
