@@ -3,6 +3,7 @@
 #
 
 import numpy as np
+import pandas as pd
 from toolz import curry
 
 from scipy.stats.mstats import mquantiles
@@ -1507,12 +1508,11 @@ def matrix_group_by(matrix, group_by_key_column, aggregator='mean'):
     array([[-6.5      ,  0.8000001, -3.1999996],
            [-2.       ,  5.6      ,  0.1      ]], dtype=float32)
     """
-    from karma.core.column import Column, AliasColumn  # FIXME
-    if isinstance(group_by_key_column, (Column, AliasColumn)):
-        initial_order_indices = group_by_key_column.deduplicate_indices(take='first')
+    if isinstance(group_by_key_column, pd.Series):
+        initial_order_indices = group_by_key_column.drop_duplicates(take='first')
         if aggregator == 'first':
             return matrix[initial_order_indices]
-        _, reversed_indices = group_by_key_column.reversed_index()
+        _, reversed_indices = pd.factoirze(group_by_key_column)
     else:
         reversed_indices = group_by_key_column
         initial_order_indices = None

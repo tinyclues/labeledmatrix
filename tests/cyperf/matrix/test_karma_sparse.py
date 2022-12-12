@@ -15,11 +15,10 @@ from scipy.sparse import SparseEfficiencyWarning
 warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
 
 
-# from sklearn.preprocessing import normalize as sk_normalize
-# from karma.learning.matrix_utils import normalize
-# from karma.learning.matrix_utils import truncate_by_count
-# from karma.core.utils import run_in_subprocess, Parallel
-# from karma.thread_setter import open_mp_threads
+from sklearn.preprocessing import normalize as sk_normalize
+from labeledmatrix.learning.matrix_utils import normalize, truncate_by_count
+from labeledmatrix.learning.thread_setter import open_mp_threads
+# from karma.core.utils import run_in_subprocess, Parallel  # FIXME
 
 
 def np_almost_equal(x, y, decimal=5):
@@ -572,29 +571,29 @@ class TestKarmaSparse(unittest.TestCase):
         self.assertMatrixEqual(KarmaSparse(original_matrix) / divider_matrix,
                                KarmaSparse(expected_matrix))
 
-    # def test_normalize(self):
-    #     norms = ('l1', 'l2', 'linf')
-    #     axis = (0, 1, None)
-    #     is_csr = (True, False)
+    def test_normalize(self):
+        norms = ('l1', 'l2', 'linf')
+        axis = (0, 1, None)
+        is_csr = (True, False)
 
-    #     for norm, ax, matrix, csr in itertools.product(norms, axis, self.mf.iterator(), is_csr):
-    #         k = KarmaSparse(matrix)
-    #         if csr:
-    #             k = k.transpose()
-    #             matrix = matrix.transpose()
-    #         copy = k.copy()
-    #         norm_ks = k.normalize(norm=norm, axis=ax)
+        for norm, ax, matrix, csr in itertools.product(norms, axis, self.mf.iterator(), is_csr):
+            k = KarmaSparse(matrix)
+            if csr:
+                k = k.transpose()
+                matrix = matrix.transpose()
+            copy = k.copy()
+            norm_ks = k.normalize(norm=norm, axis=ax)
 
-    #         # for linf and None axis we use our own normalize method to test
-    #         if norm == 'linf' or ax is None:
-    #             norm_np = normalize(matrix, norm=norm, axis=ax)
-    #         else:
-    #             norm_np = sk_normalize(matrix, norm=norm, axis=ax)
+            # for linf and None axis we use our own normalize method to test
+            if norm == 'linf' or ax is None:
+                norm_np = normalize(matrix, norm=norm, axis=ax)
+            else:
+                norm_np = sk_normalize(matrix, norm=norm, axis=ax)
 
-    #         np_almost_equal(norm_ks.toarray(), norm_np)
+            np_almost_equal(norm_ks.toarray(), norm_np)
 
-    #         # check that the KS.normalize does not modify KS object
-    #         np_almost_equal(copy.toarray(), k.toarray())
+            # check that the KS.normalize does not modify KS object
+            np_almost_equal(copy.toarray(), k.toarray())
 
     def test_abs(self):
         k = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., -1.]]))

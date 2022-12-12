@@ -41,19 +41,16 @@ def tail_clustering(vectors, multiplicities, k):
 def old_tail_clustering(vectors, multiplicities, k):
     """
     Examples: ::
-
-        >>> from karma.types import *
-        >>> v = [np.array([1,0,0]),
-        ...      np.array([0,0,2]),
-        ...      np.array([0,0,0]),
-        ...      np.array([0,1,0]),
-        ...      np.array([0,1,1])]
+        >>> v = np.array([[1,0,0],
+        ...               [0,0,2],
+        ...               [0,0,0],
+        ...               [0,1,0],
+        ...               [0,1,1]])
         >>> old_tail_clustering(v, [1, 2, 3, 4, 1], 2)
         [0, 0, 0, 1, 1]
-        >>> from numpy.random import *
         >>> nb = 100
         >>> k = 8
-        >>> v = rand(nb,10)
+        >>> v = np.random.rand(nb,10)
         >>> m = range(nb)
         >>> c = old_tail_clustering(v, m, k)
         >>> len(c)

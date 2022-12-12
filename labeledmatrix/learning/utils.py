@@ -17,7 +17,7 @@ from cyperf.tools import parallel_unique
 
 from cyperf.tools import take_indices
 
-# TODO VirtualHStack keep or drop ?
+# FIXME VirtualHStack keep or drop ?
 from karma.core.utils import is_iterable, quantile_boundaries, coerce_to_tuple_and_check_all_strings
 from labeledmatrix.learning.matrix_utils import (safe_hstack, number_nonzero, cast_float32,
                                                  direct_product, direct_product_dot,

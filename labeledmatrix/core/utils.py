@@ -88,13 +88,13 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
     aggregator = aggregator_map[aggregator]
 
     if values is not None:
-        val = np.asarray(dataframe[values][:])
+        val = dataframe[values].values
         val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
     else:
         val = np.ones(len(dataframe), dtype=np.float32)
 
-    ri_key = dataframe[key].reversed_index()
-    ri_axis = dataframe[axis].reversed_index()
+    ri_key = pd.factorize(dataframe[key])
+    ri_axis = pd.factorize(dataframe[axis])
 
     if callable(aggregator):
         return aggregator(val, ri_key, ri_axis, sparse)
@@ -171,15 +171,15 @@ def simple_counter(values, sparse=None):
         >>> from karma.synthetic.basic import basic_dataframe  # FIXME
         >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
         >>> df = basic_dataframe(100)
-        >>> lm = LabeledMatrix(*simple_counter((df['a'][:], df['b'][:])))
+        >>> lm = LabeledMatrix(*simple_counter((df['a'].values, df['b'].values)))
         >>> lm.matrix.sum() == 100
         True
-        >>> lm.row == df.deduplicate_by('a')['a'][:]
+        >>> lm.row == df.drop_duplicates('a')['a'].values
         True
-        >>> lm.column == df.deduplicate_by('b')['b'][:]
+        >>> lm.column == df.drop_duplicates('b')['b'].values
         True
         >>> df1 = df.shuffle()
-        >>> lm1 = LabeledMatrix(*simple_counter((df1['a'][:], df1['b'][:])))
+        >>> lm1 = LabeledMatrix(*simple_counter((df1['a'].values, df1['b'].values)))
         >>> lm1.sort() == lm.sort()
         True
         >>> for i in range(len(df)):
@@ -233,23 +233,22 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     The values in the cells of the returned LabeledMatrix represents the number
     of occurences of an axis instance for a key. If the event occured before
     the most recent event its weight is reduced.
-    >>> from karma.core.dataframe import DataFrame  # FIXME
-    >>> data = DataFrame([['abc@fr', 1, 'first', '2015-02-12'],
-    ...                   ['jkl@uk', 1, 'first', '2015-03-12'],
-    ...                   ['abc@fr', 4, 'fourth', '2015-04-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-05-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-06-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2012-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2013-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2014-02-12'],
-    ...                   ['bcd@de', 4, 'fourth', '2015-02-13'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-14'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-15'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-16'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-17'],
-    ...                   ['abc@fr', 1, 'first', '2015-02-18'],
-    ...                   ['bcd@de', 3, 'third', '2015-02-19']],
-    ...                   ['name', 'cat', 'long_cat', 'date'])
+    >>> data = pd.DataFrame([['abc@fr', 1, 'first', '2015-02-12'],
+    ...                      ['jkl@uk', 1, 'first', '2015-03-12'],
+    ...                      ['abc@fr', 4, 'fourth', '2015-04-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-05-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-06-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2012-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2013-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2014-02-12'],
+    ...                      ['bcd@de', 4, 'fourth', '2015-02-13'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-14'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-15'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-16'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-17'],
+    ...                      ['abc@fr', 1, 'first', '2015-02-18'],
+    ...                      ['bcd@de', 3, 'third', '2015-02-19']],
+    ...                     columns=['name', 'cat', 'long_cat', 'date'])
     >>> res1 = lm_decayed_pivot_from_dataframe(data, key='name', axis='cat')
     >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
     >>> isinstance(res1, LabeledMatrix)
@@ -277,8 +276,8 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     deco = axis_deco if axis_deco else {}
     date_arr = np.array(dataframe[date_column][:], dtype='datetime64[D]')
     decayed_series = 2 ** (-(date_arr.max() - date_arr).astype(DTYPE) / half_life)
-    key_values, key_ind = reversed_index(dataframe[key][:])
-    axis_values, axis_ind = reversed_index(dataframe[axis][:])
+    key_values, key_ind = reversed_index(dataframe[key].values)
+    axis_values, axis_ind = reversed_index(dataframe[axis].values)
 
     from labeledmatrix.core.labeledmatrix import LabeledMatrix
     pivot_lm = LabeledMatrix((axis_values, key_values),
