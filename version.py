@@ -46,7 +46,7 @@ def get_version():
     return version_returned
 
 
-VERSION = get_version() or "local"
+__version__ = get_version() or "local"
 
 if __name__ == '__main__':
-    print(VERSION)
+    print(__version__)
