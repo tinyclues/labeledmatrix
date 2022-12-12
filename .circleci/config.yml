@@ -20,6 +20,12 @@ aliases:
 # copy from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
 jobs:
   run_in_pipenv:
+    description: >
+      Run `command` in a pipenv environment. It use circleci cache to prevent build it again if file did not change.
+      `command` can be empty. In this case, it will just ensure that environment is build and cached.
+    environment:
+      PIPENV_VENV_IN_PROJECT: 1
+    executor: << parameters.executor >>
     parameters:
       command:
         default: ''
