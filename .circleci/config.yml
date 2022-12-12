@@ -61,7 +61,7 @@ jobs:
             - run:
                 command: |
                   # pipenv run pip install --upgrade pipenv
-                  # export PYTHONPATH=/home/circleci/project/
+                  export PYTHONPATH=/home/circleci/project/
                   pipenv run << parameters.command >>
                 name: run << parameters.command >>
       - when:
