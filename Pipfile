@@ -1,0 +1,24 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[packages]
+numpy = ">=1.19.5"
+pandas = ">=1.2.1"
+scipy = ">=1.2.0"
+toolz = "*"
+cython = ">=0.29.5"
+
+[dev-packages]
+pytest = "*"
+pytest-xdist = "*"
+pytest-cov = "*"
+pytest-dependency = "*"
+mock = "*"
+scikit-learn = ">=1"
+matplotlib = "*"
+seaborn = "*"
+
+[requires]
+python_version = "3.7"
