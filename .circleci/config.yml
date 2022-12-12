@@ -27,6 +27,7 @@ jobs:
     environment:
       PIPENV_VENV_IN_PROJECT: 1
     executor: << parameters.executor >>
+    resource_class: << parameters.resource_class >>
     parameters:
       command:
         default: ''
@@ -48,6 +49,8 @@ jobs:
         default: prod
         description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
         type: string
+      resource_class:
+        default: 'large'
     steps:
       - checkout
       - restore_cache:
@@ -120,6 +123,7 @@ workflows:
           requires:
             - cython_setup
           command: pipenv run pytest tests --durations=10
+          resource_class: xlarge
           <<: *all_branches_and_tags
 
       - python/pipenv_deploy:  # TODO do we need sdist in setup.py command ?
