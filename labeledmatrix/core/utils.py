@@ -1,16 +1,9 @@
-from random import random
-import string
-
 import numpy as np
 import pandas as pd
-import scipy.sparse as sp
 from toolz import merge as dict_merge
 
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
-
-from labeledmatrix.core.random import use_seed
-from labeledmatrix.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
@@ -167,65 +160,6 @@ def aeq(matrix1, matrix2):
     return np.allclose(matrix1, matrix2, rtol=1e-7)
 
 
-def simple_counter(values, sparse=None):
-    """
-        >>> from karma.synthetic.basic import basic_dataframe  # FIXME
-        >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
-        >>> df = basic_dataframe(100)
-        >>> lm = LabeledMatrix(*simple_counter((df['a'].values, df['b'].values)))
-        >>> lm.matrix.sum() == 100
-        True
-        >>> lm.row == df.drop_duplicates('a')['a'].values
-        True
-        >>> lm.column == df.drop_duplicates('b')['b'].values
-        True
-        >>> df1 = df.shuffle()
-        >>> lm1 = LabeledMatrix(*simple_counter((df1['a'].values, df1['b'].values)))
-        >>> lm1.sort() == lm.sort()
-        True
-        >>> for i in range(len(df)):
-        ...     a, b = df['a'][i], df['b'][i]
-        ...     assert lm1[a, b] == df.counts(('a', 'b'))[(a,b)]
-
-    """
-    assert len(values) == 2
-    assert len(values[0]) == len(values[1])
-    ul1, ind1 = reversed_index(values[0])
-    ul2, ind2 = reversed_index(values[1])
-    uu_tuple = (ul1, ul2)
-    matrix = KarmaSparse((ind1, ind2), shape=(len(ul1), len(ul2)), format="csr")
-    if (sparse is None and not keep_sparse(matrix)) or (sparse is False):
-        matrix = matrix.toarray()
-    return uu_tuple, matrix
-
-
-def lm_occurence(val0, val1, dense_output=False):
-    """
-    >>> lm = lm_occurence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
-    >>> lm.to_flat_dataframe().sort_by('similarity', reverse=True).preview() #doctest: +NORMALIZE_WHITESPACE
-    ------------------------
-    col0 | col1 | similarity
-    ------------------------
-    0      a      2.0
-    1      a      1.0
-    1      b      1.0
-    """
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    return LabeledMatrix(*simple_counter((val0, val1), sparse=not dense_output))
-
-
-def lm_from_dict(my_dict, dense_output=False):
-    """
-    >>> my_dict = {'a': 'x', 'c': 'y', 'b': 'y'}
-    >>> lm = lm_from_dict(my_dict).sort()
-    >>> lm.label
-    (['a', 'b', 'c'], ['x', 'y'])
-    >>> aeq(lm.matrix, np.array([[1, 0],[0, 1],[0, 1]]))
-    True
-    """
-    return lm_occurence(my_dict.keys(), my_dict.values(), dense_output)
-
-
 def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
                                     date_column='date', half_life=300.):
     """
@@ -289,26 +223,6 @@ def lm_decayed_pivot_from_dataframe(dataframe, key, axis, axis_deco=None,
     return pivot_lm
 
 
-def lmdiag(key, values, sdeco={}, dense_output=False):
-    """
-    >>> lm = lmdiag(["b", "c"], [3, 50000000]).sort()
-    >>> lm.label
-    (['b', 'c'], ['b', 'c'])
-    >>> aeq(lm.matrix, np.array([[3, 0], [0, 50000000]]))
-    True
-    >>> lm.matrix.format
-    'csr'
-    """
-    # XXX : we must get rid of this circular import
-    matrix = ks_diag(np.asarray(values))
-
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    if dense_output:
-        return LabeledMatrix((key, key), matrix.toarray(), deco=(sdeco, sdeco))
-    else:
-        return LabeledMatrix((key, key), matrix, deco=(sdeco, sdeco))
-
-
 def co(axis):
     """
     Given an axis, return the other one.
@@ -337,19 +251,6 @@ def co(axis):
         raise RuntimeError("axis {} is out of range [0,1]".format(axis))
 
 
-def lm_block(my_dict, dense_output=False):
-    """
-    >>> my_dict = {'a': 'x', 'c': 'y', 'b': 'y'}
-    >>> lm = lm_block(my_dict).sort()
-    >>> lm.label
-    (['a', 'b', 'c'], ['a', 'b', 'c'])
-    >>> aeq(lm.matrix.toarray(), np.array([[1, 0, 0],[0, 1, 1], [0, 1, 1]]))
-    True
-    """
-    lm_flat = lm_from_dict(my_dict, dense_output=dense_output)
-    return lm_flat._dot(lm_flat.transpose())
-
-
 def zipmerge(d1, d2):
     """
     >>> aa = {'a': 3, 'c': 4}
@@ -358,113 +259,6 @@ def zipmerge(d1, d2):
     ({'a': 5, 'c': 4, 'b': 4}, {'a': 3, 'c': 4, 'b': 4})
     """
     return tuple([dict_merge(x, y) for x, y in zip(d1, d2)])
-
-
-def lm_hstack(list_of_lm, dense_output=False):
-    """
-    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]])).sort()
-    >>> lm2 = LabeledMatrix((['c'], ['x', 'z', 'y']), np.array([[7, 9, 8]])).sort()
-    >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]])).sort()
-    >>> lm = lm_hstack([lm1, lm2, lm3])
-    >>> df = lm.to_dense().sort().to_vectorial_dataframe()
-    >>> df['col1'] = df['dtype(col1, dtype=np.int)']
-    >>> df.preview() #doctest: +NORMALIZE_WHITESPACE
-    -------------------------------------------------------------------
-    col0 | col1:0 | col1:1 | col1:2 | col1:3 | col1:4 | col1:5 | col1:6
-    -------------------------------------------------------------------
-    a      7        0        0        0        5        20       1
-    b      4        0        0        0        0        0        0
-    c      0        7        8        9        0        0        0
-    d      0        0        0        0        4        -20      -1
-    >>> mat_before = lm.matrix.copy()
-    >>> x = lm.sum(axis=0)
-    >>> aeq(mat_before, lm.matrix)
-    True
-    """
-    total_rows = list_of_lm[0].row
-    row_deco = {}
-    for lm in list_of_lm[1:]:
-        total_rows = total_rows.union(lm.row)[0]
-        row_deco.update(lm.row_deco)
-    aligned_matrix_list = []
-    for lm in list_of_lm:
-        row_index = lm.row.align(total_rows)[1]
-        aligned_matrix_list.append(align_along_axis(lm.matrix, row_index, 1, extend=True))
-    result = ks_hstack(aligned_matrix_list)
-    if dense_output:
-        result = result.toarray()
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    return LabeledMatrix((total_rows, range(result.shape[1])), result, deco=(row_deco, {}))
-
-
-def lm_sum(list_of_lm):
-    """
-    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]]))
-    >>> lm2 = LabeledMatrix((['c'], ['x', 'z', 'y']), np.array([[7, 9, 8]])).to_sparse()
-    >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5., 20], [-1, 4, -20]]))
-    >>> res = lm_sum([lm1, lm2, lm3]).to_dense().sort()
-    >>> res.label
-    (['a', 'b', 'c', 'd'], ['w', 'x', 'y', 'z'])
-    >>> res.matrix
-    array([[  5.,  27.,   0.,   1.],
-           [  0.,   4.,   0.,   0.],
-           [  0.,   7.,   8.,   9.],
-           [  4., -20.,   0.,  -1.]], dtype=float32)
-    """
-    if not list_of_lm:
-        raise ValueError('Empty list')
-    total_rows, total_columns = list_of_lm[0].row, list_of_lm[0].column
-    row_deco, column_deco = list_of_lm[0].deco
-    for lm in list_of_lm[1:]:
-        total_rows = total_rows.union(lm.row)[0]
-        total_columns = total_columns.union(lm.column)[0]
-        row_deco.update(lm.row_deco)
-        column_deco.update(lm.column_deco)
-    result = 0
-    for lm in list_of_lm:
-        row_index = lm.row.align(total_rows)[1]
-        column_index = lm.column.align(total_columns)[1]
-        matrix = align_along_axis(lm.matrix, row_index, 1, extend=True)
-        matrix = align_along_axis(matrix, column_index, 0, extend=True)
-        result = safe_add(matrix, result)
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    return LabeledMatrix((total_rows, total_columns),
-                         result, deco=(row_deco, column_deco))
-
-
-def lm_product(list_of_lm):
-    """
-    >>> from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    >>> lm1 = LabeledMatrix((['b', 'a'], ['x']), np.array([[4], [7]])).to_sparse()
-    >>> lm2 = LabeledMatrix((['a'], ['x', 'z', 'y']), np.array([[7, 9, 8]]))
-    >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]]))
-    >>> res = lm_product([lm1, lm2, lm3]).to_dense()
-    >>> res.label
-    (['a'], ['x'])
-    >>> aeq(res.matrix, np.array([[980]]))
-    True
-    """
-    if not list_of_lm:
-        raise ValueError('Empty list')
-
-    total_rows, total_columns = list_of_lm[0].row, list_of_lm[0].column
-    row_deco, column_deco = list_of_lm[0].deco
-    for lm in list_of_lm[1:]:
-        total_rows = total_rows.intersection(lm.row)[0]
-        total_columns = total_columns.intersection(lm.column)[0]
-
-    result = 1
-    for lm in list_of_lm:
-        row_index = lm.row.align(total_rows)[1]
-        column_index = lm.column.align(total_columns)[1]
-        matrix = align_along_axis(lm.matrix, row_index, 1, extend=False)
-        matrix = align_along_axis(matrix, column_index, 0, extend=False)
-        result = safe_multiply(matrix, result)
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    return LabeledMatrix((total_rows, total_columns),
-                         result, deco=(row_deco, column_deco))
 
 
 def lm_compute_volume_at_cutoff(lm, potential_cutoff):
@@ -489,55 +283,3 @@ def lm_compute_volume_at_cutoff(lm, potential_cutoff):
     vol_at_cutoff = in_potential_cutoff_array.sum(axis=0).astype('float32') / scores_array.shape[0]
 
     return dict(zip(lm.column, vol_at_cutoff))
-
-
-def lm_rand(shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
-    """
-    Returns a randomized LabeledMatrix.
-
-    :param shape: the shape of the `LabeledMatrix` (rows, columns)
-    :param density: ratio of non-zero elements
-    :param sparse: determines if the inner container will be sparse or not
-    :param seed: seed that could be used to seed the random generator
-    :return: A randomized LabeledMatrix
-
-    Exemples: ::
-
-        >>> lm = lm_rand(seed=12).sort()
-        >>> lm.row
-        ['lemal', 'piuzo', 'pivqv', 'wthra']
-        >>> lm.column
-        ['fkgbs', 'gcqvk', 'vteol']
-        >>> lm.matrix.toarray().shape
-        (4, 3)
-        >>> lm_rand(shape=(10, 10)).nnz()
-        50
-    """
-    def _random_words(length):
-        while True:
-            yield ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
-
-    def _generate_words(nb, length):
-        random_word = _random_words(length)
-        words = []
-        words_set = set()
-        while len(words) < nb:
-            word = next(random_word)
-            if word not in words_set:
-                words_set.add(word)
-                words.append(word)
-        return words
-
-    if square:
-        shape = (shape[0], shape[0])
-    with use_seed(seed):
-        matrix = KarmaSparse(sp.rand(shape[0], shape[1], density, format="csr", random_state=seed))
-        row = _generate_words(shape[0], 5)
-        if square:
-            column = row
-        else:
-            column = _generate_words(shape[1], 5)
-
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    lm = LabeledMatrix((row, column), matrix)
-    return lm.to_sparse() if sparse else lm

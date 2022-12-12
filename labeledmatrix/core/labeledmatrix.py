@@ -1,4 +1,7 @@
 import random
+from typing import Dict, Any
+
+import pandas as pd
 
 from toolz.dicttoolz import keymap
 from toolz import merge as dict_merge
@@ -26,6 +29,8 @@ from labeledmatrix.learning.nmf import nmf, nmf_fold
 from labeledmatrix.learning.randomize_svd import randomized_svd
 from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.tail_clustering import tail_clustering
+from labeledmatrix.learning.utils import use_seed
+from ._constructors import from_zip_occurrence, from_random, from_diagonal
 
 
 def is_integer(arg):
@@ -39,7 +44,80 @@ class LabeledMatrixException(Exception):
     pass
 
 
-class LabeledMatrix():
+class LabeledMatrix:
+    @classmethod
+    def from_zip_occurrence(cls, *args):
+        """
+        TODO doc
+        >>> lm = LabeledMatrix.from_zip_occurrence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
+        >>> lm.to_flat_dataframe().sort_values('similarity', ascending=False) #doctest: +NORMALIZE_WHITESPACE
+        ------------------------
+        col0 | col1 | similarity
+        ------------------------
+        0      a      2.0
+        1      a      1.0
+        1      b      1.0
+        """
+        return cls(*from_zip_occurrence(*args))
+
+    @classmethod
+    def from_dict(cls, dictionary: Dict[Any, Any]):
+        """
+        TODO doc
+        >>> my_dict = {'a': 'x', 'c': 'y', 'b': 'y'}
+        >>> lm = LabeledMatrix.from_dict({'a': 'x', 'c': 'y', 'b': 'y'})
+        >>> lm.to_flat_dataframe().sort_values('col0', ascending=False)
+        ------------------------
+        col0 | col1 | similarity
+        ------------------------
+        a      x      1.0
+        b      y      1.0
+        c      y      1.0
+        """
+        return cls.from_zip_occurrence(list(dictionary.keys()), list(dictionary.values()))
+
+    @classmethod
+    def from_random(cls, shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
+        """
+        Returns a randomized LabeledMatrix.
+
+        :param shape: the shape of the `LabeledMatrix` (rows, columns)
+        :param density: ratio of non-zero elements
+        :param sparse: determines if the inner container will be sparse or not
+        :param seed: seed that could be used to seed the random generator
+        :param square: same labels for rows and columns
+        :return: A randomized LabeledMatrix
+
+        Exemples: ::
+
+            >>> lm = LabeledMatrix.from_random(seed=12).sort()
+            >>> lm.row
+            ['lemal', 'piuzo', 'pivqv', 'wthra']
+            >>> lm.column
+            ['fkgbs', 'gcqvk', 'vteol']
+            >>> lm.matrix.toarray().shape
+            (4, 3)
+            >>> LabeledMatrix.from_random(shape=(10, 10)).nnz()
+            50
+        """
+        lm = cls(*from_random(shape, density, seed, square))
+        if sparse:
+            return lm.to_sparse()
+        return lm.to_dense()
+
+    @classmethod
+    def from_diagonal(cls, keys, values, keys_deco=None, sparse=True):
+        """
+        TODO doc
+        >>> lm = LabeledMatrix.from_diagonal(["b", "c"], [3, 50000000]).sort()
+        >>> lm.label
+        (['b', 'c'], ['b', 'c'])
+        >>> aeq(lm.matrix, np.array([[3, 0], [0, 50000000]]))
+        True
+        >>> lm.matrix.format
+        'csr'
+        """
+        return cls(*from_diagonal(keys, values, keys_deco, sparse))
 
     def __init__(self, xxx_todo_changeme1, matrix, deco=({}, {})):
         """
