@@ -25,7 +25,7 @@ workflows:
           pipenv_env_type: dev
           executor: python
           persist_directory: cyperf
-          command: setup.py build_ext -i -j2
+          command: ./setup.py build_ext -i -j2
           <<: *all_branches_and_tags
       - python/run_in_pipenv_env:
           name: run_lint
