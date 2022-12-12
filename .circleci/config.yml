@@ -40,6 +40,10 @@ jobs:
         default: ''
         description: directory to persist in workspace
         type: string
+      persist_directory2:
+        default: ''
+          description: another directory to persist in workspace
+          type: string
       pipenv_env_type:
         default: prod
         description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
@@ -79,7 +83,14 @@ jobs:
           steps:
             - persist_to_workspace:
                 paths:
-                  - << parameters.persist_directory >>
+                  - << parameters.persist_directory >>/*
+                root: .
+      - when:
+          condition: << parameters.persist_directory2 >>
+          steps:
+            - persist_to_workspace:
+                paths:
+                  - << parameters.persist_directory2 >>/*
                 root: .
 
 workflows:
@@ -90,6 +101,7 @@ workflows:
           pipenv_env_type: dev
           executor: python
           persist_directory: build
+          persist_directory2: cyperf
           command: ./setup.py build_ext -i -j2
           <<: *all_branches_and_tags
       - run_in_pipenv:
