@@ -1,3 +1,4 @@
+# distutils: language = c++
 import numpy as np
 
 ITYPE = np.int32

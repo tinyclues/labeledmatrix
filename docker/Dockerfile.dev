@@ -6,7 +6,8 @@ COPY Pipfile.lock Pipfile.lock
 COPY setup.py setup.py
 RUN pipenv requirements --dev > /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt --no-deps
-RUN python setup.py build_ext --inplace
 
 COPY . /src
 WORKDIR /src
+
+RUN python setup.py build_ext --inplace

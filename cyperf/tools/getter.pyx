@@ -1,3 +1,4 @@
+# distutils: language = c++
 # cython: embedsignature=True
 # cython: overflowcheck=True
 # cython: unraisable_tracebacks=True

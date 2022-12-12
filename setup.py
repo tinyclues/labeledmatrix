@@ -44,6 +44,7 @@ def create_extension(template, kwds):
 
 
 if "build_ext" in sys.argv:
+    print('build tempita')
     render_tempita()
 
 try:

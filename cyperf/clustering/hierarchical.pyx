@@ -1,6 +1,4 @@
-#
-# Copyright tinyclues, All rights reserved
-#
+# distutils: language = c++
 #cython: wraparound=False
 #cython: boundscheck=False
 #cython: nonecheck=False
