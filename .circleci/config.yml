@@ -18,7 +18,7 @@ aliases:
         only: /.*/
 
 # copy from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
-commands:
+jobs:
   run_in_pipenv:
     parameters:
       command:
