@@ -42,8 +42,8 @@ jobs:
         type: string
       persist_directory2:
         default: ''
-          description: another directory to persist in workspace
-          type: string
+        description: another directory to persist in workspace
+        type: string
       pipenv_env_type:
         default: prod
         description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
