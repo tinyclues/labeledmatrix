@@ -51,6 +51,7 @@ jobs:
         type: string
       resource_class:
         default: 'large'
+        type: string
     steps:
       - checkout
       - restore_cache:
