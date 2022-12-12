@@ -1,6 +1,6 @@
-# cython: boundscheck=False, wraparound=False, unraisable_tracebacks=True
+# distutils: language = c++
 # distutils: include_dirs = cyperf/hashing/include
-
+# cython: boundscheck=False, wraparound=False, unraisable_tracebacks=True
 
 cimport cython
 from cython.parallel cimport prange

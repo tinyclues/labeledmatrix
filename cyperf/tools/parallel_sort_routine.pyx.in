@@ -1,3 +1,4 @@
+# distutils: language = c++
 #cython: boundscheck=False, wraparound=False, overflowcheck=True
 
 from libc.stdlib cimport malloc, free

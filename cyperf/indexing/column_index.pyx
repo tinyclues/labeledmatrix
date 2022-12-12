@@ -1,3 +1,4 @@
+# distutils: language = c++
 # cython: nonecheck=True
 # cython: overflowcheck=True
 # cython: unraisable_tracebacks=True

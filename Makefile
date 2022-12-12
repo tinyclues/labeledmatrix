@@ -15,9 +15,6 @@ test: build
 lint: build
 	$(DOCKER_CMD) pylint cyperf --rcfile=setup.cfg
 
-setup: build
-	$(DOCKER_CMD) python setup.py build_ext --inplace
-
 build_lock: # build docker image for pipenv lock
 	docker-compose -f docker-compose.dev.yml build lock
 

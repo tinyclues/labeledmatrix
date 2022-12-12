@@ -1,3 +1,4 @@
+# distutils: language = c++
 #cython: embedsignature=True
 #cython: wraparound=False
 #cython: boundscheck=False

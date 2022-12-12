@@ -53,18 +53,15 @@ try:
 except Exception:
     nthreads = 1
 
-# TODO Warning: passing language='c++' to cythonize() is deprecated.
-#      Instead, put "# distutils: language=c++" in your .pyx or .pxd file(s)
 ext_modules = cythonize(
     "cyperf/**/*.pyx",
     create_extension=create_extension,
     compiler_directives={'language_level': sys.version_info[0], 'embedsignature': True},
-    language='c++',
     nthreads=nthreads,
 )
 
 pfile = Project(chdir=False).parsed_pipfile
 setup(
     ext_modules=ext_modules,
-    install_requires=convert_deps_to_pip(pfile['packages'], r=False)
+    install_requires=convert_deps_to_pip(pfile['packages'])
 )
