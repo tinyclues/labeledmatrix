@@ -10,14 +10,14 @@ executors:
       - image: circleci/python:3.7
 
 aliases:
-  filters:
-    all_branches_and_tags: &all_branches_and_tags
+  all_branches_and_tags: &all_branches_and_tags
+    filters:
       tags:
         only: /.*/
         branches:
           only: /.*/
 
-# when should we run `command: ./setup.py build_ext -i -j2` ? or `-if` ?
+# FIXME when should we run `command: ./setup.py build_ext -i -j2` ? or `-if` ?
 
 workflows:
   build:
