@@ -94,6 +94,8 @@ workflows:
           persist_directory: build
           persist_directory2: cyperf
           command: ./setup.py build_ext -i -j2
+          requires:
+            - install_pipenv
           <<: *all_branches_and_tags
       - run_in_pipenv:
           name: ls
