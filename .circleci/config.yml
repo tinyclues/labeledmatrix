@@ -36,10 +36,14 @@ jobs:
         default: python3-stretch
         description: python executor
         type: executor
-      persist_directories:
-        default: []
+      persist_directory:
+        default: ''
         description: directory to persist in workspace
-        type: list
+        type: string
+      persist_directory2:
+        default: ''
+        description: directory to persist in workspace
+        type: string
       pipenv_env_type:
         default: prod
         description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
@@ -61,11 +65,18 @@ jobs:
                   pipenv run << parameters.command >>
                 name: run << parameters.command >>
       - when:
-          condition: << parameters.persist_directories >>
+          condition: << parameters.persist_directory >>
           steps:
             - persist_to_workspace:
                 paths:
-                  << parameters.persist_directories >>
+                  << parameters.persist_directory >>
+                root: .
+      - when:
+          condition: << parameters.persist_directory2 >>
+          steps:
+            - persist_to_workspace:
+                paths:
+                  << parameters.persist_directory2 >>
                 root: .
 
 workflows:
@@ -80,9 +91,8 @@ workflows:
           name: cython_setup
           pipenv_env_type: dev
           executor: python
-          persist_directories:
-            - build
-            - cyperf
+          persist_directory: build
+          persist_directory2: cyperf
           command: ./setup.py build_ext -i -j2
           <<: *all_branches_and_tags
       - run_in_pipenv:
