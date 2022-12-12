@@ -123,8 +123,6 @@ workflows:
 
       - python/pipenv_deploy:  # TODO do we need sdist in setup.py command ?
           name: deploy_wheel
-          requires:
-            - unit_tests
           context: artifactory
           executor: python
           <<: *all_branches_and_tags
