@@ -308,7 +308,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         d = pd.DataFrame()
         # safe_dtye_cast should transform Missing -> -Maxint and pivot should put it back to Missing
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, -np.iinfo(np.int32)], np.int32)
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.iinfo(np.int32).min], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],

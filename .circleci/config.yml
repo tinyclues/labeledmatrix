@@ -17,9 +17,9 @@ aliases:
       branches:
         only: /.*/
 
-# copy from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
-# TODO try to remove this copy and use `run_in_pipenv_env` directly
 jobs:
+  # restore cache from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
+  # and run command inside
   run_in_pipenv:
     description: >
       Run `command` in a pipenv environment. It use circleci cache to prevent build it again if file did not change.
@@ -36,72 +36,53 @@ jobs:
         default: python3-stretch
         description: python executor
         type: executor
-      persist_directory:
-        default: ''
+      persist_directories:
+        default: []
         description: directory to persist in workspace
-        type: string
-      persist_directory2:
-        default: ''
-        description: another directory to persist in workspace
-        type: string
+        type: list
       pipenv_env_type:
         default: prod
         description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
         type: string
     steps:
       - checkout
-      - run:
-          name: update pipenv
-          command: pip install --upgrade pipenv
       - restore_cache:
           key: >-
             v0-6-pipenv-{{ .Environment.CIRCLE_PROJECT_REPONAME }}-<< parameters.pipenv_env_type >>-{{ checksum "Pipfile.lock" }}
-      - run:
-          command: |
-            if [ "<< parameters.pipenv_env_type >>" = "prod" ]; then
-                [ -d .venv ] || pipenv install --deploy
-            else
-                [ -d .venv ] || pipenv install --deploy --dev
-            fi
-          name: create environement if not exists (dev or prod)
-      - save_cache:
-          key: >-
-            v0-6-pipenv-{{ .Environment.CIRCLE_PROJECT_REPONAME }}-<< parameters.pipenv_env_type >>-{{ checksum "Pipfile.lock" }}
-          paths:
-            - .venv
+      - attach_workspace:
+          at: .
       - when:
           condition: << parameters.command >>
           steps:
-            - run: # FIXME why do we need to install pipenv again ?
+            - run:
                 command: |
-                  pipenv run pip install --upgrade pipenv
-                  export PYTHONPATH=/home/circleci/project/
+                  # pipenv run pip install --upgrade pipenv
+                  # export PYTHONPATH=/home/circleci/project/
                   pipenv run << parameters.command >>
                 name: run << parameters.command >>
       - when:
-          condition: << parameters.persist_directory >>
+          condition: << parameters.persist_directories >>
           steps:
             - persist_to_workspace:
                 paths:
-                  - << parameters.persist_directory >>
-                root: .
-      - when:
-          condition: << parameters.persist_directory2 >>
-          steps:
-            - persist_to_workspace:
-                paths:
-                  - << parameters.persist_directory2 >>
+                  << parameters.persist_directories >>
                 root: .
 
 workflows:
   build:
     jobs:
+      - python/run_in_pipenv_env:
+          name: install_pipenv
+          pipenv_env_type: dev
+          executor: python
+          <<: *all_branches_and_tags
       - run_in_pipenv:
           name: cython_setup
           pipenv_env_type: dev
           executor: python
-          persist_directory: build
-          persist_directory2: cyperf
+          persist_directories:
+            - build
+            - cyperf
           command: ./setup.py build_ext -i -j2
           <<: *all_branches_and_tags
       - run_in_pipenv:
