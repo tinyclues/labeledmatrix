@@ -17,17 +17,72 @@ aliases:
       branches:
         only: /.*/
 
+# copy from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
+commands:
+  run_in_pipenv:
+    parameters:
+      command:
+        default: ''
+        description: 'Command to run. Can be empty, to only build pipenv environment'
+        type: string
+      executor:
+        default: python3-stretch
+        description: python executor
+        type: executor
+      persist_directory:
+        default: ''
+        description: directory to persist in workspace
+        type: string
+      pipenv_env_type:
+        default: prod
+        description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
+        type: string
+    steps:
+      - checkout
+      - run:
+          name: update pipenv
+          command: pip install --upgrade pipenv
+      - restore_cache:
+          key: >-
+            v0-6-pipenv-{{ .Environment.CIRCLE_PROJECT_REPONAME }}-<< parameters.pipenv_env_type >>-{{ checksum "Pipfile.lock" }}
+      - run:
+          command: |
+            if [ "<< parameters.pipenv_env_type >>" = "prod" ]; then
+                [ -d .venv ] || pipenv install --deploy
+            else
+                [ -d .venv ] || pipenv install --deploy --dev
+            fi
+          name: create environement if not exists (dev or prod)
+      - save_cache:
+          key: >-
+            v0-6-pipenv-{{ .Environment.CIRCLE_PROJECT_REPONAME }}-<< parameters.pipenv_env_type >>-{{ checksum "Pipfile.lock" }}
+          paths:
+            - .venv
+      - when:
+          condition: << parameters.command >>
+          steps:
+            - run:
+                command: pipenv run << parameters.command >>
+                name: run << parameters.command >>
+      - when:
+          condition: << parameters.persist_directory >>
+          steps:
+            - persist_to_workspace:
+                paths:
+                  - << parameters.persist_directory >>
+                root: .
+
 workflows:
   build:
     jobs:
-      - python/run_in_pipenv_env:
+      - run_in_pipenv:
           name: cython_setup
           pipenv_env_type: dev
           executor: python
           persist_directory: cyperf
           command: ./setup.py build_ext -i -j2
           <<: *all_branches_and_tags
-      - python/run_in_pipenv_env:
+      - run_in_pipenv:
           name: run_lint
           pipenv_env_type: dev
           executor: python
@@ -35,7 +90,7 @@ workflows:
             - cython_setup
           command: pylint labeledmatrix cyperf --rcfile=setup.cfg
           <<: *all_branches_and_tags
-      - python/run_in_pipenv_env:
+      - run_in_pipenv:
           name: unit_tests
           pipenv_env_type: dev
           executor: python
