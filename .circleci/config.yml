@@ -17,22 +17,30 @@ aliases:
       branches:
         only: /.*/
 
-# FIXME when should we run `command: ./setup.py build_ext -i -j2` ? or `-if` ?
-
 workflows:
   build:
     jobs:
       - python/run_in_pipenv_env:
+          name: cython_setup
+          pipenv_env_type: dev
+          executor: python
+          persist_directory: cyperf
+          command: setup.py build_ext -i -j2
+          <<: *all_branches_and_tags
+      - python/run_in_pipenv_env:
           name: run_lint
           pipenv_env_type: dev
           executor: python
-          context: artifactory
+          requires:
+            - cython_setup
           command: pylint labeledmatrix cyperf --rcfile=setup.cfg
           <<: *all_branches_and_tags
       - python/run_in_pipenv_env:
           name: unit_tests
           pipenv_env_type: dev
           executor: python
+          requires:
+            - cython_setup
           command: pipenv run pytest tests --durations=10
           <<: *all_branches_and_tags
 
