@@ -19,6 +19,7 @@ mock = "*"
 scikit-learn = ">=1"
 matplotlib = "*"
 seaborn = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.7"
