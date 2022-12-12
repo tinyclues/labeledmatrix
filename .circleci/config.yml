@@ -125,4 +125,6 @@ workflows:
           name: deploy_wheel
           context: artifactory
           executor: python
+          requires:
+            - cython_setup
           <<: *all_branches_and_tags
