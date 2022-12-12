@@ -18,6 +18,7 @@ aliases:
         only: /.*/
 
 # copy from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
+# TODO try to remove this copy and use `run_in_pipenv_env` directly
 jobs:
   run_in_pipenv:
     description: >
@@ -68,7 +69,9 @@ jobs:
           condition: << parameters.command >>
           steps:
             - run:
-                command: pipenv run << parameters.command >>
+                command: |
+                  export PYTHONPATH=/home/circleci/project/
+                  pipenv run << parameters.command >>
                 name: run << parameters.command >>
       - when:
           condition: << parameters.persist_directory >>
