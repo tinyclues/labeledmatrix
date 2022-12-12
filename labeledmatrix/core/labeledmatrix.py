@@ -2377,10 +2377,10 @@ class LabeledMatrix():
         data[row] = take_indices(self.row, row_indices)
         data[col] = take_indices(self.column, col_indices)
         data[dist] = values
-        if getattr(self, 'row_deco', None):
-            data[f'deco_{row}'] = apply_python_dict(self.row_deco, data[row], None, False)
-        if getattr(self, 'column_deco', None):
-            data[f'deco_{col}'] = apply_python_dict(self.column_deco, data[col], None, False)
+        if 'deco_row' in kwargs:
+            data[kwargs['deco_row']] = apply_python_dict(self.row_deco, data[row], '', False)
+        if 'deco_col' in kwargs:
+            data[kwargs['deco_col']] = apply_python_dict(self.column_deco, data[col], '', False)
         return pd.DataFrame(data)
 
     # add structs with label:value instead of list

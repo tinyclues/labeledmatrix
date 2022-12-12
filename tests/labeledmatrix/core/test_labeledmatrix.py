@@ -28,22 +28,22 @@ class LabeledMatrixTestCase(unittest.TestCase):
         col_index = self.lm.without_zeros().column
 
         np.testing.assert_equal(len(dataframe), 22)
-        np.testing.assert_equal(sorted(dataframe.column_names), ['col0', 'col1', 'similarity'])
+        np.testing.assert_equal(sorted(dataframe.columns), ['col0', 'col1', 'similarity'])
 
-        np.testing.assert_equal(sorted(set(dataframe['col0'][:])), sorted(row_index))
-        np.testing.assert_equal(sorted(set(dataframe['col1'][:])), sorted(col_index))
-        np.testing.assert_equal(dataframe[11]['similarity'], 9)
+        np.testing.assert_equal(sorted(set(dataframe['col0'])), sorted(row_index))
+        np.testing.assert_equal(sorted(set(dataframe['col1'])), sorted(col_index))
+        np.testing.assert_equal(dataframe['similarity'].values[11], 9)
 
         # check if decoration columns are correctly exported
         dataframe = self.decorated_lm.to_flat_dataframe(deco_row='foo', deco_col='bar')
-        np.testing.assert_equal(sorted(dataframe.column_names), ['bar', 'col0', 'col1', 'foo', 'similarity'])
-        np.testing.assert_equal(set(dataframe['foo'][:]),
+        np.testing.assert_equal(sorted(dataframe.columns), ['bar', 'col0', 'col1', 'foo', 'similarity'])
+        np.testing.assert_equal(set(dataframe['foo']),
                                 set(['deco_0', 'deco_2', 'deco_3', 'deco_4', 'deco_5', 'deco_6']))
-        np.testing.assert_equal(set(dataframe['bar'][:]), {''})
+        np.testing.assert_equal(set(dataframe['bar']), {''})
         np.testing.assert_equal(dataframe['col0'][4], dataframe['foo'][4].split('_')[1])
 
         dataframe = self.decorated_lm.to_flat_dataframe(deco_row='toto')
-        np.testing.assert_equal(sorted(dataframe.column_names), ['col0', 'col1', 'similarity', 'toto'])
+        np.testing.assert_equal(sorted(dataframe.columns), ['col0', 'col1', 'similarity', 'toto'])
 
     def test_rank(self):
         np.testing.assert_array_equal(self.lm.rank(axis=1, reverse=False).matrix, [[3, 4, 0, 2, 1],
@@ -306,7 +306,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
     def test_lm_pivot_dtypes_strategy(self):
         d = pd.DataFrame()
-        # safe_dtye_cast should transform Missing -> -Maxint and pivot should put it back to Missing
+        #  pivot should ignore np.iinfo(np.int32).min put it back to Missing
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.iinfo(np.int32).min], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']

@@ -126,6 +126,7 @@ workflows:
           name: deploy_wheel
           context: artifactory
           executor: python
+          attach_workspace: true
           requires:
             - cython_setup
           <<: *all_branches_and_tags
