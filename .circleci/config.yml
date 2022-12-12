@@ -31,6 +31,7 @@ workflows:
           <<: *all_branches_and_tags
       - python/run_in_pipenv_env:
           name: unit_tests
+          pipenv_env_type: dev
           executor: python
           command: pipenv run pytest tests --durations=10
           <<: *all_branches_and_tags
