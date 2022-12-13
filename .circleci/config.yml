@@ -97,7 +97,7 @@ workflows:
             - install_pipenv_dev
           <<: *all_branches_and_tags
       - run_in_pipenv:
-          name: run_lint
+          name: lint
           pipenv_env_type: dev
           requires:
             - cython_setup_dev
