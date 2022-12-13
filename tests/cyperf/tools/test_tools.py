@@ -4,9 +4,7 @@ import numpy as np
 import unittest
 
 from cyperf.tools import slice_length, compose_slices, take_indices
-from cyperf.tools.getter import (apply_python_dict, cy_safe_intern,
-                                 cast_to_float_array, cast_to_long_array, cast_to_ascii, cast_to_unicode,
-                                 coalesce_is_not_none, coalesce_generic, Unifier)
+from cyperf.tools.getter import apply_python_dict
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort)
 from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
 
@@ -80,13 +78,6 @@ class GetterTestCase(unittest.TestCase):
         with self.assertRaises(AssertionError):
             apply_python_dict(mapping, int, -1, True)
 
-    def test_cy_safe_intern_ITER_type(self):
-        s1_array = np.array(['1', '2', '4'], dtype='S1')
-        self.assertEqual(cy_safe_intern(s1_array), s1_array.tolist())
-
-        s2_array = np.array(['1', '2', '4'], dtype='S2')
-        self.assertEqual(cy_safe_intern(s2_array), s2_array.tolist())
-
     def test_argsort(self):
         for _ in range(10):
             x = np.random.randn(50)
@@ -156,104 +147,3 @@ class GetterTestCase(unittest.TestCase):
 
         np.testing.assert_array_equal(take_indices(slice(2150000000, 2160000000, None), [0], length=3782366988),
                                       [2150000000])
-
-    def test_coerse_float(self):
-        np.testing.assert_equal(cast_to_float_array([]), [])
-
-        # making copy in trivial case
-        aa = np.array([3., 4, 5], dtype=np.float)
-        bb = cast_to_float_array(aa)
-        self.assertNotEqual(id(aa), id(bb))
-        np.testing.assert_equal(aa, bb)
-
-        np.testing.assert_equal(cast_to_float_array(['3', '4', '5.4']), [3, 4, 5.4])
-        np.testing.assert_equal(cast_to_float_array(('3.0', 4, '5???4')), [3, 4, np.nan])
-        np.testing.assert_equal(cast_to_float_array(['3.0', str, 5]), [3, np.nan, 5])
-        np.testing.assert_equal(cast_to_float_array(np.array(['3.0', str, 5])), [3, np.nan, 5])
-        np.testing.assert_equal(cast_to_float_array(np.array([4, 3, '3'], dtype=np.int), 'safe'), [4., 3., 3.])
-        with self.assertRaises(TypeError):
-            cast_to_float_array([4, 're', 3.1], 'safe')
-        with self.assertRaises(TypeError):
-            cast_to_float_array(np.array([4, 're', 3.1], dtype=np.object), 'safe')
-        np.testing.assert_equal(cast_to_float_array([4, 're', 3.1]), [4., np.nan, 3.1])
-        np.testing.assert_equal(cast_to_float_array(np.array([4, 3]), 'safe'), [4., 3.])
-        np.testing.assert_equal(cast_to_float_array(['3', np.nan, '5.4']), [3, np.nan, 5.4])
-
-    def test_coerse_long(self):
-        np.testing.assert_equal(cast_to_long_array([]), [])
-
-        # making copy in trivial case
-        aa = np.array([3, 4, 5], dtype=np.int64)
-        bb = cast_to_long_array(aa)
-        self.assertNotEqual(id(aa), id(bb))
-        np.testing.assert_equal(aa, bb)
-
-        np.testing.assert_equal(cast_to_long_array(['3', '4', '5.4']), [3, 4, 5])
-        np.testing.assert_equal(cast_to_long_array(['3', '4', '5.9']), [3, 4, 5])
-        np.testing.assert_equal(cast_to_long_array(('3.0', 4, '5???4'), default=-1), [3, 4, -1])
-        np.testing.assert_equal(cast_to_long_array(['3.0', str, 5], default=-1), [3, -1, 5])
-        np.testing.assert_equal(cast_to_long_array(np.array(['3.0', str, 5]), default=-1), [3, -1, 5])
-
-        np.testing.assert_equal(cast_to_long_array([4, 3, '3'], 'same_kind'), [4, 3, -9223372036854775808])
-        np.testing.assert_equal(cast_to_long_array([4, 3, '3'], 'unsafe'), [4, 3, 3])
-        np.testing.assert_equal(cast_to_long_array(np.array([4, 3, '3'], dtype=np.int), 'safe'), [4, 3, 3])
-        with self.assertRaises(TypeError):
-            cast_to_long_array([4, 're', 3], 'safe')
-        with self.assertRaises(TypeError):
-            cast_to_long_array(np.array([4, 're', 3], dtype=np.object), 'safe')
-        np.testing.assert_equal(cast_to_long_array([4, 're', 3], 'same_kind'), [4, -9223372036854775808, 3])
-        np.testing.assert_equal(cast_to_long_array([4, 're', 3], 'unsafe'), [4, -9223372036854775808, 3])
-        np.testing.assert_equal(cast_to_long_array(np.array([4.4, 3.1]), 'safe'), [4, 3])
-        np.testing.assert_equal(cast_to_long_array(['3', np.nan, '5.4']), [3, -9223372036854775808, 5])
-        np.testing.assert_equal(cast_to_long_array(np.array([[3, np.nan, 5.4]])), [[3, -9223372036854775808, 5]])
-
-    def test_coerse_ascii(self):
-        arr = [b'camelCase', b'\xe8cop\xc3ge', u'\xe8cop\xc3ge', 1, np.nan, ()]
-        self.assertEqual(cast_to_ascii(arr), ['camelCase', 'copge', b'copge', '1', 'nan', '()'])
-
-        def py_ascii(x):
-            import six  # FIXME
-            return x.encode('ascii', errors='ignore') \
-                if isinstance(x, six.text_type) \
-                else str(six.text_type(x, 'ascii', errors='ignore')) \
-                if isinstance(x, (str, bytes)) else str(x)
-        self.assertEqual(cast_to_ascii(arr), list(map(py_ascii, arr)))
-
-    def test_coerse_unicode(self):
-        arr = [b'camelCase', b'\xe8cO\xa8e\xc3\xa9', b'\xc3\xa90e', 1, np.nan, ()]
-        self.assertEqual(cast_to_unicode(arr),
-                         [b'camelCase', b'cOe\xc3\xa9', b'\xc3\xa90e', u'1', 'nan', '()'])
-        self.assertEqual(type(cast_to_unicode([1])[0]), str)
-
-        def py_uni(x):
-            import six  # FIXME
-            return (six.text_type(x, 'utf-8', errors='ignore') if isinstance(x, bytes) else x)\
-                    .encode('utf-8', errors='ignore') if isinstance(x, bytes) else six.text_type(x)
-
-        self.assertEqual(cast_to_unicode(arr), list(map(py_uni, arr)))
-
-    def test_coalesce_is_not_none(self):
-        self.assertEqual(coalesce_is_not_none(None, 0, None, 3, default=-1), 0)
-        self.assertEqual(coalesce_is_not_none(None, None, None, default=-1), -1)
-        self.assertEqual(coalesce_is_not_none(default=-1), -1)
-
-    def test_coalesce_generic(self):
-        self.assertEqual(coalesce_generic(0, -123, 2, predicate=lambda x: x > 0, default=-42), 2)
-        self.assertEqual(coalesce_generic(0, -123, 0, predicate=lambda x: x > 0, default=-42), -42)
-        self.assertEqual(coalesce_generic(predicate=lambda x: x > 0, default=-42), -42)
-
-
-class UnifierTestCase(unittest.TestCase):
-
-    def test_unifier_map(self):
-        u = Unifier()
-        self.assertIsInstance(u, dict)
-        s1, s2 = 'foo!', 'foo!'
-        seq = [s1, s2, 4, [4, 2], (2, 4), (2, 4)]
-
-        unified_seq = u.map(seq)
-        self.assertEquals(unified_seq, list(map(u.unify, seq)))
-        self.assertEquals(seq, unified_seq)
-        self.assertEquals(u, {s1: s1, 4: 4, (2, 4): (2, 4)})
-        self.assertIs(unified_seq[0], unified_seq[1])
-        self.assertIs(unified_seq[-1], unified_seq[-2])

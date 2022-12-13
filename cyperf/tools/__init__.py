@@ -9,8 +9,7 @@ from cyperf.tools import parallel_sort_routine
 from cyperf.tools.parallel_sort_routine import (inplace_string_parallel_sort,
                                                 inplace_numerical_parallel_sort as _inplace_numerical_parallel_sort,
                                                 inplace_numerical_parallel_sort_nan)
-from cyperf.tools.getter import (take_indices_on_numpy, take_indices_on_iterable,
-                                 apply_python_dict, cast_to_float_array)
+from cyperf.tools.getter import (take_indices_on_numpy, take_indices_on_iterable, apply_python_dict)
 
 
 def _direct_dtype_converter(arr):
