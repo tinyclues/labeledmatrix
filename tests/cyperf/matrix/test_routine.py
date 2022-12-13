@@ -3,8 +3,7 @@ import unittest
 from bisect import bisect_left as bisect_left_old
 
 import numpy as np
-from cyperf.matrix.routine import (bisect_left, batch_contains_mask, batch_is_exceptional_mask,
-                                   cy_safe_slug, cy_domain_from_email_lambda, indices_lookup)
+from cyperf.matrix.routine import (bisect_left, batch_contains_mask, indices_lookup)
 from cyperf.matrix.karma_sparse import KarmaSparse, sp
 
 
@@ -14,36 +13,6 @@ def kronii(left, right):
 
 
 class RoutineTestCase(unittest.TestCase):
-
-    def test_safe_slug(self):
-        self.assertEqual(cy_safe_slug(' "Foo bar q"u"x " '), b'foo_bar_q_u_x')
-        self.assertEqual(cy_safe_slug(b'\xc3\xa9'), b'e')
-        self.assertEqual(cy_safe_slug(b'\xe9'), b'?')
-        self.assertEqual(cy_safe_slug(b'\xc3foo!'), b'?foo!')
-        self.assertEqual(cy_safe_slug(b't\xb0st'), b't?st'),
-        self.assertEquals(cy_safe_slug(u'foo\xe8@_-'), b'fooe@_-')
-
-        self.assertEquals(cy_safe_slug(b'`Error!'), b'`error!')
-        self.assertEquals(cy_safe_slug(b'5454'), b'5454')
-
-        self.assertEquals(cy_safe_slug(u'`Error!'), b'`error!')
-        self.assertEquals(cy_safe_slug(u'5454'), b'5454')
-
-        self.assertEquals(cy_safe_slug(u'\xc3\xa9'), b'a?')
-        self.assertEquals(cy_safe_slug(u'\xe9'), b'e')
-        self.assertEquals(cy_safe_slug(b'`Error!'), b'`error!')
-
-    def test_domain_from_email_lambda(self):
-        self.assertEqual(cy_domain_from_email_lambda('x', missing='RR'), 'RR')
-        self.assertEqual(cy_domain_from_email_lambda('xRy', missing=''), '')
-        self.assertEqual(cy_domain_from_email_lambda('xRy', missing='', delimiter='R'), 'y')
-        self.assertEqual(cy_domain_from_email_lambda('x@y.com'), 'y.com')
-        self.assertEqual(cy_domain_from_email_lambda('qdfd@rrr@x@y.com'), 'y.com')
-        self.assertEqual(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), u'y.com')
-        self.assertIsInstance(cy_domain_from_email_lambda(u'qdfd@rrr@x@y.com'), str)
-
-        with self.assertRaises(AttributeError) as e:
-            _ = cy_domain_from_email_lambda(33)
 
     def test_kronii(self):
         x, y = np.array([[1, 10, 3], [2, -2, 5]]), np.array([[5, 6], [0, 1]])
@@ -70,28 +39,6 @@ class RoutineTestCase(unittest.TestCase):
         for pr in [pr1, pr2, pr3]:
             np.testing.assert_array_equal(batch_contains_mask(pr[0], a), pr[1])
             np.testing.assert_array_equal(batch_contains_mask(pr[0], frozenset(a)), pr[1])
-
-    def test_batch_is_exceptional_mask(self):
-        a = set(['a', 'b', 3, np.iinfo(np.int).min, KarmaSparse])
-        expectional_char = 'f'
-
-        pr1 = (np.array(['r', 'af', 'f', 'gg']),
-               np.array([False, False, True, False]))
-        pr2 = (np.array([1, 2, 3, 4, 5, np.nan, np.iinfo(np.int).min]),
-               np.array([False, False, True, False, False, True, True]))
-
-        pr2_tuple = (np.array([(1,), (2, 'a'), (3,), [3, 3], (),
-                               (np.nan, 'rr', 3), (3, 'fa'), [3, 'fa', 1], (3, ('fa', 'a'))]),
-                     np.array([False, False, True, True, False, False, True, False, True]))
-
-        pr3 = (np.array([1, 'ff', 3, KarmaSparse, -np.nan, np.iinfo(np.int).max]),
-               np.array([False, True, True, True, True, False]))
-        pr4 = (np.array([]), np.array([], dtype=np.bool))
-
-        for pr in [pr1, pr2, pr2_tuple, pr3, pr4]:
-            for b in [a, frozenset(a)]:
-                np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0], b, expectional_char), pr[1])
-                np.testing.assert_array_equal(batch_is_exceptional_mask(pr[0].tolist(), b, expectional_char), pr[1])
 
     def test_kronii_random(self):
         for _ in range(30):
