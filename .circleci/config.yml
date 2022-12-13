@@ -26,6 +26,7 @@ jobs:
       `command` can be empty. In this case, it will just ensure that environment is build and cached.
     environment:
       PIPENV_VENV_IN_PROJECT: 1
+    executor: python
     resource_class: << parameters.resource_class >>
     parameters:
       command:
@@ -78,6 +79,7 @@ jobs:
 
   # copy of https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-pipenv_deploy with installation of pipenv
   pipenv_deploy:
+    executor: python
     steps:
       - checkout
       - run:
@@ -108,7 +110,6 @@ workflows:
       - run_in_pipenv:
           name: cython_setup
           pipenv_env_type: dev
-          executor: python
           persist_directory: build
           persist_directory2: cyperf
           command: ./setup.py build_ext -i -j2
@@ -118,7 +119,6 @@ workflows:
       - run_in_pipenv:
           name: run_lint
           pipenv_env_type: dev
-          executor: python
           requires:
             - cython_setup
           command: pylint labeledmatrix cyperf --rcfile=setup.cfg
@@ -126,7 +126,6 @@ workflows:
       - run_in_pipenv:
           name: unit_tests
           pipenv_env_type: dev
-          executor: python
           requires:
             - cython_setup
           command: pipenv run pytest tests --durations=10
@@ -136,5 +135,4 @@ workflows:
       - pipenv_deploy:
           name: deploy_wheel
           context: artifactory
-          executor: python
           <<: *all_branches_and_tags
