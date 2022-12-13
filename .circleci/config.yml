@@ -26,17 +26,12 @@ jobs:
       `command` can be empty. In this case, it will just ensure that environment is build and cached.
     environment:
       PIPENV_VENV_IN_PROJECT: 1
-    executor: << parameters.executor >>
     resource_class: << parameters.resource_class >>
     parameters:
       command:
         default: ''
         description: 'Command to run. Can be empty, to only build pipenv environment'
         type: string
-      executor:
-        default: python3-stretch
-        description: python executor
-        type: executor
       persist_directory:
         default: ''
         description: directory to persist in workspace
@@ -81,6 +76,27 @@ jobs:
                   << parameters.persist_directory2 >>
                 root: .
 
+  # copy of https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-pipenv_deploy with installation of pipenv
+  pipenv_deploy:
+    steps:
+      - checkout
+      - run:
+          command: pip install --upgrade pipenv
+          name: Install pipenv needed for setup.py
+      - run: # TODO do we need sdist in setup.py command ?
+          command: python setup.py bdist_wheel
+          name: Run project package
+      - run:
+          command: pip install twine
+          name: install twine
+      - run:
+          command: twine upload dist/*
+          name: upload wheel
+      - persist_to_workspace:
+          paths:
+            - dist
+          root: .
+
 workflows:
   build:
     jobs:
@@ -100,14 +116,6 @@ workflows:
             - install_pipenv
           <<: *all_branches_and_tags
       - run_in_pipenv:
-          name: ls
-          pipenv_env_type: dev
-          executor: python
-          command: ls
-          requires:
-            - cython_setup
-          <<: *all_branches_and_tags
-      - run_in_pipenv:
           name: run_lint
           pipenv_env_type: dev
           executor: python
@@ -125,11 +133,8 @@ workflows:
           resource_class: xlarge
           <<: *all_branches_and_tags
 
-      - python/pipenv_deploy:  # TODO do we need sdist in setup.py command ?
+      - pipenv_deploy:
           name: deploy_wheel
           context: artifactory
           executor: python
-          attach_workspace: true
-          requires:
-            - cython_setup
           <<: *all_branches_and_tags
