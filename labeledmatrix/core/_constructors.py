@@ -88,7 +88,7 @@ def from_diagonal(keys, values, keys_deco=None, sparse=True):
     if not sparse:
         matrix = matrix.toarray()
 
-    return (keys, keys), matrix, (keys_deco, keys_deco)
+    return (keys, keys), matrix, (keys_deco or {}, keys_deco or {})
 
 
 def _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse: bool = True,
