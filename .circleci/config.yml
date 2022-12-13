@@ -77,28 +77,6 @@ jobs:
                   << parameters.persist_directory2 >>
                 root: .
 
-  # copy of https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-pipenv_deploy with installation of pipenv
-  pipenv_deploy:
-    executor: python
-    steps:
-      - checkout
-      - run:
-          command: pip install --upgrade pipenv
-          name: Install pipenv needed for setup.py
-      - run: # TODO do we need sdist in setup.py command ?
-          command: python setup.py bdist_wheel
-          name: Run project package
-      - run:
-          command: pip install twine
-          name: install twine
-      - run:
-          command: twine upload dist/*
-          name: upload wheel
-      - persist_to_workspace:
-          paths:
-            - dist
-          root: .
-
 workflows:
   build:
     jobs:
@@ -132,18 +110,12 @@ workflows:
           resource_class: xlarge
           <<: *all_branches_and_tags
 
-      - pipenv_deploy:
-          name: deploy_wheel
-          context: artifactory
-          <<: *all_branches_and_tags
-
       - python/run_in_pipenv_env:  # running inside pipenv because of complex dependencies in setup.py
           name: deploy_wheel
           pipenv_env_type: prod
           executor: python
-          # TODO do we need sdist in setup.py command ?
           command: |
-            python setup.py bdist_wheel
+            python setup.py build_ext -i -j2 bdist_wheel
             pip install twine
             twine upload dist/*
           persist_directory: dist
