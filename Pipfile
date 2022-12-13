@@ -9,6 +9,7 @@ pandas = ">=1.2.1"
 scipy = ">=1.2.0"
 toolz = "*"
 cython = ">=0.29.5"
+pipenv = "*"
 
 [dev-packages]
 pytest = "*"

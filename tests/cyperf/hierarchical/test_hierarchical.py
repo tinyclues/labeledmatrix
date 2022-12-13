@@ -7,8 +7,8 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 import scipy.cluster.hierarchy as hc
 from scipy.spatial.distance import cdist, pdist
-from sklearn.cluster.hierarchical import AgglomerativeClustering as Ward
-from sklearn.datasets.samples_generator import make_blobs
+from sklearn.cluster import AgglomerativeClustering as Ward
+from sklearn.datasets import make_blobs
 from sklearn.metrics import normalized_mutual_info_score
 import operator
 

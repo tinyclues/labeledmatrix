@@ -1,11 +1,11 @@
 import unittest
 
 import numpy as np
+import pandas as pd
 from cyperf.matrix.karma_sparse import DTYPE
 
-from labeledmatrix.core.labeledmatrix import to_flat_dataframe, LabeledMatrix
+from labeledmatrix.core.labeledmatrix import LabeledMatrix
 from labeledmatrix.core.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
-from karma import DataFrame, Column  # FIXME
 
 
 class LabeledMatrixTestCase(unittest.TestCase):
@@ -28,22 +28,22 @@ class LabeledMatrixTestCase(unittest.TestCase):
         col_index = self.lm.without_zeros().column
 
         np.testing.assert_equal(len(dataframe), 22)
-        np.testing.assert_equal(sorted(dataframe.column_names), ['col0', 'col1', 'similarity'])
+        np.testing.assert_equal(sorted(dataframe.columns), ['col0', 'col1', 'similarity'])
 
-        np.testing.assert_equal(sorted(set(dataframe['col0'][:])), sorted(row_index))
-        np.testing.assert_equal(sorted(set(dataframe['col1'][:])), sorted(col_index))
-        np.testing.assert_equal(dataframe[11]['similarity'], 9)
+        np.testing.assert_equal(sorted(set(dataframe['col0'])), sorted(row_index))
+        np.testing.assert_equal(sorted(set(dataframe['col1'])), sorted(col_index))
+        np.testing.assert_equal(dataframe['similarity'].values[11], 9)
 
         # check if decoration columns are correctly exported
         dataframe = self.decorated_lm.to_flat_dataframe(deco_row='foo', deco_col='bar')
-        np.testing.assert_equal(sorted(dataframe.column_names), ['bar', 'col0', 'col1', 'foo', 'similarity'])
-        np.testing.assert_equal(set(dataframe['foo'][:]),
+        np.testing.assert_equal(sorted(dataframe.columns), ['bar', 'col0', 'col1', 'foo', 'similarity'])
+        np.testing.assert_equal(set(dataframe['foo']),
                                 set(['deco_0', 'deco_2', 'deco_3', 'deco_4', 'deco_5', 'deco_6']))
-        np.testing.assert_equal(set(dataframe['bar'][:]), {''})
+        np.testing.assert_equal(set(dataframe['bar']), {''})
         np.testing.assert_equal(dataframe['col0'][4], dataframe['foo'][4].split('_')[1])
 
         dataframe = self.decorated_lm.to_flat_dataframe(deco_row='toto')
-        np.testing.assert_equal(sorted(dataframe.column_names), ['col0', 'col1', 'similarity', 'toto'])
+        np.testing.assert_equal(sorted(dataframe.columns), ['col0', 'col1', 'similarity', 'toto'])
 
     def test_rank(self):
         np.testing.assert_array_equal(self.lm.rank(axis=1, reverse=False).matrix, [[3, 4, 0, 2, 1],
@@ -236,37 +236,6 @@ class LabeledMatrixTestCase(unittest.TestCase):
             _ = lm_sparse.argmax_dispatch(maximum_pressure=1, max_volumes=[2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
-    def test_static_to_flat_dataframe(self):
-        lm0 = LabeledMatrix((['t1', 't2', 't3'], ['t1', 't2', 't3']), np.random.rand(3, 3)).diagonal()
-        lm1 = LabeledMatrix((['t1', 't2', 't3'], ['t1', 't2', 't3']), np.random.rand(3, 3)).diagonal()
-
-        test_list = to_flat_dataframe([lm0, lm1])
-        test_list_row_col = to_flat_dataframe([lm0, lm1], row='topic_id', col='topic_id_dupl')
-        test_list_same_name = to_flat_dataframe([lm0, lm1], row='topic_id', col='topic_id')
-        self.assertEqual(len(test_list), 3)
-        self.assertEqual(test_list.column_names, ['col0', 'col1', 'sim0', 'sim1'])
-        self.assertEqual(test_list['col0'][:], test_list['col1'][:])
-        self.assertEqual(test_list_row_col.column_names, ['topic_id', 'topic_id_dupl', 'sim0', 'sim1'])
-        self.assertEqual(test_list_same_name.column_names, ['topic_id', 'sim0', 'sim1'])
-
-        test_dict = to_flat_dataframe({'metric1': lm0, 'metric2': lm1})
-        test_dict_row_col = to_flat_dataframe({'metric1': lm0, 'metric2': lm1}, row='topic_id', col='topic_id_dupl')
-        self.assertEqual(len(test_dict), 3)
-        self.assertEqual(test_dict.column_names, ['col0', 'col1', 'metric2', 'metric1'])
-        self.assertEqual(test_dict_row_col.column_names, ['topic_id', 'topic_id_dupl', 'metric2', 'metric1'])
-
-        np.testing.assert_array_equal(test_dict['metric1'][:], test_list['sim0'][:])
-
-        lm0 = LabeledMatrix((['t1', 't2', 't3'], ['t1', 't2', 't3']), np.asarray([[3, 0, 0], [0, 2, 0], [0, 7, 4]]))
-        lm1 = LabeledMatrix((['t1', 't4'], ['t1', 't2', 't3', 't4']), np.asarray([[2, 0, 0, 8], [0, 3, 0, 9]]))
-        lm2 = LabeledMatrix((['t1', 't2', 't3', 't4'], ['t2', 't4']), np.asarray([[6, 1], [7, 3], [0, 0], [0, 0]]))
-
-        actual = to_flat_dataframe({'m1': lm0, 'm2': lm1, 'm3': lm2})
-        self.assertEqual(actual['as_tuple(col0, col1)'][:], [('t1', 't1'), ('t2', 't2'), ('t3', 't2'), ('t3', 't3'),
-                                                             ('t1', 't4'), ('t2', 't4'), ('t4', 't2'), ('t4', 't4')])
-        self.assertEqual(actual['as_tuple(m1, m2, m3)'][:], [(3, 2, 0), (2, 0, 7), (7, 0, 0), (4, 0, 0), (0, 8, 1),
-                                                             (0, 0, 3), (0, 3, 0), (0, 9, 0)])
-
     def test_population_potential_allocation(self):
         mat = np.array([[0.6, 0., 0.],
                         [0., 0.6, 0.],
@@ -302,7 +271,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                                      [0.627, 0., 0.373]], decimal=3)
 
     def test_lm_aggregate_pivot(self):
-        d = DataFrame()
+        d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3']
         d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20]
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+']
@@ -326,7 +295,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         self.assertEqual('aggregator dummyAggregator does not exist', str(e.exception))
 
     def test_lm_pivot_missing(self):
-        d = DataFrame()
+        d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20, None]
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
@@ -336,10 +305,10 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                                    [20, 0]])
 
     def test_lm_pivot_dtypes_strategy(self):
-        d = DataFrame()
-        # safe_dtye_cast should transform Missing -> -Maxint and pivot should put it back to Missing
+        d = pd.DataFrame()
+        #  pivot should ignore np.iinfo(np.int32).min put it back to Missing
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, -np.iinfo(np.int32)], np.int32)
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.iinfo(np.int32).min], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],
@@ -347,7 +316,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                          [20., 0.]])
         self.assertEqual(lm.matrix.dtype, np.float32)
 
-        d = DataFrame()
+        d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
@@ -357,7 +326,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                          [30., 0.]])
         self.assertEqual(lm.matrix.dtype, np.int32)
 
-        d = DataFrame()
+        d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']

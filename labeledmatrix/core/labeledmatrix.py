@@ -1,5 +1,4 @@
 import random
-import pandas as pd
 
 from toolz.dicttoolz import keymap
 from toolz import merge as dict_merge
@@ -15,17 +14,18 @@ from cyperf.matrix.karma_sparse import ks_diag
 from cyperf.tools import take_indices
 from cyperf.tools.getter import apply_python_dict
 
+from labeledmatrix.core.random import use_seed
 from labeledmatrix.core.utils import co, aeq, zipmerge, lm_occurence, lmdiag, lm_hstack
 
 from labeledmatrix.learning.matrix_utils import *
-from labeledmatrix.learning.tail_clustering import tail_clustering
+
 from labeledmatrix.learning.affinity_propagation import affinity_propagation
-from labeledmatrix.learning.hierarchical import clustering_dispatcher
-from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.co_clustering import co_clustering
+from labeledmatrix.learning.hierarchical import clustering_dispatcher
 from labeledmatrix.learning.nmf import nmf, nmf_fold
 from labeledmatrix.learning.randomize_svd import randomized_svd
-from labeledmatrix.learning.utils import use_seed
+from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
+from labeledmatrix.learning.tail_clustering import tail_clustering
 
 
 def is_integer(arg):
@@ -2377,10 +2377,10 @@ class LabeledMatrix():
         data[row] = take_indices(self.row, row_indices)
         data[col] = take_indices(self.column, col_indices)
         data[dist] = values
-        if getattr(self, 'row_deco', None):
-            data[f'deco_{row}'] = apply_python_dict(self.row_deco, data[row], None, False)
-        if getattr(self, 'column_deco', None):
-            data[f'deco_{col}'] = apply_python_dict(self.column_deco, data[col], None, False)
+        if 'deco_row' in kwargs:
+            data[kwargs['deco_row']] = apply_python_dict(self.row_deco, data[row], '', False)
+        if 'deco_col' in kwargs:
+            data[kwargs['deco_col']] = apply_python_dict(self.column_deco, data[col], '', False)
         return pd.DataFrame(data)
 
     # add structs with label:value instead of list

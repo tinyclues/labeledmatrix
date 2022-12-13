@@ -1,5 +1,6 @@
 import unittest
 import itertools
+import os
 import random
 from numpy import allclose as eq
 from pickle import dumps, loads
@@ -807,7 +808,7 @@ class TestKarmaSparse(unittest.TestCase):
             we just want to make sure we can still load them
         """
         ks32 = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
-        path = './tests/matrix/karma_sparse_64.pickle'
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'karma_sparse_64.pickle'))
 
         with open(path, "rb") as _f:
             ks64 = loads(_f.read(), encoding='bytes')
@@ -815,13 +816,13 @@ class TestKarmaSparse(unittest.TestCase):
         self.assertEqual(ks32.dtype, ks64.dtype)
         np_almost_equal(ks32, ks64)
 
-    def test_load_py3_pickle(self):
+    def test_load_pickle(self):
         """
             The matrix in karma_sparse_64.pickle was saved from an environment where they were all in 64bit
             we just want to make sure we can still load them
         """
         ks_expected = KarmaSparse(np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]))
-        path = './tests/matrix/karma_sparse_py3.pickle'
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'karma_sparse_py3.pickle'))
 
         with open(path, "rb") as _f:
             ks_got = loads(_f.read())

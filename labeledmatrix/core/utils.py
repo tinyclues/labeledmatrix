@@ -9,8 +9,8 @@ from toolz import merge as dict_merge
 from cyperf.matrix.karma_sparse import KarmaSparse, DTYPE, ks_hstack, ks_diag, dense_pivot
 from cyperf.indexing.indexed_list import reversed_index
 
+from labeledmatrix.core.random import use_seed
 from labeledmatrix.learning.matrix_utils import safe_multiply, align_along_axis, safe_add
-from labeledmatrix.learning.utils import use_seed
 
 PIVOT_AGGREGATORS_LIST = ['sum', 'min', 'max', '!', 'last', 'first', 'mean', 'std']
 
@@ -116,13 +116,13 @@ def _lm_aggregate_pivot(val, ri_key, ri_axis, aggregator, sparse, default=0):
     val_key, ind_key = ri_key
     val_axis, ind_axis = ri_axis
 
-    shape = (len(val_key), len(val_axis))
+    shape = (len(ind_key), len(ind_axis))
     if sparse:
-        matrix = KarmaSparse((val, (ind_key, ind_axis)), shape=shape, format="csr", aggregator=aggregator)
+        matrix = KarmaSparse((val, (val_key, val_axis)), shape=shape, format="csr", aggregator=aggregator)
     else:
-        matrix = dense_pivot(ind_key, ind_axis, val, shape=shape, aggregator=aggregator, default=default)
+        matrix = dense_pivot(val_key, val_axis, val, shape=shape, aggregator=aggregator, default=default)
     from labeledmatrix.core.labeledmatrix import LabeledMatrix
-    return LabeledMatrix((val_key, val_axis), matrix)
+    return LabeledMatrix((ind_key, ind_axis), matrix)
 
 
 def _lm_aggregate_pivot_mean(val, ri_key, ri_axis, sparse=True, default=0):
