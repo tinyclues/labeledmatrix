@@ -7,7 +7,7 @@ orbs:
 executors:
   python:
     docker:
-      - image: circleci/python:3.7
+      - image: cimg/python:3.7
 
 aliases:
   all_branches_and_tags: &all_branches_and_tags
