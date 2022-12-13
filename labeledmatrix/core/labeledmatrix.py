@@ -1,6 +1,7 @@
 import random
-from typing import Dict, Any
+from typing import Dict, Any, Union, List, Optional, Callable, Tuple
 
+import numpy as np
 import pandas as pd
 
 from toolz.dicttoolz import keymap
@@ -30,7 +31,7 @@ from labeledmatrix.learning.randomize_svd import randomized_svd
 from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.tail_clustering import tail_clustering
 from labeledmatrix.learning.utils import use_seed
-from ._constructors import from_zip_occurrence, from_random, from_diagonal
+from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot
 
 
 def is_integer(arg):
@@ -118,6 +119,81 @@ class LabeledMatrix:
         'csr'
         """
         return cls(*from_diagonal(keys, values, keys_deco, sparse))
+
+    @classmethod
+    def from_pivot(cls, dataframe: pd.DataFrame,
+                   index: Optional[Union[str, List[str]]] = None,
+                   columns: Optional[Union[str, List[str]]] = None,
+                   values: Optional[str] = None, aggregator: str = 'sum',
+                   sparse: bool = True):
+        """
+        Analog of pandas.pivot
+        :param dataframe: input Dataframe
+        :param index: same as in pandas.pivot: column or list of columns to use as result's index.
+                      If None, uses existing index.
+        :param columns: same as in pandas pivot: column or list of columns to use as result’s columns.
+                      If None, all columns are taken.
+        :param values: as in pandas pivot: optional column's name to take values from.
+                       Currently can take only one column's value
+                       TODO support list of columns here
+        :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
+        :param sparse: boolean to return sparse result instead of dense one
+        :return: LabeledMatrix object
+
+        >>> d = pd.DataFrame()
+        >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
+        >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
+        >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum').to_dense()\
+            .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      180.0    75.0
+        2      60.0     65.0
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean').to_dense()\
+            .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      90.0     37.5
+        2      60.0     32.5
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std').to_dense()\
+            .to_vectorial_dataframe().preview()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      10.0     4.5
+        2      0.0      2.5
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'min', sparse=False)\
+            .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      80.0     33.0
+        2      60.0     30.0
+
+        >>> lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'max').to_dense()\
+            .to_vectorial_dataframe().preview() #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      100.0    42.0
+        2      60.0     35.0
+        """
+        res = from_pivot(dataframe, index, columns, values, aggregator, sparse)
+        if aggregator == 'mean':
+            labels, (matrix, cardinality_matrix) = res
+            lm, lm_cardinality = cls(labels, matrix), cls(labels, cardinality_matrix)
+            return lm.divide(lm_cardinality)
+        if aggregator == 'std':
+            labels, (matrix_mean, matrix_squares_mean) = res
+            lm_mean, lm_squares_mean = cls(labels, matrix_mean), cls(labels, matrix_squares_mean)
+            return (lm_squares_mean - lm_mean.power(2)).power(0.5)
+        return cls(*res)
 
     def __init__(self, xxx_todo_changeme1, matrix, deco=({}, {})):
         """

@@ -1,13 +1,14 @@
 import string
-from typing import Union, List, Any
+from typing import Union, List, Any, Optional, Tuple, Callable
 
 import numpy as np
+import pandas as pd
 import scipy.sparse as sp
 
-from cyperf.indexing.indexed_list import reversed_index
-from cyperf.matrix.karma_sparse import KarmaSparse, ks_diag
+from cyperf.indexing.indexed_list import reversed_index, IndexedList
+from cyperf.matrix.karma_sparse import KarmaSparse, ks_diag, dense_pivot
 
-from labeledmatrix.learning.matrix_utils import keep_sparse
+from labeledmatrix.learning.matrix_utils import keep_sparse, safe_multiply, pseudo_element_inverse, safe_add
 from labeledmatrix.learning.utils import use_seed
 
 
@@ -90,5 +91,122 @@ def from_diagonal(keys, values, keys_deco=None, sparse=True):
     return (keys, keys), matrix, (keys_deco, keys_deco)
 
 
-def from_pivot(dataframe, index=None, columns=None, values=None, aggregator="sum", sparse=True):
-    pass
+def _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse: bool = True,
+                        default: float = 0.):
+    """
+    private method called by lm_aggregate
+
+    :param val: np array
+    :param key_indices: reverse index for key
+    :param key_uniques: unique values of key
+    :param col_indices: reverse index for column
+    :param col_uniques: unique values of column
+    :param aggregator: str
+    :param sparse: bool
+    :param default:
+    :return: LabeledMatrix
+    """
+    shape = (len(key_uniques), len(col_uniques))
+    if sparse:
+        matrix = KarmaSparse((val, (key_indices, col_indices)), shape=shape, format="csr", aggregator=aggregator)
+    else:
+        matrix = dense_pivot(key_indices, col_indices, val, shape=shape, aggregator=aggregator, default=default)
+    return (key_uniques, col_uniques), matrix
+
+
+def _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uniques, sparse=True, default=0):
+    """
+    private method called by lm_aggregate_pivot
+
+    :param val: np array
+    :param ri_key: tuple (unique values, reverse index) for key
+    :param ri_axis: tuple (unique values, reverse index) for axis
+    :param sparse: bool
+    :return: LabeledMatrix
+    """
+    # Sparse matrix ignore nan values :
+    # So when calculating the mean you should divide by the number of element without nan values.
+    # To do so we replace 1 by nan so that KarmaSparse will ignore those values.
+    ones = np.ones(len(val), dtype=np.float32)
+    ones[np.isnan(val)] = np.nan
+
+    labels, matrix = _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques,
+                                         aggregator='add', sparse=sparse, default=default)
+    _, cardinality_matrix = _lm_aggregate_pivot(ones, key_indices, key_uniques, col_indices, col_uniques,
+                                                aggregator='add', sparse=sparse, default=default)
+
+    return labels, (matrix, cardinality_matrix)
+
+
+def _lm_aggregate_pivot_std(val, key_indices, key_uniques, col_indices, col_uniques, sparse=True, default=0):
+    """
+        private method called by lm_aggregate_pivot
+
+        :param val: np array
+        :param ri_key: tuple (unique values, reverse index) for key
+        :param ri_axis: tuple (unique values, reverse index) for axis
+        :param sparse: bool
+        :return: LabeledMatrix
+        """
+    labels, matrix_mean = _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uniques,
+                                                   sparse=sparse, default=default)
+    _, matrix_squares_mean = _lm_aggregate_pivot_mean(val ** 2, key_indices, key_uniques, col_indices, col_uniques,
+                                                      sparse=sparse, default=default)
+    return labels, (matrix_mean, matrix_squares_mean)
+
+
+KNOWN_AGGREGATORS = {'sum': 'add', 'min': 'min', 'max': 'max',
+                     '!': 'first', 'first': 'first', 'last': 'last',
+                     'mean': _lm_aggregate_pivot_mean, 'std': _lm_aggregate_pivot_std}
+
+
+def from_pivot(dataframe: pd.DataFrame,
+               index: Optional[Union[str, List[str]]] = None,
+               columns: Optional[Union[str, List[str]]] = None,
+               values: Optional[str] = None,
+               aggregator: Union[str, Callable] = "sum",
+               sparse: bool = True) -> Tuple[Tuple[IndexedList, IndexedList], Union[KarmaSparse, np.ndarray]]:
+    """
+    Analog of pandas.pivot
+        :param dataframe: input Dataframe
+        :param index: same as in pandas.pivot: column or list of columns to use as result's index.
+                      If None, uses existing index.
+        :param columns: same as in pandas pivot: column or list of columns to use as result’s columns.
+                      If None, all columns are taken.
+        :param values: same as in pandas pivot: optional column's name to take values from.  TODO support list of columns here
+        :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
+        :param sparse: boolean to return sparse result instead of dense one
+        :return: Tuple (row labels, columns labels), pivot matrix
+    """
+    def _reversed_index(cols: Union[str, List[str]]) -> Tuple[np.ndarray, np.ndarray]:
+        if isinstance(cols, list) and len(cols) == 1:
+            cols = cols[0]
+        if isinstance(cols, str):
+            return reversed_index(dataframe[cols])[::-1]
+        return pd.MultiIndex.from_frame(dataframe[cols]).factorize()
+
+    if index is None:
+        key_indices, key_uniques = reversed_index(dataframe.index)[::-1]
+    else:
+        key_indices, key_uniques = _reversed_index(index)
+
+    if columns is None:
+        columns = dataframe.columns
+    col_indices, col_uniques = _reversed_index(columns)
+
+    if values is not None:
+        val = dataframe[values].values
+        # we will use KarmaSparse(float32) implementation of pivot, so casting values to needed type
+        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
+    else:
+        val = np.ones(len(dataframe), dtype=np.float32)
+
+    if isinstance(aggregator, str):
+        if aggregator not in KNOWN_AGGREGATORS:
+            raise ValueError(f'Unknown aggregator `{aggregator}`')
+        aggregator = KNOWN_AGGREGATORS[aggregator]
+
+    if callable(aggregator):
+        return aggregator(val, key_indices, key_uniques, col_indices, col_uniques, sparse)
+    else:
+        return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)
