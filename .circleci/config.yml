@@ -20,6 +20,7 @@ aliases:
 jobs:
   # restore cache from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
   # and run command inside
+  # needed to copy it because original job can't persist more than one folder and don't expose resource_class
   run_in_pipenv:
     description: >
       Run `command` in a pipenv environment. It use circleci cache to prevent build it again if file did not change.
@@ -81,31 +82,32 @@ workflows:
   build:
     jobs:
       - python/run_in_pipenv_env:
-          name: install_pipenv
+          name: install_pipenv_dev
           pipenv_env_type: dev
           executor: python
           <<: *all_branches_and_tags
       - run_in_pipenv:
-          name: cython_setup
+          name: cython_setup_dev
           pipenv_env_type: dev
           persist_directory: build
-          persist_directory2: cyperf
+          persist_directory2: cyperf  # FIXME ideally we want just to run setup.py inside run_in_pipenv_env from orb
+          # TODO but it can't persist many folders, but only one -> so we need to redefine part of run_in_pipenv
           command: ./setup.py build_ext -i -j2
           requires:
-            - install_pipenv
+            - install_pipenv_dev
           <<: *all_branches_and_tags
       - run_in_pipenv:
           name: run_lint
           pipenv_env_type: dev
           requires:
-            - cython_setup
+            - cython_setup_dev
           command: pylint labeledmatrix cyperf --rcfile=setup.cfg
           <<: *all_branches_and_tags
       - run_in_pipenv:
           name: unit_tests
           pipenv_env_type: dev
           requires:
-            - cython_setup
+            - cython_setup_dev
           command: pipenv run pytest tests --durations=10
           resource_class: xlarge
           <<: *all_branches_and_tags
