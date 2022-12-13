@@ -136,3 +136,15 @@ workflows:
           name: deploy_wheel
           context: artifactory
           <<: *all_branches_and_tags
+
+      - python/run_in_pipenv_env:  # running inside pipenv because of complex dependencies in setup.py
+          name: deploy_wheel
+          pipenv_env_type: prod
+          executor: python
+          # TODO do we need sdist in setup.py command ?
+          command: |
+            python setup.py bdist_wheel
+            pip install twine
+            twine upload dist/*
+          persist_directory: dist
+          <<: *all_branches_and_tags
