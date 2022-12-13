@@ -120,5 +120,6 @@ workflows:
             python setup.py build_ext -i -j2 bdist_wheel
             pip install twine
             twine upload dist/*
+          context: artifactory
           persist_directory: dist
           <<: *all_branches_and_tags
