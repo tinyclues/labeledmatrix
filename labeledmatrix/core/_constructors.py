@@ -8,8 +8,8 @@ import scipy.sparse as sp
 from cyperf.indexing.indexed_list import reversed_index, IndexedList
 from cyperf.matrix.karma_sparse import KarmaSparse, ks_diag, dense_pivot
 
-from labeledmatrix.learning.matrix_utils import keep_sparse, safe_multiply, pseudo_element_inverse, safe_add
-from labeledmatrix.learning.utils import use_seed
+from labeledmatrix.core.random import use_seed
+from labeledmatrix.learning.matrix_utils import keep_sparse
 
 
 # TODO challenge reversed_index through this file vs pd.factorize
