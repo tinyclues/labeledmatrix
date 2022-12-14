@@ -190,12 +190,12 @@ class ParallelSortCase(unittest.TestCase):
 
     def test_sort_argsort_long_numpy_string(self):
         for a in self.get_string_data_generator():
-            a = np.array(a, dtype='S302')
+            a = np.array(a, dtype='S305')
             assert_equal(parallel_argsort(a, reverse=False), np.argsort(a, kind="merge"))
             assert_equal(parallel_argsort(a, reverse=True), argsort_fallback(a, reverse=True))
 
     def test_sort_argsort_long_numpy_string_explicit(self):
-        a = np.array(['aaa' * 101, 'aaa' * 101], dtype='S302')
+        a = np.array(['aaa' * 101, 'aaa' * 101], dtype='S305')
         for reverse in [True, False]:
             assert_equal(parallel_argsort_numpy_strings_int(a, reverse=reverse), [0, 1])
 
