@@ -1,5 +1,5 @@
 cimport numpy as np
-from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, A, B, INT1
+from cyperf.tools.types cimport DTYPE_t, ITYPE_t, LTYPE_t, bool, A, B, INT1, ITER, ITER_BIS
 
 
 cdef void partial_sort(A* dist, B* idx, LTYPE_t size, LTYPE_t m, bool reverse=*) nogil

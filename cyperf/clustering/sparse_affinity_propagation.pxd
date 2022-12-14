@@ -1,11 +1,21 @@
 cimport numpy as np
+cimport cython
 import numpy as np
 
-from cyperf.matrix.karma_sparse cimport KarmaSparse, DTYPE_t, ITYPE_t, LTYPE_t, BOOL_t, bool
-from cyperf.matrix.routine cimport all_equal
+from cyperf.matrix.karma_sparse cimport KarmaSparse, DTYPE_t, ITYPE_t, LTYPE_t, BOOL_t, bool, A, B
 
 cdef DTYPE_t MINF = - np.inf
 cdef DTYPE_t NOISE = 0.0000001
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline bool all_equal(A * old, B * new, long n) nogil:
+    cdef long i
+    for i in range(n):
+        if old[i] != new[i]:
+            return 0
+    return 1
 
 
 cdef class SAFP:

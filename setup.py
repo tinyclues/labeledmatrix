@@ -5,7 +5,6 @@ import os
 import sys
 
 from setuptools import setup
-from distutils.dist import Distribution
 
 from pipenv.utils.dependencies import convert_deps_to_pip  # TODO consider pyproject.toml
 from pipenv.project import Project
@@ -39,25 +38,17 @@ def create_extension(template, kwds):
     # see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=25975 and https://github.com/cython/cython/issues/550
     if kwds['name'] not in ('cyperf.tools.parallel_sort_routine', 'cyperf.matrix.karma_sparse'):
         kwds['extra_compile_args'].append('-ffast-math')
-
     return default_create_extension(template, kwds)
 
 
 if "build_ext" in sys.argv:
     render_tempita()
 
-try:
-    dist = Distribution()
-    dist.parse_command_line()
-    nthreads = int(dist.command_options['build_ext']['parallel'][1])
-except Exception:
-    nthreads = 1
 
 ext_modules = cythonize(
     "cyperf/**/*.pyx",
     create_extension=create_extension,
     compiler_directives={'language_level': sys.version_info[0], 'embedsignature': True},
-    nthreads=nthreads,
 )
 
 pfile = Project(chdir=False).parsed_pipfile

@@ -29,6 +29,10 @@ def np_almost_equal(x, y, decimal=5):
 def array_cast(x):
     return np.asarray(x, dtype=DTYPE)
 
+def kronii(left, right):
+    left, right = np.asarray(left, dtype=np.float32), np.asarray(right, dtype=np.float32)
+    return np.einsum('ij, ik -> ijk', left, right, optimize='optimal').reshape(left.shape[0], -1)
+
 
 class MatrixFabric(object):
     def __init__(self, shape=None, density=0.2, format=None, random_state=None):
@@ -1277,3 +1281,35 @@ class TestKarmaSparse(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             matrix1.quantile_boundaries(4, axis=None)
+
+
+class KroniiTestCase(unittest.TestCase):
+
+    def test_kronii(self):
+        x, y = np.array([[1, 10, 3], [2, -2, 5]]), np.array([[5, 6], [0, 1]])
+        xx = KarmaSparse(x)
+        yy = KarmaSparse(y)
+
+        result1 = kronii(x, y)
+        result2 = xx.kronii(y)
+        result3 = xx.kronii(yy)
+
+        np.testing.assert_array_almost_equal(result1,
+                                             np.array([[5, 6, 50, 60, 15, 18],
+                                                       [0, 2, 0, -2, 0, 5]]))
+        np.testing.assert_array_almost_equal(result1, result2)
+        np.testing.assert_array_almost_equal(result2, result3)
+
+    def test_kronii_random(self):
+        for _ in range(30):
+            nrows = np.random.randint(1, 100)
+            xx = KarmaSparse(sp.rand(nrows, np.random.randint(1, 100), np.random.rand()))
+            yy = KarmaSparse(sp.rand(nrows, np.random.randint(1, 100), np.random.rand()))
+
+            result1 = kronii(xx.toarray(), yy.toarray())
+            result2 = xx.kronii(yy.toarray())
+            result3 = xx.kronii(yy)
+
+            np.testing.assert_array_almost_equal(result1, result2)
+            np.testing.assert_array_almost_equal(result2, result3)
+            self.assertAlmostEqual(result1[-1, -1], xx[-1, -1] * yy[-1, -1])

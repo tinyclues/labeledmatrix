@@ -5,8 +5,37 @@
 #cython: boundscheck=False
 
 
+cimport cython
 import numpy as np
 from cyperf.tools.types import ITYPE, DTYPE, LTYPE
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.cdivision(True)
+cpdef np.ndarray[ndim=1, dtype=int] bisect_left(ITER a, ITER_BIS x):
+    """Return the index where to insert item x in list a, assuming a is sorted.
+
+    The return value i is such that all e in a[:i] have e < x, and all e in
+    a[i:] have e >= x.  So if x already appears in the list, a.insert(x) will
+    insert just before the leftmost x already there.
+    """
+    cdef long lo, hi, mid, nb = len(x), i
+    cdef int[::1] out = np.zeros(nb, dtype=np.int32)
+
+    for i in range(nb):
+        o = x[i]
+        lo = 0
+        hi = len(a)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if a[mid] < o:
+                lo = mid + 1
+            else:
+                hi = mid
+        out[i] = lo
+    return np.asarray(out)
+
 
 cpdef np.ndarray[dtype=ITYPE_t, ndim=1] cython_argpartition(A[:] xx, ITYPE_t nb,  bool reverse):
     """

@@ -1,9 +1,11 @@
 
 from itertools import product
+from bisect import bisect_left as bisect_left_old
 import numpy as np
 import unittest
 
 from cyperf.tools import slice_length, compose_slices, take_indices
+from cyperf.matrix.routine import bisect_left
 from cyperf.tools.getter import apply_python_dict
 from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort)
 from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
@@ -147,3 +149,30 @@ class GetterTestCase(unittest.TestCase):
 
         np.testing.assert_array_equal(take_indices(slice(2150000000, 2160000000, None), [0], length=3782366988),
                                       [2150000000])
+
+    def test_bisect_left(self):
+        for _ in range(5):
+            a_unique = np.unique(np.random.rand(1000))
+            a_int = np.random.randint(0, 100, 1000)
+            a_int_sorted = np.sort(np.random.randint(0, 100, 1000))
+
+            for _ in range(5):
+                x_unique = np.random.rand(1)
+                x_int = np.random.randint(0, 100, 1)
+                x_array = np.random.randint(0, 100, 100)
+                for a, x in [(a_unique, x_unique), (a_int, x_int), (a_int_sorted, x_int)]:
+                    self.assertEqual(bisect_left(a, x), bisect_left_old(a, x))
+                    self.assertEqual(bisect_left(a, x), a.searchsorted(x))
+                np.testing.assert_array_equal(bisect_left(a_int_sorted, x_array), a_int_sorted.searchsorted(x_array))
+
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [0]), [0])
+        np.testing.assert_array_equal(bisect_left(np.array([1, 2, 7, 12]), [0]), [0])
+        np.testing.assert_array_equal(bisect_left(np.array([1., 2., 7, 12]), [0]), [0])
+        np.testing.assert_array_equal(bisect_left([1., 2., 7, 12], np.array([0])), [0])
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [2]), [1])
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [7]), [2])
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [10]), [3])
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [1, 3, 12, 14]), [0, 2, 3, 4])
+
+        np.testing.assert_array_equal(bisect_left(np.array(['1', '2', '77']), ['1', '12', '3']), [0, 1, 2])
+        np.testing.assert_array_equal(bisect_left([1, 2, 7, 12], [1, 3, 12, 14]), [0, 2, 3, 4])
