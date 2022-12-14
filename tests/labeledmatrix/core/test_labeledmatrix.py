@@ -306,9 +306,8 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
     def test_lm_pivot_dtypes_strategy(self):
         d = pd.DataFrame()
-        #  pivot should ignore np.iinfo(np.int32).min put it back to Missing
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
-        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.iinfo(np.int32).min], np.int32)
+        d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.nan], np.float32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
         lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],

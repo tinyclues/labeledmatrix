@@ -446,11 +446,11 @@ class LabeledMatrix():
         array([[0, 0, 0],
                [0, 1, 2],
                [0, 3, 4]])
-        >>> lm.to_sparse().extend((['a'], ['a'])).matrix.toarray().astype(np.int)
+        >>> lm.to_sparse().extend((['a'], ['a'])).matrix.toarray().astype(np.int64)
         array([[0, 0, 0],
                [0, 1, 2],
                [0, 3, 4]])
-        >>> lm.to_sparse().extend(2*[['a', 'd', 'c']]).matrix.toarray().astype(np.int)
+        >>> lm.to_sparse().extend(2*[['a', 'd', 'c']]).matrix.toarray().astype(np.int64)
         array([[1, 2, 0, 0],
                [3, 4, 0, 0],
                [0, 0, 0, 0],
@@ -464,7 +464,7 @@ class LabeledMatrix():
                [0, 0]])
         >>> lm.extend((["a", "b"], ["y"])).label
         (['b', 'c', 'a'], ['x', 'y'])
-        >>> lm.to_sparse().extend((["a", "b"], ["y"])).matrix.toarray().astype(np.int)
+        >>> lm.to_sparse().extend((["a", "b"], ["y"])).matrix.toarray().astype(np.int64)
         array([[1, 0],
                [3, 0],
                [0, 0]])
@@ -507,7 +507,7 @@ class LabeledMatrix():
         >>> rlm.sort().label
         (['a', 'c'], ['a', 'c'])
         >>> rlm = lm.to_sparse().extend(2*[['a', 'd', 'c']]).restrict(2*[['d','b','c']])
-        >>> rlm.sort().matrix.toarray().astype(np.int)
+        >>> rlm.sort().matrix.toarray().astype(np.int64)
         array([[1, 2, 0],
                [3, 4, 0],
                [0, 0, 0]])
@@ -1362,13 +1362,13 @@ class LabeledMatrix():
         """
         >>> lm = LabeledMatrix((['a', 'b', 'c'], ['x', 'y', 'z']),
         ...                    np.arange(9).reshape(3, 3) + 1)
-        >>> lm.min().sort().matrix.toarray().astype(np.int)
+        >>> lm.min().sort().matrix.toarray().astype(np.int64)
         array([[1, 0, 0],
                [0, 4, 0],
                [0, 0, 7]])
         >>> lm.min().sort().label
         (['a', 'b', 'c'], ['a', 'b', 'c'])
-        >>> lm.min(axis=0).sort().matrix.toarray().astype(np.int)
+        >>> lm.min(axis=0).sort().matrix.toarray().astype(np.int64)
         array([[1, 0, 0],
                [0, 2, 0],
                [0, 0, 3]])
@@ -1640,7 +1640,7 @@ class LabeledMatrix():
         """
         if isinstance(max_rank, dict):
             max_rank = np.array([max_rank.get(label, 0) for label in self.label[co(axis)]],
-                                dtype=np.int)
+                                dtype=np.int64)
         elif not is_integer(max_rank):
             raise ValueError('max_rank must be integer or dict')
         if np.all(max_rank == 0):
@@ -1822,11 +1822,11 @@ class LabeledMatrix():
             array([[1.       , 0.6666667, 0.6666667],
                    [0.6666667, 1.       , 1.       ],
                    [0.6666667, 1.       , 1.       ]], dtype=float32)
-            >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int)
+            >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int64)
             array([[3, 2, 2],
                    [2, 3, 3],
                    [2, 3, 3]])
-            >>> np.array(lm.pairwise_overlap(0.8, axis=1, renorm=False).matrix, dtype=np.int)
+            >>> np.array(lm.pairwise_overlap(0.8, axis=1, renorm=False).matrix, dtype=np.int64)
             array([[2, 1, 1, 1],
                    [1, 2, 2, 2],
                    [1, 2, 2, 2],
@@ -1882,7 +1882,7 @@ class LabeledMatrix():
         if max_volumes is None:
             max_volumes = self.matrix.shape[0]
         if is_integer(max_volumes):
-            max_volumes = np.full(nb_topic, max_volumes, dtype=np.int)
+            max_volumes = np.full(nb_topic, max_volumes, dtype=np.int64)
         elif isinstance(max_volumes, dict):
             max_volumes = np.array([max_volumes.get(topic, 0) for topic in self.column])
         else:
@@ -1891,7 +1891,7 @@ class LabeledMatrix():
         if max_ranks is None:
             max_ranks = self.matrix.shape[0]
         if is_integer(max_ranks):
-            max_ranks = np.full(nb_topic, max_ranks, dtype=np.int)
+            max_ranks = np.full(nb_topic, max_ranks, dtype=np.int64)
         elif isinstance(max_ranks, dict):
             max_ranks = np.array([max_ranks[topic] for topic in self.column])
         else:
@@ -2084,13 +2084,13 @@ class LabeledMatrix():
         >>> lm = LabeledMatrix([range(5)]*2, mat)
         >>> lm.connected_components().label
         ([0, 1, 2, 3, 4], [0, 1])
-        >>> lm.connected_components().matrix.toarray().astype(np.int)
+        >>> lm.connected_components().matrix.toarray().astype(np.int64)
         array([[1, 0],
                [1, 0],
                [0, 1],
                [0, 1],
                [1, 0]])
-        >>> lm.to_sparse().connected_components("strong").sort().matrix.toarray().astype(np.int)
+        >>> lm.to_sparse().connected_components("strong").sort().matrix.toarray().astype(np.int64)
         array([[0, 1, 0, 0],
                [1, 0, 0, 0],
                [0, 0, 1, 0],
@@ -2116,7 +2116,7 @@ class LabeledMatrix():
         >>> lm_ac = lm.affinity_clusters().sort()
         >>> lm_ac.label
         (['a', 'b', 'c', 'd'], ['a', 'd'])
-        >>> lm_ac.matrix.toarray().astype(np.int)
+        >>> lm_ac.matrix.toarray().astype(np.int64)
         array([[1, 0],
                [1, 0],
                [0, 1],

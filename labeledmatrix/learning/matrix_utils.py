@@ -129,7 +129,7 @@ def truncate_by_count(matrix, max_rank, axis):
             return truncate_by_count_dense(matrix.transpose(), ranks, axis=1).transpose()
 
     if not np.isscalar(max_rank):
-        return truncate_by_count_dense(np.asarray(matrix), np.asarray(max_rank, dtype=np.int), axis)
+        return truncate_by_count_dense(np.asarray(matrix), np.asarray(max_rank, dtype=np.int64), axis)
     elif is_karmasparse(matrix):
         return matrix.truncate_by_count(max_rank, axis)
     elif is_scipysparse(matrix):
@@ -391,13 +391,13 @@ def rank_matrix(matrix, axis, reverse=False):
            [1, 2, 2, 4, 2],
            [2, 1, 3, 2, 3],
            [4, 3, 4, 3, 4]])
-    >>> rank_matrix(ks, axis=1).toarray().astype(np.int)
+    >>> rank_matrix(ks, axis=1).toarray().astype(np.int64)
     array([[2, 3, 0, 1, 0],
            [0, 0, 0, 0, 0],
            [0, 1, 2, 3, 0],
            [1, 0, 3, 2, 0],
            [4, 1, 5, 3, 2]])
-    >>> rank_matrix(ks, axis=0).toarray().astype(np.int)
+    >>> rank_matrix(ks, axis=0).toarray().astype(np.int64)
     array([[2, 3, 0, 1, 0],
            [0, 0, 0, 0, 0],
            [0, 1, 1, 4, 0],
@@ -1181,7 +1181,7 @@ def sparse_quantiles(matrix, nb, axis):
     array([[0., 1., 1., 1., 1., 2., 2., 2., 2., 2.],
            [1., 1., 1., 1., 1., 2., 2., 2., 2., 2.]], dtype=float32)
     """
-    bins = np.arange(nb, dtype=np.float) / nb
+    bins = np.arange(nb, dtype=np.float64) / nb
 
     if axis == 0:
         matrix = matrix.tocsc()
@@ -1429,7 +1429,7 @@ def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=
     True
     >>> to_array_if_needed(np.array([1,2], dtype=np.float32), min_dtype=np.float32).dtype == np.float32
     True
-    >>> to_array_if_needed(np.array([1,2], dtype=np.float), min_dtype=np.float32).dtype == np.float
+    >>> to_array_if_needed(np.array([1,2], dtype=np.float64), min_dtype=np.float32).dtype == np.float
     True
     """
     if is_karmasparse(data):
@@ -1733,7 +1733,7 @@ def quantile_boundaries(matrix, nb, axis):
             return quantile_boundaries(matrix.T, nb, axis=0).T
         n_rows, n_cols = matrix.shape
         nb = min(nb, n_rows + 1)
-        idx = (n_rows * np.arange(1, nb, dtype=float) / nb + 0.5).astype(np.int) - 1
+        idx = (n_rows * np.arange(1, nb, dtype=float) / nb + 0.5).astype(np.int64) - 1
 
         q_indices = np.argsort(matrix, axis=0)[idx]
         return matrix[q_indices, np.arange(n_cols)]

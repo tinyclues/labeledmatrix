@@ -32,10 +32,6 @@ class testDoctest(unittest.TestCase):
         import cyperf.tools.getter
         self.assertEqual(doctest.testmod(cyperf.tools.getter).failed, 0)
 
-    def test_curve(self):
-        import cyperf.tools.curve
-        self.assertEqual(doctest.testmod(cyperf.tools.curve).failed, 0)
-
     def test_doctest(self):
         import cyperf.clustering.hierarchical
         self.assertEqual(doctest.testmod(cyperf.clustering.hierarchical).failed, 0)

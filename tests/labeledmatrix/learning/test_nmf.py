@@ -40,7 +40,7 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertEqual(h.shape, (10, 1))
 
     def test_dtype(self):
-        for dtype in [np.float, np.float32]:
+        for dtype in [np.float64, np.float32]:
             matrix = np.random.rand(3, 10).astype(dtype)
             w, h = nmf(matrix, rank=None)
             self.assertEqual(w.dtype, dtype)
@@ -62,7 +62,7 @@ class LibNMFTestCase(unittest.TestCase):
                             np.random.poisson(6, size=(4, 10)))
         matrix[0, 0] = 0
         matrix[-1, -1] = 0
-        seed = matrix.sum()
+        seed = int(matrix.sum())
         # dense
         w_d, h_d = nmf(matrix, rank=4, max_iter=500, seed=seed)
         # sparse
@@ -83,7 +83,7 @@ class LibNMFTestCase(unittest.TestCase):
                             np.random.poisson(6, size=(4, 10)))
         matrix[0, 0] = 0
         matrix[-1, -1] = 0
-        seed = matrix.sum()
+        seed = int(matrix.sum())
         w_1, h_1 = nmf(matrix, rank=4, max_iter=500, seed=seed)
         np.random.rand()
         w_2, h_2 = nmf(matrix, rank=4, max_iter=500, seed=seed)
@@ -103,7 +103,7 @@ class LibNMFTestCase(unittest.TestCase):
     def test_rank_detection(self):
         with use_seed(3335):
             matrix = np.dot(np.random.zipf(1.5, size=(30, 10)), np.random.zipf(2, size=(10, 30)))
-        seed = matrix.sum()
+        seed = int(matrix.sum())
         w1, h1 = nmf(matrix, rank=None, seed=seed)
         self.assertLessEqual(np.mean(np.abs(matrix - np.dot(w1, h1.T))) / np.mean(matrix), 0.01)
         self.assertTrue(w1.shape[1] in range(7, 14))

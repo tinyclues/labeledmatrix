@@ -6,10 +6,12 @@ from libcpp.functional cimport function
 cdef extern from "<parallel/algorithm>" namespace "__gnu_parallel":
     cdef cppclass parallel_tag:
         parallel_tag()
-    cdef cppclass sequential_tag:
-        sequential_tag()
+    cdef cppclass sampling_tag:
+        sampling_tag()
     cdef cppclass multiway_mergesort_sampling_tag(parallel_tag):
         multiway_mergesort_sampling_tag()
+    cdef cppclass multiway_mergesort_exact_tag(parallel_tag):
+        multiway_mergesort_exact_tag()
     cdef void sort[T](T first, T last, parallel_tag tag) nogil
     cdef void sort[T, Compare](T first, T last, Compare comp, parallel_tag tag) nogil
     cdef void stable_sort[T, Compare](T first, T last, Compare comp, parallel_tag tag) nogil

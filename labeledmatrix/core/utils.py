@@ -89,7 +89,8 @@ def lm_aggregate_pivot(dataframe, key, axis, values=None, aggregator="sum", spar
 
     if values is not None:
         val = dataframe[values].values
-        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
+        if sparse:
+            val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
     else:
         val = np.ones(len(dataframe), dtype=np.float32)
 

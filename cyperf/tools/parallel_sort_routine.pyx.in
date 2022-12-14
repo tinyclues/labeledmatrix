@@ -1,4 +1,4 @@
-# distutils: language = c++
+#distutils: language = c++
 #cython: boundscheck=False, wraparound=False, overflowcheck=True
 
 from libc.stdlib cimport malloc, free
@@ -163,7 +163,8 @@ def parallel_argsort_numpy_strings_{{out_c_type}}(keys, bint reverse=False):
             coupled_struct[i].value = &arr[i, 0]
             coupled_struct[i].index = i
 
-        if length >= 300:  # fallback to slow implem
+        if length > 300:  # fallback to slow implem
+            # Note that in that slow implem there's an stability issue depeding on the compilation
             if reverse:
                 stable_sort(&(coupled_struct[0]), &(coupled_struct[nb]), make_str_greater_cmp[{{out_c_type}}](length), mt)
             else:
