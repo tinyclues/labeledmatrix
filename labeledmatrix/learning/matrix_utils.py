@@ -1181,7 +1181,7 @@ def sparse_quantiles(matrix, nb, axis):
     array([[0., 1., 1., 1., 1., 2., 2., 2., 2., 2.],
            [1., 1., 1., 1., 1., 2., 2., 2., 2., 2.]], dtype=float32)
     """
-    bins = np.arange(nb, dtype=np.float) / nb
+    bins = np.arange(nb, dtype=np.float64) / nb
 
     if axis == 0:
         matrix = matrix.tocsc()
@@ -1429,7 +1429,7 @@ def to_array_if_needed(data, force_dim2=False, min_dtype=None, scalar_transpose=
     True
     >>> to_array_if_needed(np.array([1,2], dtype=np.float32), min_dtype=np.float32).dtype == np.float32
     True
-    >>> to_array_if_needed(np.array([1,2], dtype=np.float), min_dtype=np.float32).dtype == np.float
+    >>> to_array_if_needed(np.array([1,2], dtype=np.float64), min_dtype=np.float32).dtype == np.float
     True
     """
     if is_karmasparse(data):
