@@ -1,4 +1,4 @@
-from collections import Hashable
+from collections.abc import Hashable
 from functools import wraps
 
 from numpy.random.mtrand import seed as np_seed

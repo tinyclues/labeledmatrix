@@ -5,9 +5,8 @@ import numpy as np
 import unittest
 
 from cyperf.tools import slice_length, compose_slices, take_indices
-from cyperf.matrix.routine import bisect_left
 from cyperf.tools.getter import apply_python_dict
-from cyperf.tools.sort_tools import (cython_argpartition, _inplace_permutation, cython_argsort)
+from cyperf.tools.sort_tools import (bisect_left, cython_argpartition, _inplace_permutation, cython_argsort)
 from cyperf.tools.vector import int32Vector, float32Vector, int64Vector, float64Vector
 
 
