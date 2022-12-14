@@ -196,8 +196,9 @@ def from_pivot(dataframe: pd.DataFrame,
 
     if values is not None:
         val = dataframe[values].values
-        # we will use KarmaSparse(float32) implementation of pivot, so casting values to needed type
-        val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
+        if sparse:
+            # we will use KarmaSparse(float32) implementation of pivot, so casting values to needed type
+            val = val.astype(np.promote_types(val.dtype, np.float32), copy=False)
     else:
         val = np.ones(len(dataframe), dtype=np.float32)
 

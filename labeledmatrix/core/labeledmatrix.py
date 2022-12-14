@@ -13,7 +13,7 @@ from toolz.dicttoolz import keymap
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
 from cyperf.matrix.karma_sparse import ks_diag, KarmaSparse, is_karmasparse
-from cyperf.tools import take_indices, logit, argsort
+from cyperf.tools import take_indices, logit
 from cyperf.tools.getter import apply_python_dict
 
 from labeledmatrix.learning.affinity_propagation import affinity_propagation
@@ -25,13 +25,14 @@ from labeledmatrix.learning.matrix_utils import (align_along_axis, argmax_dispat
                                                  safe_min, safe_minimum, truncate_by_cumulative, truncate_with_cutoff,
                                                  nonzero_mask, number_nonzero, safe_dot,
                                                  truncate_by_budget, complement, pseudo_element_inverse, safe_multiply,
-                                                 safe_max, anomaly, safe_add, safe_mean, normalize)
+                                                 safe_max, anomaly, safe_add, safe_mean, normalize, truncated_dot)
 from labeledmatrix.learning.nmf import nmf, nmf_fold
 from labeledmatrix.learning.randomize_svd import randomized_svd
 from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.tail_clustering import tail_clustering
 
 from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot
+from ._exporters import to_vectorial_dataframe, to_flat_dataframe, to_list_dataframe
 from .random import use_seed
 from .utils import co, aeq, zipmerge, is_integer
 
@@ -180,11 +181,11 @@ class LabeledMatrix:
         if aggregator == 'mean':
             labels, (matrix, cardinality_matrix) = res
             lm, lm_cardinality = cls(labels, matrix), cls(labels, cardinality_matrix)
-            return lm.divide(lm_cardinality)
+            return lm._divide(lm_cardinality)
         if aggregator == 'std':
             labels, (matrix_mean, matrix_squares_mean) = res
             lm_mean, lm_squares_mean = cls(labels, matrix_mean), cls(labels, matrix_squares_mean)
-            return (lm_squares_mean - lm_mean.power(2)).power(0.5)
+            return (lm_squares_mean._add(-lm_mean.power(2))).power(0.5)
         return cls(*res)
 
     @classmethod
@@ -246,16 +247,7 @@ class LabeledMatrix:
         c  0.0  0.0  0.0
         d  1.0  0.0  0.0
         """
-        if deco:
-            columns = apply_python_dict(self.column_deco, self.column.list, None, True)
-            rows = apply_python_dict(self.row_deco, self.row.list, None, True)
-        else:
-            rows = self.row.list
-            columns = self.column.list
-        if self.is_sparse:
-            return pd.DataFrame.sparse.from_spmatrix(self.matrix.to_scipy_sparse(), columns=columns, index=rows)
-        else:
-            return pd.DataFrame(self.matrix, columns=columns, index=rows)
+        return to_vectorial_dataframe(self, deco)
 
     def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
         """
@@ -279,20 +271,7 @@ class LabeledMatrix:
         3    c    z         2.0         C
         4    d    x         1.0      None
         """
-        row_indices, col_indices = self.matrix.nonzero()
-        if not self.is_sparse:
-            values = self.matrix[row_indices, col_indices]
-        else:
-            values = self.matrix.data.copy()  # for sparse this is fast since order is the same
-
-        data = {row: take_indices(self.row, row_indices),
-                col: take_indices(self.column, col_indices),
-                dist: values}
-        if 'deco_row' in kwargs:
-            data[kwargs['deco_row']] = apply_python_dict(self.row_deco, data[row], '', False)
-        if 'deco_col' in kwargs:
-            data[kwargs['deco_col']] = apply_python_dict(self.column_deco, data[col], '', False)
-        return pd.DataFrame(data)
+        return to_flat_dataframe(self, row, col, dist, **kwargs)
 
     # FIXME add structs with label:value instead of list
     # FIXME can we reuse self.to_ragged_tensor or self.to_pyarrow here ?
@@ -324,32 +303,19 @@ class LabeledMatrix:
         2   c   [z, y, x]
         3   d   [y, z, w]
         """
-        if self.is_sparse:
-            matrix = self.matrix.tocsr()
-            double = [[x, [self.column[y]
-                           for y in matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]
-                           [argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
-                           if not (exclude * (x == self.column[y]))]]
-                      for i, x in enumerate(self.row)]
-        else:
-            asort = self.matrix.argsort(axis=1)[:, ::-1]
-            double = [[x, [self.column[y] for y in asort[i] if
-                           self.matrix[i, y] and not (exclude * (x == self.column[y]))]]
-                      for i, x in enumerate(self.row)]
-        return pd.DataFrame([x for x in double if x[1]],
-                            columns=[col, prefix + col]).sort_values(col)
+        return to_list_dataframe(self, col, prefix, exclude)
 
-    def to_ragged_tensor(self, nonzero_mask):
+    def to_ragged_tensor(self, return_nonzero_mask):
         """
-        :param nonzero_mask: boolean if we should return values too
+        :param return_nonzero_mask: boolean if we should return values too
         :return:
         """
         # FIXME
         # FIXME how to package ? tuple of row: Tensor, column: Tensor, indices: RaggedTensor, values: RaggedTensor ?
 
-    def to_pyarrow(self, nonzero_mask):
+    def to_pyarrow(self, return_nonzero_mask):
         """
-        :param nonzero_mask: boolean if we should return values too
+        :param return_nonzero_mask: boolean if we should return values too
         :return:
         """
         # FIXME
