@@ -7,7 +7,7 @@ from numpy.testing import assert_allclose
 
 from labeledmatrix.learning.matrix_utils import kl_div
 from labeledmatrix.learning.nmf import nmf, nmf_fold, NMF, GNMF
-from labeledmatrix.core.utils import use_seed
+from labeledmatrix.core.random import use_seed
 
 
 def shuffle_indices(sp_matrix):

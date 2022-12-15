@@ -17,8 +17,7 @@ warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
 
 
 from sklearn.preprocessing import normalize as sk_normalize
-from labeledmatrix.learning.matrix_utils import normalize, truncate_by_count
-from labeledmatrix.learning.thread_setter import open_mp_threads
+from labeledmatrix.learning.matrix_utils import normalize
 # from karma.core.utils import run_in_subprocess, Parallel  # FIXME
 
 

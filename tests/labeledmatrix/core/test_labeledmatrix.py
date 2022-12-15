@@ -5,7 +5,7 @@ import pandas as pd
 from cyperf.matrix.karma_sparse import DTYPE
 
 from labeledmatrix.core.labeledmatrix import LabeledMatrix
-from labeledmatrix.core.utils import lm_aggregate_pivot, lm_compute_volume_at_cutoff
+from labeledmatrix.core.utils import lm_compute_volume_at_cutoff
 
 
 class LabeledMatrixTestCase(unittest.TestCase):
@@ -270,36 +270,36 @@ class LabeledMatrixTestCase(unittest.TestCase):
                                                                      [0.544, 0.456, 0.],
                                                                      [0.627, 0., 0.373]], decimal=3)
 
-    def test_lm_aggregate_pivot(self):
+    def test_lm_from_pivot(self):
         d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3']
         d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20]
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+']
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean')
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean')
         np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[90, 37.5],
                                                                    [60, 32.5],
                                                                    [20, 0]])
 
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std')
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std')
         np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[10, 4.5],
                                                                    [0, 2.5],
                                                                    [0, 0]])
 
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False)
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[10, 4.5],
                                                          [0, 2.5],
                                                          [0, 0]])
 
         with self.assertRaises(ValueError) as e:
-            lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'dummyAggregator', sparse=False)
-        self.assertEqual('aggregator dummyAggregator does not exist', str(e.exception))
+            LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'dummyAggregator', sparse=False)
+        self.assertEqual('Unknown aggregator `dummyAggregator`', str(e.exception))
 
     def test_lm_pivot_missing(self):
         d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = [100, 42, 60, 30, 80, 35, 33, 20, None]
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean')
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean')
         np.testing.assert_array_almost_equal(lm.matrix.toarray(), [[90, 37.5],
                                                                    [60, 32.5],
                                                                    [20, 0]])
@@ -309,7 +309,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, np.nan], np.float32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],
                                                          [60., 65.],
                                                          [20., 0.]])
@@ -319,7 +319,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'sum', sparse=False)
         np.testing.assert_array_almost_equal(lm.matrix, [[180., 75.],
                                                          [60., 65.],
                                                          [30., 0.]])
@@ -329,7 +329,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3', '3']
         d['revenue'] = np.asarray([100, 42, 60, 30, 80, 35, 33, 20, 10], np.int32)
         d['csp'] = ['+', '-', '+', '-', '+', '-', '-', '+', '+']
-        lm = lm_aggregate_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False)
+        lm = LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False)
         self.assertEqual(lm.matrix.dtype, np.float64)
 
     def test_lm_compute_vol_at_cutoff(self):

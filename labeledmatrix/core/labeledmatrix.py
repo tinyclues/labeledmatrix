@@ -1,36 +1,40 @@
 import random
+from typing import Dict, Any, Union, List, Optional
 
-from toolz.dicttoolz import keymap
-from toolz import merge as dict_merge
-from numbers import Integral
-
-from scipy.sparse.linalg import svds
+import numpy as np
+import pandas as pd
+from scipy.sparse import isspmatrix as is_scipysparse
 from scipy.sparse.csgraph import connected_components
+from scipy.sparse.linalg import svds
 from sklearn.cluster import SpectralClustering
+from toolz import merge as dict_merge
+from toolz.dicttoolz import keymap
 
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
-from cyperf.matrix.karma_sparse import ks_diag
-from cyperf.tools import take_indices
+from cyperf.matrix.karma_sparse import ks_diag, KarmaSparse, is_karmasparse
+from cyperf.tools import take_indices, logit
 from cyperf.tools.getter import apply_python_dict
-
-from labeledmatrix.core.random import use_seed
-from labeledmatrix.core.utils import co, aeq, zipmerge, lm_occurence, lmdiag, lm_hstack
-
-from labeledmatrix.learning.matrix_utils import *
 
 from labeledmatrix.learning.affinity_propagation import affinity_propagation
 from labeledmatrix.learning.co_clustering import co_clustering
 from labeledmatrix.learning.hierarchical import clustering_dispatcher
+from labeledmatrix.learning.matrix_utils import (align_along_axis, argmax_dispatch, safe_maximum, truncate_by_count,
+                                                 pairwise_buddy,
+                                                 buddies_matrix, rank_matrix, rank_dispatch, keep_sparse, safe_sum,
+                                                 safe_min, safe_minimum, truncate_by_cumulative, truncate_with_cutoff,
+                                                 nonzero_mask, number_nonzero, safe_dot,
+                                                 truncate_by_budget, complement, pseudo_element_inverse, safe_multiply,
+                                                 safe_max, anomaly, safe_add, safe_mean, normalize, truncated_dot)
 from labeledmatrix.learning.nmf import nmf, nmf_fold
 from labeledmatrix.learning.randomize_svd import randomized_svd
 from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.tail_clustering import tail_clustering
 
-
-def is_integer(arg):
-    return isinstance(arg, Integral)
-
+from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot
+from ._exporters import to_vectorial_dataframe, to_flat_dataframe, to_list_dataframe
+from .random import use_seed
+from .utils import co, aeq, zipmerge, is_integer
 
 __all__ = ["LabeledMatrix", "LabeledMatrixException"]
 
@@ -39,7 +43,302 @@ class LabeledMatrixException(Exception):
     pass
 
 
-class LabeledMatrix():
+class LabeledMatrix:
+    @classmethod
+    def from_zip_occurrence(cls, *args):
+        """
+        TODO doc
+        >>> lm = LabeledMatrix.from_zip_occurrence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
+        >>> lm.to_flat_dataframe().sort_values('similarity', ascending=False) #doctest: +NORMALIZE_WHITESPACE
+        ------------------------
+        col0 | col1 | similarity
+        ------------------------
+        0      a      2.0
+        1      a      1.0
+        1      b      1.0
+        """
+        return cls(*from_zip_occurrence(*args))
+
+    @classmethod
+    def from_dict(cls, dictionary: Dict[Any, Any]):
+        """
+        TODO doc
+        >>> my_dict = {'a': 'x', 'c': 'y', 'b': 'y'}
+        >>> lm = LabeledMatrix.from_dict({'a': 'x', 'c': 'y', 'b': 'y'})
+        >>> lm.to_flat_dataframe().sort_values('col0', ascending=False)
+        ------------------------
+        col0 | col1 | similarity
+        ------------------------
+        a      x      1.0
+        b      y      1.0
+        c      y      1.0
+        """
+        return cls.from_zip_occurrence(list(dictionary.keys()), list(dictionary.values()))
+
+    @classmethod
+    def from_random(cls, shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
+        """
+        Returns a randomized LabeledMatrix.
+
+        :param shape: the shape of the `LabeledMatrix` (rows, columns)
+        :param density: ratio of non-zero elements
+        :param sparse: determines if the inner container will be sparse or not
+        :param seed: seed that could be used to seed the random generator
+        :param square: same labels for rows and columns
+        :return: A randomized LabeledMatrix
+
+        Exemples: ::
+
+            >>> lm = LabeledMatrix.from_random(seed=12).sort()
+            >>> lm.row
+            ['lemal', 'piuzo', 'pivqv', 'wthra']
+            >>> lm.column
+            ['fkgbs', 'gcqvk', 'vteol']
+            >>> lm.matrix.toarray().shape
+            (4, 3)
+            >>> LabeledMatrix.from_random(shape=(10, 10)).nnz()
+            50
+        """
+        lm = cls(*from_random(shape, density, seed, square))
+        if sparse:
+            return lm.to_sparse()
+        return lm.to_dense()
+
+    @classmethod
+    def from_diagonal(cls, keys, values, keys_deco=None, sparse=True):
+        """
+        TODO doc
+        >>> lm = LabeledMatrix.from_diagonal(["b", "c"], [3, 50000000]).sort()
+        >>> lm.label
+        (['b', 'c'], ['b', 'c'])
+        >>> aeq(lm.matrix, np.array([[3, 0], [0, 50000000]]))
+        True
+        >>> lm.matrix.format
+        'csr'
+        """
+        return cls(*from_diagonal(keys, values, keys_deco, sparse))
+
+    @classmethod
+    def from_pivot(cls, dataframe: pd.DataFrame,
+                   index: Optional[Union[str, List[str]]] = None,
+                   columns: Optional[Union[str, List[str]]] = None,
+                   values: Optional[str] = None, aggregator: str = 'sum',
+                   sparse: bool = True):
+        """
+        Analog of pandas.pivot
+        :param dataframe: input Dataframe
+        :param index: same as in pandas.pivot: column or list of columns to use as result's index.
+                      If None, uses existing index.
+        :param columns: same as in pandas pivot: column or list of columns to use as result’s columns.
+                      If None, all columns are taken.
+        :param values: as in pandas pivot: optional column's name to take values from.
+                       Currently can take only one column's value
+                       TODO support list of columns here
+        :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
+        :param sparse: boolean to return sparse result instead of dense one
+        :return: LabeledMatrix object
+
+        >>> d = pd.DataFrame()
+        >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
+        >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
+        >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      180.0    75.0
+        2      60.0     65.0
+
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      90.0     37.5
+        2      60.0     32.5
+
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      10.0     4.5
+        2      0.0      2.5
+
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'min', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      80.0     33.0
+        2      60.0     30.0
+
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'max', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        ----------------------
+        col0 | col1:+ | col1:-
+        ----------------------
+        1      100.0    42.0
+        2      60.0     35.0
+        """
+        res = from_pivot(dataframe, index, columns, values, aggregator, sparse)
+        if aggregator == 'mean':
+            labels, (matrix, cardinality_matrix) = res
+            lm, lm_cardinality = cls(labels, matrix), cls(labels, cardinality_matrix)
+            return lm._divide(lm_cardinality)
+        if aggregator == 'std':
+            labels, (matrix_sum, matrix_squares_sum, cardinality_matrix) = res
+            lm_sum, lm_squares_sum = cls(labels, matrix_sum), cls(labels, matrix_squares_sum)
+            lm_cardinality = cls(labels, cardinality_matrix)
+            return (lm_squares_sum._divide(lm_cardinality)._add(-lm_sum._divide(lm_cardinality).power(2))).power(0.5)
+        return cls(*res)
+
+    @classmethod
+    def from_ragged_tensor(cls, row_index, column_labels, indices, values=None):
+        """
+
+        :param row_index: tf.Tensor
+        :param column_labels: list/np.array
+        :param indices: tf.RaggedTensor
+        :param values: optional tf.RaggedTensor with matrix values, should be aligned with indices
+        """
+        if values is not None:
+            assert indices.values.shape[0] == values.values.shape[0]
+            assert np.array_equal(indices.offsets, values.offsets)
+        # FIXME
+
+    @classmethod
+    def from_pyarrow_list_array(cls, row_index, column_labels, indices, values=None):
+        """
+        :param row_index:
+        :param column_labels:
+        :param indices:
+        :param values:
+        :return:
+        """
+        # FIXME same idea as with ragged, maybe transform pyarrow to ragged first and then call cls.from_ragged_tensor
+
+    @classmethod
+    def from_xarray(cls):
+        """
+
+        :return:
+        """
+        # FIXME
+
+    def to_vectorial_dataframe(self, deco=False):
+        """
+        >>> mat = np.array([[4, 5, 0],
+        ...                 [0, 3, 0],
+        ...                 [0, 0, 0],
+        ...                 [1, 0, 0]])
+        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat, deco=({'a': 'AA'}, {'y': 'YY'}))
+        >>> lm.to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+           x  y  z
+        a  4  5  0
+        b  0  3  0
+        c  0  0  0
+        d  1  0  0
+        >>> lm.to_vectorial_dataframe(deco=True) #doctest: +NORMALIZE_WHITESPACE
+            x  YY  z
+        AA  4   5  0
+        b   0   3  0
+        c   0   0  0
+        d   1   0  0
+        >>> lm.to_sparse().to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+             x    y    z
+        a  4.0  5.0  0.0
+        b  0.0  3.0  0.0
+        c  0.0  0.0  0.0
+        d  1.0  0.0  0.0
+        """
+        return to_vectorial_dataframe(self, deco)
+
+    def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
+        """
+        Return a DataFrame with three columns (row, col and dist) from LabeledMatrix.
+
+        kwargs:
+            - deco_row: name of the decoration column for row
+            - deco_col: name of the decoration column for col
+
+        >>> mat = np.array([[4, 5, 0],
+        ...                 [0, 3, 0],
+        ...                 [0, 0, 2],
+        ...                 [1, 0, 0]])
+        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat)
+        >>> lm.set_deco(row_deco={'b': 'B', 'c': 'C', 'a': 'A'})
+        >>> lm.to_sparse().to_flat_dataframe().sort_values('similarity', ascending=False)
+          col0 col1  similarity deco_col0
+        1    a    y         5.0         A
+        0    a    x         4.0         A
+        2    b    y         3.0         B
+        3    c    z         2.0         C
+        4    d    x         1.0      None
+        """
+        return to_flat_dataframe(self, row, col, dist, **kwargs)
+
+    # FIXME add structs with label:value instead of list
+    # FIXME can we reuse self.to_ragged_tensor or self.to_pyarrow here ?
+    def to_list_dataframe(self, col="col", prefix="list_of_", exclude=False):
+        """
+        Return a DataFrame with columns col, list_of_col.
+        For each row, sort the non zero values and return the column labels as list_of_col
+        >>> mat = np.array([[4, 0, 0, 0],
+        ...                 [5, 4, 1, 0],
+        ...                 [0, 1, 4, 5],
+        ...                 [1, 0, 5, 4]])
+        >>> lm = LabeledMatrix(2*[['a', 'b', 'c', 'd']], mat)
+        >>> lm.to_list_dataframe(exclude=True) #doctest: +NORMALIZE_WHITESPACE
+          col list_of_col
+        0   b      [a, c]
+        1   c      [d, b]
+        2   d      [c, a]
+        >>> lm.to_sparse().to_list_dataframe(exclude=True)
+        ...             #doctest: +NORMALIZE_WHITESPACE
+          col list_of_col
+        0   b      [a, c]
+        1   c      [d, b]
+        2   d      [c, a]
+        >>> lm = LabeledMatrix([['a', 'b', 'c', 'd'], ['w', 'x', 'y', 'z']], mat)
+        >>> lm.to_list_dataframe(exclude=True) #doctest: +NORMALIZE_WHITESPACE
+          col list_of_col
+        0   a         [w]
+        1   b   [w, x, y]
+        2   c   [z, y, x]
+        3   d   [y, z, w]
+        """
+        return to_list_dataframe(self, col, prefix, exclude)
+
+    def to_ragged_tensor(self, return_nonzero_mask):
+        """
+        :param return_nonzero_mask: boolean if we should return values too
+        :return:
+        """
+        # FIXME
+        # FIXME how to package ? tuple of row: Tensor, column: Tensor, indices: RaggedTensor, values: RaggedTensor ?
+
+    def to_pyarrow(self, return_nonzero_mask):
+        """
+        :param return_nonzero_mask: boolean if we should return values too
+        :return:
+        """
+        # FIXME
+        # FIXME same question as for to_ragged_tensor
+
+    def to_xarray(self):
+        """
+
+        :return:
+        """
+        # FIXME
+
+    def to_tensorflow_model(self, input_name, output_name, default="zero", coordinates=None):
+        """
+        :param input_name:
+        :param output_name:
+        :param default:
+        :param coordinates:
+        :return:
+        """
+        # FIXME: TF lookup + embeddings
+        pass
 
     def __init__(self, xxx_todo_changeme1, matrix, deco=({}, {})):
         """
@@ -268,7 +567,7 @@ class LabeledMatrix():
         return random.choice(self.column)
 
     def rand_label(self):
-        return (self.rand_row(), self.rand_column())
+        return self.rand_row(), self.rand_column()
 
     def set_deco(self, row_deco=None, column_deco=None):
         def _check_dict(deco):
@@ -1355,8 +1654,7 @@ class LabeledMatrix():
         values = safe_max(self.matrix, axis=axis)
         if axis is None:
             return values
-        return lmdiag(self.label[co(axis)], values, sdeco=self.deco[co(axis)],
-                      dense_output=False)
+        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
     def min(self, axis=1):
         """
@@ -1384,8 +1682,7 @@ class LabeledMatrix():
         values = safe_min(self.matrix, axis=axis)
         if axis is None:
             return values
-        return lmdiag(self.label[co(axis)], values, sdeco=self.deco[co(axis)],
-                      dense_output=False)
+        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
     def sum(self, axis=1):
         """
@@ -1407,8 +1704,7 @@ class LabeledMatrix():
         values = safe_sum(self.matrix, axis=axis)
         if axis is None:
             return values
-        return lmdiag(self.label[co(axis)], values, sdeco=self.deco[co(axis)],
-                      dense_output=False)
+        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
     def mean(self, axis=1):
         """
@@ -1431,8 +1727,7 @@ class LabeledMatrix():
         values = safe_mean(self.matrix, axis=axis)
         if axis is None:
             return values
-        return lmdiag(self.label[co(axis)], values, sdeco=self.deco[co(axis)],
-                      dense_output=False)
+        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
     def abs(self):
         """
@@ -1801,7 +2096,7 @@ class LabeledMatrix():
         """
         if 0 <= top < 1:
             top = int(top * self.shape[axis])
-        elif not isinstance(top, Integral):
+        elif not is_integer(top):
             raise ValueError('top argument must be a float in [0, 1) or an integer, got {} instead'.format(type(top)))
         return top
 
@@ -2036,7 +2331,7 @@ class LabeledMatrix():
         ...               [0, 10, 0],
         ...               [0, 9, 1]])
         >>> lm = LabeledMatrix((range(5), range(3)), v).to_dense()
-        >>> weight = lmdiag(range(5), [1, 2, 4, 4, 1])
+        >>> weight = LabeledMatrix.from_diagonal(np.arange(5), [1, 2, 4, 4, 1])
         >>> lm.tail_clustering(weight, 2).dict_argmax()
         {0: 2, 1: 2, 2: 2, 3: 3, 4: 3}
         >>> lm.tail_clustering(weight, 2).to_sparse().dict_argmax()
@@ -2048,7 +2343,7 @@ class LabeledMatrix():
             labels = sparse_tail_clustering(self.matrix, mults, k, min_density)
         else:
             labels = tail_clustering(self.matrix, mults, k)
-        lm = lm_occurence(self.row, take_indices(self.row, labels))
+        lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(self.row_deco, self.row_deco)
         return lm
 
@@ -2061,7 +2356,7 @@ class LabeledMatrix():
         ...               [0, 10, 0],
         ...               [0, 9, 1]])
         >>> lm = LabeledMatrix((range(5), range(3)), v)
-        >>> weights = lmdiag(range(5), [1, 2, 4, 4, 1])
+        >>> weights = LabeledMatrix.from_diagonal(np.arange(5), [1, 2, 4, 4, 1])
         >>> lm.hierarchical_clustering(weights, 2).dict_argmax()
         {0: 2, 1: 2, 2: 2, 3: 3, 4: 3}
         """
@@ -2069,7 +2364,7 @@ class LabeledMatrix():
             weight = weight.sum(axis=1).align(self, axes=[(1, 1, None), (0, 1, None)])[0].matrix.diagonal()
 
         labels = WardTree(np.asarray(self.matrix), weights=weight, n_clusters=k).build_labels()
-        lm = lm_occurence(self.row, take_indices(self.row, labels))
+        lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(self.row_deco, self.row_deco)
 
         return lm
@@ -2102,7 +2397,7 @@ class LabeledMatrix():
         matrix = self.matrix.to_scipy_sparse(copy=False) if self.is_sparse else self.matrix
         nn, lab = connected_components(matrix, directed=True, connection=connection)
         # print("Number of components: {}".format(nn))
-        lm = lm_occurence(self.row, lab)
+        lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
         return lm
 
@@ -2125,7 +2420,7 @@ class LabeledMatrix():
         if not self.is_square:
             raise LabeledMatrixException('Works only on squared matrix')
         labels = affinity_propagation(self.matrix, preference, max_iter=max_iter, damping=0.6)
-        lm = lm_occurence(self.row, take_indices(self.row, labels))
+        lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(*self.deco)
         return lm
 
@@ -2133,7 +2428,7 @@ class LabeledMatrix():
         clust = SpectralClustering(n_clusters=k, n_init=10, affinity="precomputed",
                                    n_neighbors=3, assign_labels='kmeans')
         lab = clust.fit_predict(self.matrix)
-        lm = lm_occurence(self.row, lab)
+        lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
         return lm
 
@@ -2165,9 +2460,9 @@ class LabeledMatrix():
         True
         """
         w, h = co_clustering(self.matrix, ranks=ranks, max_iter=max_iter, nb_preruns=nb_preruns, pre_iter=pre_iter)
-        lmw = lm_occurence(self.row, w)
+        lmw = LabeledMatrix.from_zip_occurrence(self.row, w)
         lmw.set_deco(row_deco=self.row_deco)
-        lmh = lm_occurence(self.column, h)
+        lmh = LabeledMatrix.from_zip_occurrence(self.column, h)
         lmw.set_deco(column_deco=self.column_deco)
         return lmw, lmh
 
@@ -2276,7 +2571,7 @@ class LabeledMatrix():
     @use_seed()
     def nmf(self, rank, max_model_rank=60, max_iter=150, svd_init=False):
         """
-        >>> m = lm_rand(seed=12, density=0.5).to_dense()
+        >>> m = LabeledMatrix.from_random(seed=12, density=0.5, sparse=False)
         >>> w, h = m.dot(m.transpose()).nmf(3, max_iter=20)
         >>> (w.dot(h.transpose()) - m.dot(m.transpose())).abs().matrix.sum() < 0.05
         True
@@ -2305,9 +2600,8 @@ class LabeledMatrix():
 
     def nmf_fold(self, right_factor, max_iter=30):
         """
-        >>> w = lm_rand((10, 5), density=0.5, seed=100).to_dense()
-        >>> h = lm_rand((7, 5), density=0.5, seed=100)
-        >>> w, h = lm_hstack([w]), lm_hstack([h]) # to get default column labels
+        >>> w = LabeledMatrix.from_random((10, 5), seed=100, density=0.5, sparse=False)
+        >>> h = LabeledMatrix.from_random((7, 5), seed=100, density=0.5, sparse=True)
         >>> matrix = w.dot(h.transpose())
         >>> ww = matrix.nmf_fold(h, 200)
         >>> ww.label == w.label
@@ -2324,7 +2618,7 @@ class LabeledMatrix():
 
     def nmf_proxy(self, rank, max_iter=120, svd_init=True):
         """
-        >>> m = lm_rand(seed=12, density=0.5)
+        >>> m = LabeledMatrix.from_random(seed=12)
         >>> lm = m.dot(m.transpose())
         >>> (lm - lm.nmf_proxy(3)).abs().matrix.sum() < 0.1
         True
@@ -2344,88 +2638,6 @@ class LabeledMatrix():
         matrix = 1. * safe_dot(np.hstack(ww), np.hstack(hh).transpose(),
                                mat_mask=self.matrix) / len(ranks)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
-
-    def to_flat_dataframe(self, row="col0", col="col1", dist="similarity", **kwargs):
-        """
-        Return a DataFrame with three columns (row, col and dist) from LabeledMatrix.
-
-        kwargs:
-            - deco_row: name of the decoration column for row
-            - deco_col: name of the decoration column for col
-
-        >>> mat = np.array([[4, 5, 0],
-        ...                 [0, 3, 0],
-        ...                 [0, 0, 2],
-        ...                 [1, 0, 0]])
-        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat)
-        >>> lm.set_deco(row_deco={'b': 'B', 'c': 'C', 'a': 'A'})
-        >>> lm.to_sparse().to_flat_dataframe().sort_values('similarity', ascending=False)
-          col0 col1  similarity deco_col0
-        1    a    y         5.0         A
-        0    a    x         4.0         A
-        2    b    y         3.0         B
-        3    c    z         2.0         C
-        4    d    x         1.0      None
-        """
-        row_indices, col_indices = self.matrix.nonzero()
-        if not self.is_sparse:
-            values = self.matrix[row_indices, col_indices]
-        else:
-            values = self.matrix.data.copy()  # for sparse this is fast since order is the same
-
-        data = {}
-        data[row] = take_indices(self.row, row_indices)
-        data[col] = take_indices(self.column, col_indices)
-        data[dist] = values
-        if 'deco_row' in kwargs:
-            data[kwargs['deco_row']] = apply_python_dict(self.row_deco, data[row], '', False)
-        if 'deco_col' in kwargs:
-            data[kwargs['deco_col']] = apply_python_dict(self.column_deco, data[col], '', False)
-        return pd.DataFrame(data)
-
-    # add structs with label:value instead of list
-    def to_list_dataframe(self, col="col", prefix="list_of_", exclude=False):
-        """
-        Return a DataFrame with columns col, list_of_col.
-        For each row, sort the non zero values and return the column labels as list_of_col
-        >>> mat = np.array([[4, 0, 0, 0],
-        ...                 [5, 4, 1, 0],
-        ...                 [0, 1, 4, 5],
-        ...                 [1, 0, 5, 4]])
-        >>> lm = LabeledMatrix(2*[['a', 'b', 'c', 'd']], mat)
-        >>> lm.to_list_dataframe(exclude=True) #doctest: +NORMALIZE_WHITESPACE
-          col list_of_col
-        0   b      [a, c]
-        1   c      [d, b]
-        2   d      [c, a]
-        >>> lm.to_sparse().to_list_dataframe(exclude=True)
-        ...             #doctest: +NORMALIZE_WHITESPACE
-          col list_of_col
-        0   b      [a, c]
-        1   c      [d, b]
-        2   d      [c, a]
-        >>> lm = LabeledMatrix([['a', 'b', 'c', 'd'], ['w', 'x', 'y', 'z']], mat)
-        >>> lm.to_list_dataframe(exclude=True) #doctest: +NORMALIZE_WHITESPACE
-          col list_of_col
-        0   a         [w]
-        1   b   [w, x, y]
-        2   c   [z, y, x]
-        3   d   [y, z, w]
-        """
-        if self.is_sparse:
-            matrix = self.matrix.tocsr()
-            double = [[x, [self.column[y]
-                           for y in matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]
-                           [argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
-                           if not (exclude * (x == self.column[y]))]]
-                      for i, x in enumerate(self.row)]
-        else:
-            asort = self.matrix.argsort(axis=1)[:, ::-1]
-            double = [[x, [self.column[y] for y in asort[i] if
-                           self.matrix[i, y] and not (exclude * (x == self.column[y]))]]
-                      for i, x in enumerate(self.row)]
-        return pd.DataFrame([x for x in double if x[1]],
-                            columns=[col, prefix + col]).sort_values(col)
 
     def _reco_df(self, my_row=None, nb=20):
         """
@@ -2507,43 +2719,6 @@ class LabeledMatrix():
             print('-' * 60)
         display(reco)
 
-    def to_vectorial_dataframe(self, deco=False):
-        """
-        >>> mat = np.array([[4, 5, 0],
-        ...                 [0, 3, 0],
-        ...                 [0, 0, 0],
-        ...                 [1, 0, 0]])
-        >>> lm = LabeledMatrix((['a', 'b', 'c', 'd'], ['x', 'y', 'z']), mat, deco=({'a': 'AA'}, {'y': 'YY'}))
-        >>> lm.to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
-           x  y  z
-        a  4  5  0
-        b  0  3  0
-        c  0  0  0
-        d  1  0  0
-        >>> lm.to_vectorial_dataframe(deco=True) #doctest: +NORMALIZE_WHITESPACE
-            x  YY  z
-        AA  4   5  0
-        b   0   3  0
-        c   0   0  0
-        d   1   0  0
-        >>> lm.to_sparse().to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
-             x    y    z
-        a  4.0  5.0  0.0
-        b  0.0  3.0  0.0
-        c  0.0  0.0  0.0
-        d  1.0  0.0  0.0
-        """
-        if deco:
-            columns = apply_python_dict(self.column_deco, self.column.list, None, True)
-            rows = apply_python_dict(self.row_deco, self.row.list, None, True)
-        else:
-            rows = self.row.list
-            columns = self.column.list
-        if self.is_sparse:
-            return pd.DataFrame.sparse.from_spmatrix(self.matrix.to_scipy_sparse(), columns=columns, index=rows)
-        else:
-            return pd.DataFrame(self.matrix, columns=columns, index=rows)
-
     def cluster_heatmap(self, **kwargs):
         import seaborn as sns
         return sns.clustermap(self.to_vectorial_dataframe(), figsize=(30, 30),
@@ -2565,7 +2740,3 @@ class LabeledMatrix():
             ax = sns.heatmap(df, square=True, annot=True,
                              cmap=sns.color_palette("RdYlGn_r", 100))
         return ax
-
-    def to_tensorflow_model(self, inpput, output, default="zero", coordinates=None):
-        # FIXME: TF lookup + embeddings
-        pass
