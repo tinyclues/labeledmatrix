@@ -148,11 +148,11 @@ def _lm_aggregate_pivot_std(val, key_indices, key_uniques, col_indices, col_uniq
         :param sparse: bool
         :return: LabeledMatrix
         """
-    labels, matrix_mean = _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uniques,
+    labels, matrices_mean = _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uniques,
                                                    sparse=sparse, default=default)
-    _, matrix_squares_mean = _lm_aggregate_pivot_mean(val ** 2, key_indices, key_uniques, col_indices, col_uniques,
+    _, matrices_squares_mean = _lm_aggregate_pivot_mean(val ** 2, key_indices, key_uniques, col_indices, col_uniques,
                                                       sparse=sparse, default=default)
-    return labels, (matrix_mean, matrix_squares_mean)
+    return labels, (matrices_mean[0], matrices_squares_mean[0], matrices_mean[1])
 
 
 KNOWN_AGGREGATORS = {'sum': 'add', 'min': 'min', 'max': 'max',

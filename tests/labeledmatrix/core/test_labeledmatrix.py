@@ -292,7 +292,7 @@ class LabeledMatrixTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as e:
             LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'dummyAggregator', sparse=False)
-        self.assertEqual('aggregator dummyAggregator does not exist', str(e.exception))
+        self.assertEqual('Unknown aggregator `dummyAggregator`', str(e.exception))
 
     def test_lm_pivot_missing(self):
         d = pd.DataFrame()

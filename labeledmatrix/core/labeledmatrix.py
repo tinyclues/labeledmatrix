@@ -183,9 +183,10 @@ class LabeledMatrix:
             lm, lm_cardinality = cls(labels, matrix), cls(labels, cardinality_matrix)
             return lm._divide(lm_cardinality)
         if aggregator == 'std':
-            labels, (matrix_mean, matrix_squares_mean) = res
-            lm_mean, lm_squares_mean = cls(labels, matrix_mean), cls(labels, matrix_squares_mean)
-            return (lm_squares_mean._add(-lm_mean.power(2))).power(0.5)
+            labels, (matrix_sum, matrix_squares_sum, cardinality_matrix) = res
+            lm_sum, lm_squares_sum = cls(labels, matrix_sum), cls(labels, matrix_squares_sum)
+            lm_cardinality = cls(labels, cardinality_matrix)
+            return (lm_squares_sum._divide(lm_cardinality)._add(-lm_sum._divide(lm_cardinality).power(2))).power(0.5)
         return cls(*res)
 
     @classmethod
