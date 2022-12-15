@@ -2425,8 +2425,7 @@ class LabeledMatrix:
         return lm
 
     def spectral_clusters(self, k=10):
-        clust = SpectralClustering(n_clusters=k, n_init=10, affinity="precomputed",
-                                   n_neighbors=3, assign_labels='kmeans')
+        clust = SpectralClustering(n_clusters=k, affinity="precomputed", n_neighbors=3)
         lab = clust.fit_predict(self.matrix)
         lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
@@ -2600,8 +2599,8 @@ class LabeledMatrix:
 
     def nmf_fold(self, right_factor, max_iter=30):
         """
-        >>> w = LabeledMatrix.from_random((10, 5), seed=100, density=0.5, sparse=False)
-        >>> h = LabeledMatrix.from_random((7, 5), seed=100, density=0.5, sparse=True)
+        >>> w = LabeledMatrix.from_random((10, 5), seed=100, sparse=False)
+        >>> h = LabeledMatrix.from_random((7, 5), seed=100)
         >>> matrix = w.dot(h.transpose())
         >>> ww = matrix.nmf_fold(h, 200)
         >>> ww.label == w.label

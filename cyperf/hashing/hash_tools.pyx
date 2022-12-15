@@ -138,12 +138,12 @@ cpdef np.ndarray[np.uint32_t, ndim=1, mode="c"] randomizer_python_string(list ke
     return np.asarray(result)
 
 
-def increment_over_numpy_string(np.ndarray keys,
-                                np.ndarray[cython.integral, ndim=1] segments,
-                                np.ndarray[A, ndim=2, mode="c"] values,
-                                const np.uint32_t[::1] seeds,
-                                const np.uint32_t[::1] composition,
-                                int nb_segments):
+cpdef increment_over_numpy_string(np.ndarray keys,
+                                  np.ndarray[cython.integral, ndim=1] segments,
+                                  np.ndarray[A, ndim=2, mode="c"] values,
+                                  const np.uint32_t[::1] seeds,
+                                  const np.uint32_t[::1] composition,
+                                  int nb_segments):
     assert len(keys) == segments.shape[0] == values.shape[0]
     assert np.asarray(segments).min() >= 0
     assert len(composition) == 2
