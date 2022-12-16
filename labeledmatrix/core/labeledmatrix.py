@@ -1,5 +1,5 @@
 import random
-from typing import Dict, Any, Union, List, Optional
+from typing import Dict, Any, Union, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -340,7 +340,8 @@ class LabeledMatrix:
         # FIXME: TF lookup + embeddings
         pass
 
-    def __init__(self, xxx_todo_changeme1, matrix, deco=({}, {})):
+    def __init__(self, xxx_todo_changeme: Tuple[List[Any], List[Any]], matrix: Union[np.ndarray, KarmaSparse],
+                 deco=({}, {})):
         """
         >>> matrix = np.array([[4, 6, 5], [7, 9, 8], [1, 3, 2]])
         >>> row, column = ['b', 'c', 'a'], ['x', 'z', 'y']
@@ -375,7 +376,7 @@ class LabeledMatrix:
         >>> LabeledMatrix((row, np.array(['x', 'y', 'z'])), matrix.copy()).column
         ['x', 'y', 'z']
         """
-        (row, column) = xxx_todo_changeme1  # FIXME
+        (row, column) = xxx_todo_changeme  # FIXME
         self.check_format((row, column), matrix)
         if is_scipysparse(matrix):
             matrix = KarmaSparse(matrix)
@@ -393,6 +394,8 @@ class LabeledMatrix:
         self.label = (self.row, self.column)
         self.deco = deco
         self.row_deco, self.column_deco = self.deco
+
+        self._nnz = None
 
     def __hash__(self):
         return super(LabeledMatrix, self).__hash__()
@@ -429,14 +432,12 @@ class LabeledMatrix:
         return self.matrix.dtype
 
     @staticmethod
-    def check_format(xxx_todo_changeme, matrix):
+    def check_format(xxx_todo_changeme: Tuple[List[Any], List[Any]], matrix: Union[np.ndarray, KarmaSparse]):
         """
         Used to check a number of assertion on the content of a LabeledMatrix.
 
-        :param row: row labels, labels should be unique and of the correct
-                    shape, with respect to the given matrix
-        :param column: column labels, labels should be unique and of the correct
-                       shape, with respect to the given matrix
+        :param xxx_todo_changeme: tuple (row and column) labels, labels should be unique and of the correct
+                                  shape, with respect to the given matrix
         :param matrix: a numpy or scipy two dimensional array
         :return: None
         :raise: LabeledMatrixException
@@ -550,7 +551,7 @@ class LabeledMatrix:
 
         :return: the number of non-zero element in the matrix
         """
-        if not hasattr(self, "_nnz"):
+        if self._nnz is None:
             self._nnz = number_nonzero(self.matrix)
         return self._nnz
 
@@ -618,7 +619,8 @@ class LabeledMatrix:
         else:
             return self.to_dense()
 
-    def align(self, other, axes=[(0, 0, False), (1, 1, False)], self_only=False):
+    def align(self, other: 'LabeledMatrix',
+              axes=((0, 0, False), (1, 1, False))) -> Tuple['LabeledMatrix', 'LabeledMatrix']:
         """
         Aligns two LabeledMatrix according to provided axis
         For instance, if axes = [axis] and axis = (0, 1, True) means that
@@ -692,12 +694,9 @@ class LabeledMatrix:
                     other_copy = LabeledMatrix((new, other_copy.column), mat_other)
         self_copy.set_deco(*self.deco)
         other_copy.set_deco(*other.deco)
-        if self_only:
-            return self_copy
-        else:
-            return self_copy, other_copy
+        return self_copy, other_copy
 
-    def extend_row(self, rows, deco={}):
+    def extend_row(self, rows, deco=None):
         """
         >>> lm = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
         >>> aeq(lm.extend_row(['b']).sort().matrix, np.array([[1, 2],[0, 0],[3, 4]]))
@@ -715,9 +714,9 @@ class LabeledMatrix:
         all_rows, arg_row, _ = self.row.union(rows)
         return LabeledMatrix((all_rows, self.column),
                              align_along_axis(self.matrix, arg_row, 1, True),
-                             deco=(dict_merge(self.row_deco, deco), self.column_deco))
+                             deco=(dict_merge(self.row_deco, deco or {}), self.column_deco))
 
-    def extend_column(self, columns, deco={}):
+    def extend_column(self, columns, deco=None):
         """
         >>> lm = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
         >>> lm.extend_column(['b']).sort().matrix
@@ -736,7 +735,7 @@ class LabeledMatrix:
         all_columns, arg_column, _ = self.column.union(columns)
         return LabeledMatrix((self.row, all_columns),
                              align_along_axis(self.matrix, arg_column, 0, True),
-                             deco=(self.row_deco, dict_merge(self.column_deco, deco)))
+                             deco=(self.row_deco, dict_merge(self.column_deco, deco or {})))
 
     def extend(self, label, deco=({}, {})):
         """
@@ -781,7 +780,7 @@ class LabeledMatrix:
         common_rows, arg_row, _ = self.row.intersection(rows)
         if len(common_rows):
             return LabeledMatrix((common_rows, self.column),
-                                 align_along_axis(self.matrix, arg_row, 1, False),
+                                 align_along_axis(self.matrix, arg_row, 1),
                                  deco=self.deco)
         else:
             raise LabeledMatrixException('restrict has returned an empty labeled matrix')
@@ -790,7 +789,7 @@ class LabeledMatrix:
         common_columns, arg_column, _ = self.column.intersection(columns)
         if len(common_columns):
             return LabeledMatrix((self.row, common_columns),
-                                 align_along_axis(self.matrix, arg_column, 0, False),
+                                 align_along_axis(self.matrix, arg_column, 0),
                                  deco=self.deco)
         else:
             raise LabeledMatrixException('restrict has returned an empty labeled matrix')
@@ -833,7 +832,7 @@ class LabeledMatrix:
         keep_row, arg_row = self.row.difference(rows)
         if len(keep_row):
             return LabeledMatrix((keep_row, self.column),
-                                 align_along_axis(self.matrix, arg_row, 1, False),
+                                 align_along_axis(self.matrix, arg_row, 1),
                                  deco=self.deco)
         else:
             raise LabeledMatrixException('exclude has returned an empty labeled matrix')
@@ -842,7 +841,7 @@ class LabeledMatrix:
         keep_column, arg_column = self.column.difference(columns)
         if len(keep_column):
             return LabeledMatrix((self.row, keep_column),
-                                 align_along_axis(self.matrix, arg_column, 0, False),
+                                 align_along_axis(self.matrix, arg_column, 0),
                                  deco=self.deco)
         else:
             raise LabeledMatrixException('exclude has returned an empty labeled matrix')
@@ -1026,7 +1025,7 @@ class LabeledMatrix:
         (2, 3)
         """
         if 0 < p < 1:
-            p = len(self.row) * p
+            p *= len(self.row)
         p = int(p)
         if p <= 0:
             raise LabeledMatrixException('p should be > 0, currently is {}.'.format(p))
@@ -1052,7 +1051,7 @@ class LabeledMatrix:
         (3, 1)
         """
         if 0 < p < 1:
-            p = len(self.column) * p
+            p *= len(self.column)
         p = int(p)
         if p <= 0:
             raise LabeledMatrixException('p should be > 0, currently is {}.'.format(p))
@@ -1556,7 +1555,7 @@ class LabeledMatrix:
         ...                     np.array([[1,0,5], [0,0,0], [0,1,0]]))
         >>> lm2 = LabeledMatrix(2*[['b', 'c', 'd']],
         ...                     np.array([[1,-2,2], [0,3,0],[0,2,0]]))
-        >>> aeq(lm1.maximum(lm2.to_sparse()).matrix, np.array([[1, 0, 5], [0, 3, 0],[0, 2, 0]]))
+        >>> aeq(lm1.maximum(lm2.to_sparse()).matrix, np.array([[1, 0, 5], [0, 3, 0], [0, 2, 0]]))
         True
         """
         s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
@@ -1606,7 +1605,7 @@ class LabeledMatrix:
             return self
 
         diff_lm = (1 - scalar) * diff_lm
-        diff_lm = diff_lm.align(self, [(0, 0, None), (1, 1, None)], self_only=True)
+        diff_lm, _ = diff_lm.align(self, [(0, 0, None), (1, 1, None)])
 
         return self - diff_lm
 
@@ -1781,7 +1780,7 @@ class LabeledMatrix:
             matrix = KarmaSparse((data, (x, y)), shape=self.matrix.shape)
         else:
             matrix = self.matrix.copy()
-            matrix[(x, y)] = matrix[(x, y)] * factor
+            matrix[(x, y)] *= factor
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
     def apply_numpy_function(self, function, function_args=None):
@@ -2077,7 +2076,7 @@ class LabeledMatrix:
         """
         source = self.nonzero_mask()
         inter = source._dot(source.transpose())
-        total = source.sum(axis=1)
+        total = source.sum()
         union = inter.nonzero_mask()._dot(total) \
             ._add(total._dot(inter.nonzero_mask()))._add(-inter)
         return 1. * inter / union
@@ -2143,7 +2142,7 @@ class LabeledMatrix:
         else:
             overlap_lm = top_lm_mask.transpose()._dot(top_lm_mask)
         if renorm:
-            return overlap_lm.normalize(axis=1, norm='linf')
+            return overlap_lm.normalize(norm='linf')
         else:
             return overlap_lm
 
@@ -2213,7 +2212,7 @@ class LabeledMatrix:
         >>> score.population_allocation(dispatch_mask, norm=None).matrix
         array([[2., 1.],
                [2., 1.]])
-        >>> score.population_allocation(dispatch_mask, norm='l1').matrix
+        >>> score.population_allocation(dispatch_mask).matrix
         array([[0.66666667, 0.33333333],
                [0.66666667, 0.33333333]])
         """
@@ -2236,7 +2235,7 @@ class LabeledMatrix:
         >>> score.potential_allocation(dispatch_mask, norm=None).matrix
         array([[1.5, 0.2],
                [0.7, 1. ]])
-        >>> score.potential_allocation(dispatch_mask, norm='l1').matrix
+        >>> score.potential_allocation(dispatch_mask).matrix
         array([[0.88235294, 0.11764706],
                [0.41176471, 0.58823529]])
         """
@@ -2395,7 +2394,7 @@ class LabeledMatrix:
         if not self.is_square():
             raise LabeledMatrixException("Matrix must be squared")
         matrix = self.matrix.to_scipy_sparse(copy=False) if self.is_sparse else self.matrix
-        nn, lab = connected_components(matrix, directed=True, connection=connection)
+        nn, lab = connected_components(matrix, connection=connection)
         # print("Number of components: {}".format(nn))
         lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
@@ -2419,7 +2418,7 @@ class LabeledMatrix:
         """
         if not self.is_square:
             raise LabeledMatrixException('Works only on squared matrix')
-        labels = affinity_propagation(self.matrix, preference, max_iter=max_iter, damping=0.6)
+        labels = affinity_propagation(self.matrix, preference, max_iter=max_iter)
         lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(*self.deco)
         return lm
@@ -2487,7 +2486,7 @@ class LabeledMatrix:
         ([0, 1, 2, 3], [0, 1])
         >>> np.allclose(u.dot(w.transpose()).matrix, lm.matrix, atol=1e-4)
         True
-        >>> u, w = lm.svd(2, randomized=True)
+        >>> u, w = lm.svd(2)
         >>> u.matrix
         array([[-0.45176491, -1.23232132],
                [-1.58301848, -0.79741909],
@@ -2570,7 +2569,7 @@ class LabeledMatrix:
     @use_seed()
     def nmf(self, rank, max_model_rank=60, max_iter=150, svd_init=False):
         """
-        >>> m = LabeledMatrix.from_random(seed=12, density=0.5, sparse=False)
+        >>> m = LabeledMatrix.from_random(seed=12, sparse=False)
         >>> w, h = m.dot(m.transpose()).nmf(3, max_iter=20)
         >>> (w.dot(h.transpose()) - m.dot(m.transpose())).abs().matrix.sum() < 0.05
         True
@@ -2672,10 +2671,8 @@ class LabeledMatrix:
             .sort_values('score', ascending=False)
 
         # head
-        head = {}
-        head['entry_key'] = [my_row]
         nb_nonzero = len(lm_loc.column)
-        head['nb_nonzero'] = [nb_nonzero]
+        head = {'entry_key': [my_row], 'nb_nonzero': [nb_nonzero]}
 
         if nb_nonzero > 0:
             head['total_score'] = [safe_sum(lm_loc.matrix)]
@@ -2720,22 +2717,18 @@ class LabeledMatrix:
 
     def cluster_heatmap(self, **kwargs):
         import seaborn as sns
-        return sns.clustermap(self.to_vectorial_dataframe(), figsize=(30, 30),
-                              dendrogram_ratio=0.05,
-                              cmap=sns.color_palette("RdYlGn_r", 100))
+        kwargs = {'figsize': (30, 30), 'dendrogram_ratio': 0.05, 'cmap': sns.color_palette("RdYlGn_r", 100), **kwargs}
+        return sns.clustermap(self.to_vectorial_dataframe(), **kwargs)
 
     def heatmap(self, ordering=None, **kwargs):
         import seaborn as sns
-        import matplotlib.pyplot as plt
         if ordering == 'hierarchical':
             lm = self.sort_by_hierarchical_clustering()
         elif ordering == 'naive':
             lm = self.sort()
         else:
             lm = self
-        df = lm.to_dense().to_vectorial_dataframe()
         with sns.axes_style("white"):
-            f, ax = plt.subplots(figsize=(30, 30))
-            ax = sns.heatmap(df, square=True, annot=True,
-                             cmap=sns.color_palette("RdYlGn_r", 100))
+            kwargs = {'figsize': (30, 30), 'cmap': sns.color_palette("RdYlGn_r", 100), 'annot': True, **kwargs}
+            ax = sns.heatmap(lm.to_dense().to_vectorial_dataframe(), square=True, **kwargs)
         return ax
