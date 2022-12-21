@@ -18,8 +18,7 @@ def to_vectorial_dataframe(lm, deco: bool = False) -> pd.DataFrame:
         columns = lm.column.list
     if lm.is_sparse:
         return pd.DataFrame.sparse.from_spmatrix(lm.matrix.to_scipy_sparse(), columns=columns, index=rows)
-    else:
-        return pd.DataFrame(lm.matrix, columns=columns, index=rows)
+    return pd.DataFrame(lm.matrix, columns=columns, index=rows)
 
 
 def to_flat_dataframe(lm, row="col0", col="col1", dist="similarity", **kwargs) -> pd.DataFrame:
@@ -58,12 +57,12 @@ def to_list_dataframe(lm, col: str = "col", prefix: str = "list_of_", exclude: b
         double = [[x, [lm.column[y]
                        for y in matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]
                        [argsort(matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])[::-1]]
-                       if not (exclude * (x == lm.column[y]))]]
+                       if not exclude or x != lm.column[y]]]
                   for i, x in enumerate(lm.row)]
     else:
         asort = lm.matrix.argsort(axis=1)[:, ::-1]
         double = [[x, [lm.column[y] for y in asort[i] if
-                       lm.matrix[i, y] and not (exclude * (x == lm.column[y]))]]
+                       lm.matrix[i, y] and (not exclude or x != lm.column[y])]]
                   for i, x in enumerate(lm.row)]
     return pd.DataFrame([x for x in double if x[1]],
                         columns=[col, prefix + col]).sort_values(col)

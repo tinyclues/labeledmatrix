@@ -16,10 +16,10 @@ shell: build
 	$(DOCKER_CMD) /bin/bash
 
 test: build
-	$(DOCKER_CMD) pytest --cov cyperf
+	$(DOCKER_CMD) pytest
 
 lint: build
-	$(DOCKER_CMD) pylint labeledmatrix --rcfile=setup.cfg
+	$(DOCKER_CMD) pylint
 
 build_lock: # build docker image for pipenv lock
 	docker-compose -f docker-compose.dev.yml build lock

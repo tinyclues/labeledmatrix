@@ -177,7 +177,8 @@ def from_pivot(dataframe: pd.DataFrame,
                       If None, uses existing index.
         :param columns: same as in pandas pivot: column or list of columns to use as result’s columns.
                       If None, all columns are taken.
-        :param values: same as in pandas pivot: optional column's name to take values from.  TODO support list of columns here
+        :param values: same as in pandas pivot: optional column's name to take values from.
+                       TODO support list of columns here
         :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
         :param sparse: boolean to return sparse result instead of dense one
         :return: Tuple (row labels, columns labels), pivot matrix
@@ -213,5 +214,4 @@ def from_pivot(dataframe: pd.DataFrame,
 
     if callable(aggregator):
         return aggregator(val, key_indices, key_uniques, col_indices, col_uniques, sparse)
-    else:
-        return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)
+    return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)

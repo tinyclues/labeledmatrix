@@ -101,7 +101,7 @@ workflows:
           pipenv_env_type: dev
           requires:
             - cython_setup_dev
-          command: pylint labeledmatrix cyperf --rcfile=setup.cfg
+          command: pylint labeledmatrix cyperf
           <<: *all_branches_and_tags
       - run_in_pipenv:
           name: unit_tests
