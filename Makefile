@@ -4,16 +4,22 @@ help: ## show help message.
 build:  # build dev docker image.
 	docker-compose -f docker-compose.dev.yml build labeledmatrix
 
+rebuild:  # Force rebuild the image
+	rm -rf build/
+	rm -rf dist/
+	rm -rf *egg*/
+	docker-compose -f docker-compose.dev.yml build --no-cache labeledmatrix
+
 DOCKER_CMD := docker-compose -f docker-compose.dev.yml run --rm labeledmatrix
 
 shell: build
 	$(DOCKER_CMD) /bin/bash
 
 test: build
-	$(DOCKER_CMD) pytest --cov cyperf
+	$(DOCKER_CMD) pytest
 
 lint: build
-	$(DOCKER_CMD) pylint cyperf --rcfile=setup.cfg
+	$(DOCKER_CMD) pylint
 
 build_lock: # build docker image for pipenv lock
 	docker-compose -f docker-compose.dev.yml build lock

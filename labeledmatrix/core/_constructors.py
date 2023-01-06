@@ -119,8 +119,10 @@ def _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uni
     private method called by lm_aggregate_pivot
 
     :param val: np array
-    :param ri_key: tuple (unique values, reverse index) for key
-    :param ri_axis: tuple (unique values, reverse index) for axis
+    :param key_indices: reverse index for key
+    :param key_uniques: unique values of key
+    :param col_indices: reverse index for column
+    :param col_uniques: unique values of column
     :param sparse: bool
     :return: LabeledMatrix
     """
@@ -142,16 +144,18 @@ def _lm_aggregate_pivot_std(val, key_indices, key_uniques, col_indices, col_uniq
     """
         private method called by lm_aggregate_pivot
 
-        :param val: np array
-        :param ri_key: tuple (unique values, reverse index) for key
-        :param ri_axis: tuple (unique values, reverse index) for axis
-        :param sparse: bool
-        :return: LabeledMatrix
+    :param val: np array
+    :param key_indices: reverse index for key
+    :param key_uniques: unique values of key
+    :param col_indices: reverse index for column
+    :param col_uniques: unique values of column
+    :param sparse: bool
+    :return: LabeledMatrix
         """
     labels, matrices_mean = _lm_aggregate_pivot_mean(val, key_indices, key_uniques, col_indices, col_uniques,
-                                                   sparse=sparse, default=default)
+                                                     sparse=sparse, default=default)
     _, matrices_squares_mean = _lm_aggregate_pivot_mean(val ** 2, key_indices, key_uniques, col_indices, col_uniques,
-                                                      sparse=sparse, default=default)
+                                                        sparse=sparse, default=default)
     return labels, (matrices_mean[0], matrices_squares_mean[0], matrices_mean[1])
 
 
@@ -173,7 +177,8 @@ def from_pivot(dataframe: pd.DataFrame,
                       If None, uses existing index.
         :param columns: same as in pandas pivot: column or list of columns to use as result’s columns.
                       If None, all columns are taken.
-        :param values: same as in pandas pivot: optional column's name to take values from.  TODO support list of columns here
+        :param values: same as in pandas pivot: optional column's name to take values from.
+                       TODO support list of columns here
         :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
         :param sparse: boolean to return sparse result instead of dense one
         :return: Tuple (row labels, columns labels), pivot matrix
@@ -209,5 +214,4 @@ def from_pivot(dataframe: pd.DataFrame,
 
     if callable(aggregator):
         return aggregator(val, key_indices, key_uniques, col_indices, col_uniques, sparse)
-    else:
-        return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)
+    return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)

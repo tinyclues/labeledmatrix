@@ -2,7 +2,6 @@
 # Copyright tinyclues, All rights reserved
 #
 
-from __future__ import absolute_import
 from contextlib import contextmanager
 import ctypes
 from ctypes.util import find_library
