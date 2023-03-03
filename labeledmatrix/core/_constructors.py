@@ -187,7 +187,7 @@ def from_pivot(dataframe: pd.DataFrame,
         if isinstance(cols, list) and len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, str):
-            return reversed_index(dataframe[cols])[::-1]
+            return reversed_index(dataframe[cols].values)[::-1]
         return pd.MultiIndex.from_frame(dataframe[cols]).factorize()
 
     if index is None:

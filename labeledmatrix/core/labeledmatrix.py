@@ -2067,10 +2067,10 @@ class LabeledMatrix:
         >>> lm._relative_count(0.5, axis=1)
         1
         """
-        if not is_integer(top):
-            raise ValueError(f'top argument must be a float in [0, 1) or an integer, got {type(top)} instead')
         if 0 <= top < 1:
             top = int(top * self.shape[axis])
+        if not is_integer(top):
+            raise ValueError(f'top argument must be a float in [0, 1) or an integer, got {type(top)} instead')
         return top
 
     def pairwise_overlap(self, top, axis=0, renorm=True, potential=False):
