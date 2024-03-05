@@ -2,7 +2,7 @@
 version: 2.1
 
 orbs:
-  python: tinyclues/python@3.5.8
+  python: circleci/python@2.1.1
 
 executors:
   python:
@@ -10,6 +10,7 @@ executors:
       - image: circleci/python:3.7
 
 aliases:
+  # TODO activate CI only on master for now
   all_branches_and_tags: &all_branches_and_tags
     filters:
       tags:
@@ -18,108 +19,86 @@ aliases:
         only: /.*/
 
 jobs:
-  # restore cache from https://circleci.com/developer/orbs/orb/tinyclues/python#jobs-run_in_pipenv_env
-  # and run command inside
-  # needed to copy it because original job can't persist more than one folder and don't expose resource_class
-  run_in_pipenv:
-    description: >
-      Run `command` in a pipenv environment. It use circleci cache to prevent build it again if file did not change.
-      `command` can be empty. In this case, it will just ensure that environment is build and cached.
+  cythonize:
     environment:
       PIPENV_VENV_IN_PROJECT: 1
     executor: python
-    resource_class: << parameters.resource_class >>
-    parameters:
-      command:
-        default: ''
-        description: 'Command to run. Can be empty, to only build pipenv environment'
-        type: string
-      persist_directory:
-        default: ''
-        description: directory to persist in workspace
-        type: string
-      persist_directory2:
-        default: ''
-        description: directory to persist in workspace
-        type: string
-      pipenv_env_type:
-        default: prod
-        description: 'The pipenv environment type, ''prod'' or ''dev''. Default ''prod''.'
-        type: string
-      resource_class:
-        default: 'large'
-        type: string
     steps:
       - checkout
-      - restore_cache:
-          key: >-
-            v0-6-pipenv-{{ .Environment.CIRCLE_PROJECT_REPONAME }}-<< parameters.pipenv_env_type >>-{{ checksum "Pipfile.lock" }}
-      - attach_workspace:
-          at: .
-      - when:
-          condition: << parameters.command >>
-          steps:
-            - run:
-                command: |
-                  pipenv run << parameters.command >>
-                name: run << parameters.command >>
-      - when:
-          condition: << parameters.persist_directory >>
-          steps:
-            - persist_to_workspace:
-                paths:
-                  << parameters.persist_directory >>
-                root: .
-      - when:
-          condition: << parameters.persist_directory2 >>
-          steps:
-            - persist_to_workspace:
-                paths:
-                  << parameters.persist_directory2 >>
-                root: .
-
-workflows:
+      - python/install-packages:
+          pkg-manager: pipenv
+          args: --deploy
+      - run:
+          command: |
+            ./setup.py build_ext -i -j2
+      - persist_to_workspace:
+          paths:
+            - build
+            - cyperf
+          root: .
+  lint:
+    environment:
+      PIPENV_VENV_IN_PROJECT: 1
+    executor: python
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pipenv
+          args: --deploy --dev
+      - run:
+          command: |
+            pipenv run pylint labeledmatrix cyperf
+          name: pylint
+  tests:
+    environment:
+      PIPENV_VENV_IN_PROJECT: 1
+    executor: python
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pipenv
+          args: --deploy --dev
+      - run:
+          command: |
+            pipenv run pytest tests --durations=10
+          name: unit-tests
   build:
-    jobs:
-      - python/run_in_pipenv_env:
-          name: install_pipenv_dev
-          pipenv_env_type: dev
-          executor: python
-          <<: *all_branches_and_tags
-      - run_in_pipenv:
-          name: cython_setup_dev
-          pipenv_env_type: dev
-          persist_directory: build
-          persist_directory2: cyperf  # FIXME ideally we want just to run setup.py inside run_in_pipenv_env from orb
-          # TODO but it can't persist many folders, but only one -> so we need to redefine part of run_in_pipenv
-          command: ./setup.py build_ext -i -j2
-          requires:
-            - install_pipenv_dev
-          <<: *all_branches_and_tags
-      - run_in_pipenv:
-          name: lint
-          pipenv_env_type: dev
-          requires:
-            - cython_setup_dev
-          command: pylint labeledmatrix cyperf
-          <<: *all_branches_and_tags
-      - run_in_pipenv:
-          name: unit_tests
-          pipenv_env_type: dev
-          requires:
-            - cython_setup_dev
-          command: pipenv run pytest tests --durations=10
-          resource_class: xlarge
-          <<: *all_branches_and_tags
-
-      - python/run_in_pipenv_env:  # running inside pipenv because of complex dependencies in setup.py
-          name: deploy_wheel
-          pipenv_env_type: prod
-          executor: python
+    environment:
+      PIPENV_VENV_IN_PROJECT: 1
+    executor: python
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pipenv
+          args: --deploy
+      - run:
           command: |
             python setup.py build_ext -i -j2 bdist_wheel
             pip install twine
             twine upload dist/*
+          name: build
+      - persist_to_workspace:
+          paths:
+            - dist
+          root: .
+
+workflows:
+  build:
+    jobs:
+      - cythonize:
+          name: cython_setup_dev
+          <<: *all_branches_and_tags
+      - lint:
+          name: lint
+          requires:
+            - cython_setup_dev
+          <<: *all_branches_and_tags
+      - tests:
+          name: unit_tests
+          requires:
+            - cython_setup_dev
+          <<: *all_branches_and_tags
+      - build:  # running inside pipenv because of complex dependencies in setup.py
+          name: deploy_wheel
           context: artifactory
-          persist_directory: dist
           <<: *all_branches_and_tags
