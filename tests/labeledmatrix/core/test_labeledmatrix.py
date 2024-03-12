@@ -155,37 +155,37 @@ class LabeledMatrixTestCase(unittest.TestCase):
         matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         lm = LabeledMatrix((list(range(4)), ['a', 'b', 'c']), matrix)
 
-        np.testing.assert_array_equal(np.asarray(lm.rank_dispatch(1).matrix), [[10, 0, 0],
-                                                                               [0, 5, 0],
-                                                                               [0, 6, 0],
-                                                                               [0, 0, 5]])
+        np.testing.assert_array_equal(np.asarray(lm.rank_round_robin_allocation(1).matrix), [[10, 0, 0],
+                                                                                             [0, 5, 0],
+                                                                                             [0, 6, 0],
+                                                                                             [0, 0, 5]])
 
-        np.testing.assert_array_equal(np.asarray(lm.rank_dispatch(1, 1, 1).matrix), [[10, 0, 0],
-                                                                                     [0, 0, 0],
-                                                                                     [0, 6, 0],
-                                                                                     [0, 0, 0]])
+        np.testing.assert_array_equal(np.asarray(lm.rank_round_robin_allocation(1, 1, 1).matrix), [[10, 0, 0],
+                                                                                                   [0, 0, 0],
+                                                                                                   [0, 6, 0],
+                                                                                                   [0, 0, 0]])
 
         np.testing.assert_array_equal(np.asarray(
-            lm.rank_dispatch(1, {'a': 3, 'b': 1, 'c': 2}, {'a': 3, 'b': 1, 'c': 2}).matrix),
+            lm.rank_round_robin_allocation(1, {'a': 3, 'b': 1, 'c': 2}, {'a': 3, 'b': 1, 'c': 2}).matrix),
             [[10, 0, 0],
              [2, 0, 0],
              [0, 6, 0],
              [0, 0, 5]])
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_dispatch(1, [1, 1, 1], 2)
+            _ = lm.rank_round_robin_allocation(1, [1, 1, 1], 2)
         self.assertEqual('max_ranks must be integer or dict', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_dispatch(1, 2, [2, 2, 2])
+            _ = lm.rank_round_robin_allocation(1, 2, [2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_dispatch(1, 2, {'a': -3, 'b': 1, 'c': 2})
+            _ = lm.rank_round_robin_allocation(1, 2, {'a': -3, 'b': 1, 'c': 2})
         self.assertEqual('max_volumes must be positive or 0', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_dispatch(1, {'a': -3, 'b': 1, 'c': 2}, 2)
+            _ = lm.rank_round_robin_allocation(1, {'a': -3, 'b': 1, 'c': 2}, 2)
         self.assertEqual('max_ranks must be positive or 0', str(e.exception))
 
     def test_argmax_dispatch(self):
@@ -194,46 +194,46 @@ class LabeledMatrixTestCase(unittest.TestCase):
         lm = LabeledMatrix((list(range(matrix.shape[0])), ['a', 'b', 'c']), matrix)
         lm_sparse = lm.to_sparse()
 
-        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1).matrix,
+        np.testing.assert_array_equal(lm_sparse.argmax_allocation(maximum_pressure=1).matrix,
                                       np.array([[0., 0., 0.7],
                                                 [0., 0.4, 0.],
                                                 [0.8, 0., 0.],
                                                 [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1, max_volumes=1).matrix,
+        np.testing.assert_array_equal(lm_sparse.argmax_allocation(maximum_pressure=1, max_volumes=1).matrix,
                                       np.array([[0., 0.5, 0.],
                                                 [0., 0., 0.],
                                                 [0.8, 0., 0.],
                                                 [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=1,
-                                                                max_volumes={'a': 1, 'b': 2, 'c': 1}).matrix,
+        np.testing.assert_array_equal(lm_sparse.argmax_allocation(maximum_pressure=1,
+                                                                  max_volumes={'a': 1, 'b': 2, 'c': 1}).matrix,
                                       np.array([[0., 0.5, 0.],
                                                 [0., 0.4, 0.],
                                                 [0.8, 0., 0.],
                                                 [0., 0., 0.9]], dtype=DTYPE))
 
-        np.testing.assert_array_equal(lm_sparse.argmax_dispatch(maximum_pressure=4).matrix,
+        np.testing.assert_array_equal(lm_sparse.argmax_allocation(maximum_pressure=4).matrix,
                                       np.array([[0.2, 0.5, 0.7],
                                                 [0.1, 0.4, 0.3],
                                                 [0.8, 0.3, 0.75],
                                                 [0.2, 0.7, 0.9]], dtype=DTYPE))
 
-        self.assertEqual(np.count_nonzero(lm_sparse.argmax_dispatch(maximum_pressure=4, max_volumes=0).matrix), 0)
-        self.assertEqual(np.count_nonzero(lm_sparse.argmax_dispatch(maximum_pressure=4, max_ranks=0).matrix), 0)
+        self.assertEqual(np.count_nonzero(lm_sparse.argmax_allocation(maximum_pressure=4, max_volumes=0).matrix), 0)
+        self.assertEqual(np.count_nonzero(lm_sparse.argmax_allocation(maximum_pressure=4, max_ranks=0).matrix), 0)
 
         matrix = np.random.rand(1000, 10)
         lm_sparse = LabeledMatrix((list(range(matrix.shape[0])), list(range(matrix.shape[1]))), matrix).to_sparse()
         max_volume, maximum_pressure, max_rank = (300, 4, 100)
-        dispatched_lm = lm_sparse.argmax_dispatch(maximum_pressure=maximum_pressure,
-                                                  max_volumes=max_volume,
-                                                  max_ranks=max_rank).nonzero_mask()
+        dispatched_lm = lm_sparse.argmax_allocation(maximum_pressure=maximum_pressure,
+                                                    max_volumes=max_volume,
+                                                    max_ranks=max_rank).nonzero_mask()
 
         self.assertEqual(dispatched_lm.sum(axis=1).max(axis=None), 4)
         self.assertTrue(dispatched_lm.sum(axis=0).max(axis=None) <= min(max_volume, max_rank))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm_sparse.argmax_dispatch(maximum_pressure=1, max_volumes=[2, 2, 2])
+            _ = lm_sparse.argmax_allocation(maximum_pressure=1, max_volumes=[2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
     def test_population_potential_allocation(self):

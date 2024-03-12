@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+from numbers import Number
+
 import random
-from typing import Dict, Any, Union, List, Optional, Tuple
+from typing import Dict, Any, Union, List, Optional, Tuple, Callable
 
 import numpy as np
 import pandas as pd
@@ -13,7 +17,7 @@ from toolz.dicttoolz import keymap
 from cyperf.clustering.hierarchical import WardTree
 from cyperf.indexing.indexed_list import IndexedList
 from cyperf.matrix.karma_sparse import ks_diag, KarmaSparse, is_karmasparse
-from cyperf.tools import take_indices, logit
+from cyperf.tools import take_indices, sigmoid
 from cyperf.tools.getter import apply_python_dict
 
 from labeledmatrix.learning.affinity_propagation import affinity_propagation
@@ -45,9 +49,10 @@ class LabeledMatrixException(Exception):
 
 class LabeledMatrix:
     @classmethod
-    def from_zip_occurrence(cls, *args):
+    def from_zip_occurrence(cls, row_labels, column_labels) -> LabeledMatrix:
         """
-        TODO doc
+        Initializing LabeledMatrix from COO format (potentially corrdinate pairs may be repeated).
+        Data will be set to number of co-occurrences of each pair.
         >>> lm = LabeledMatrix.from_zip_occurrence([0, 1, 1, 0], ['a', 'b', 'a', 'a'])
         >>> lm.to_flat_dataframe().sort_values('similarity', ascending=False) #doctest: +NORMALIZE_WHITESPACE
         ------------------------
@@ -57,12 +62,13 @@ class LabeledMatrix:
         1      a      1.0
         1      b      1.0
         """
-        return cls(*from_zip_occurrence(*args))
+        return cls(*from_zip_occurrence(row_labels, column_labels))
 
     @classmethod
-    def from_dict(cls, dictionary: Dict[Any, Any]):
+    def from_dict(cls, dictionary: Dict[Any, Any]) -> LabeledMatrix:
         """
-        TODO doc
+        Initializing LabeledMatrix from COO format defined as dict: keys correspond to row labels and values to columns
+        Values are equal number of co-occurrences of each pair (0 or 1)
         >>> my_dict = {'a': 'x', 'c': 'y', 'b': 'y'}
         >>> lm = LabeledMatrix.from_dict({'a': 'x', 'c': 'y', 'b': 'y'})
         >>> lm.to_flat_dataframe().sort_values('col0', ascending=False)
@@ -76,7 +82,7 @@ class LabeledMatrix:
         return cls.from_zip_occurrence(list(dictionary.keys()), list(dictionary.values()))
 
     @classmethod
-    def from_random(cls, shape=(4, 3), density=0.5, sparse=True, seed=None, square=False):
+    def from_random(cls, shape=(4, 3), density=0.5, sparse=True, seed=None, square=False) -> LabeledMatrix:
         """
         Returns a randomized LabeledMatrix.
 
@@ -105,9 +111,13 @@ class LabeledMatrix:
         return lm.to_dense()
 
     @classmethod
-    def from_diagonal(cls, keys, values, keys_deco=None, sparse=True):
+    def from_diagonal(cls, labels, values, keys_deco=None, sparse=True) -> LabeledMatrix:
         """
-        TODO doc
+        Initializing diagonal LabeledMatrix with row labels equal to column labels
+        :param labels: labels for both rows and columns
+        :param values: values to be put on diagonal, must have the same shape as corresponding labels
+        :param keys_deco: dict with deco for labels
+        :param sparse: boolean whether to use sparse backend, True by default
         >>> lm = LabeledMatrix.from_diagonal(['b', 'c'], [3, 50000000]).sort()
         >>> lm.label
         (['b', 'c'], ['b', 'c'])
@@ -116,14 +126,14 @@ class LabeledMatrix:
         >>> lm.matrix.format
         'csr'
         """
-        return cls(*from_diagonal(keys, values, keys_deco, sparse))
+        return cls(*from_diagonal(labels, values, keys_deco, sparse))
 
     @classmethod
     def from_pivot(cls, dataframe: pd.DataFrame,
                    index: Optional[Union[str, List[str]]] = None,
                    columns: Optional[Union[str, List[str]]] = None,
                    values: Optional[str] = None, aggregator: str = 'sum',
-                   sparse: bool = True):
+                   sparse: bool = True) -> LabeledMatrix:
         """
         Analog of pandas.pivot
         :param dataframe: input Dataframe
@@ -133,7 +143,6 @@ class LabeledMatrix:
                       If None, all columns are taken.
         :param values: as in pandas pivot: optional column's name to take values from.
                        Currently can take only one column's value
-                       TODO support list of columns here
         :param aggregator: string from 'sum' (by default), 'min', 'max', 'first', 'last', 'mean', 'std'
         :param sparse: boolean to return sparse result instead of dense one
         :return: LabeledMatrix object
@@ -190,7 +199,7 @@ class LabeledMatrix:
         return cls(*res)
 
     @classmethod
-    def from_ragged_tensor(cls, row_index, column_labels, indices, values=None):
+    def from_ragged_tensor(cls, row_index, column_labels, indices, values=None) -> LabeledMatrix:
         """
 
         :param row_index: tf.Tensor
@@ -204,7 +213,7 @@ class LabeledMatrix:
         # FIXME
 
     @classmethod
-    def from_pyarrow_list_array(cls, row_index, column_labels, indices, values=None):
+    def from_pyarrow_list_array(cls, row_index, column_labels, indices, values=None) -> LabeledMatrix:
         """
         :param row_index:
         :param column_labels:
@@ -215,15 +224,19 @@ class LabeledMatrix:
         # FIXME same idea as with ragged, maybe transform pyarrow to ragged first and then call cls.from_ragged_tensor
 
     @classmethod
-    def from_xarray(cls):
+    def from_xarray(cls) -> LabeledMatrix:
         """
 
         :return:
         """
         # FIXME
 
-    def to_vectorial_dataframe(self, deco=False):
+    def to_vectorial_dataframe(self, deco=False) -> pd.DataFrame:
         """
+        Export LabeledMatrix to pd.DataFrame as matrix:
+            self.row and self.column gives dataframe's indexes (row and column)
+            column values are equal to self.matrix
+        Names of index entries can be changed using decoration stored in self.deco (deco=True option)
         >>> mat = np.array([[4, 5, 0],
         ...                 [0, 3, 0],
         ...                 [0, 0, 0],
@@ -250,7 +263,7 @@ class LabeledMatrix:
         """
         return to_vectorial_dataframe(self, deco)
 
-    def to_flat_dataframe(self, row='col0', col='col1', dist='similarity', **kwargs):
+    def to_flat_dataframe(self, row='col0', col='col1', dist='similarity', **kwargs) -> pd.DataFrame:
         """
         Return a DataFrame with three columns (row, col and dist) from LabeledMatrix.
 
@@ -274,9 +287,7 @@ class LabeledMatrix:
         """
         return to_flat_dataframe(self, row, col, dist, **kwargs)
 
-    # FIXME add structs with label:value instead of list
-    # FIXME can we reuse self.to_ragged_tensor or self.to_pyarrow here ?
-    def to_list_dataframe(self, col='col', prefix='list_of_', exclude=False):
+    def to_list_dataframe(self, col='col', prefix='list_of_', exclude=False) -> pd.DataFrame:
         """
         Return a DataFrame with columns col, list_of_col.
         For each row, sort the non zero values and return the column labels as list_of_col
@@ -340,9 +351,16 @@ class LabeledMatrix:
         # FIXME: TF lookup + embeddings
         pass
 
-    def __init__(self, xxx_todo_changeme: Tuple[List[Any], List[Any]], matrix: Union[np.ndarray, KarmaSparse],
+    def __init__(self,
+                 row_column_labels: Tuple[Union[List[Any], np.ndarray, IndexedList],
+                                          Union[List[Any], np.ndarray, IndexedList]],
+                 matrix: Union[np.ndarray, KarmaSparse],
                  deco=({}, {})):
         """
+        :param row_column_labels: tuple with 2 entries: row labels and column labels.
+                                  Labels must be unique (separately for each list)
+        :param matrix: 2d numpy array or KarmaSparse matrix with values
+        :param deco: tuple decoration dictionaries with additional labels for rows and columns respectively
         >>> matrix = np.array([[4, 6, 5], [7, 9, 8], [1, 3, 2]])
         >>> row, column = ['b', 'c', 'a'], ['x', 'z', 'y']
         >>> lm = LabeledMatrix((row, column), matrix.copy())
@@ -376,7 +394,7 @@ class LabeledMatrix:
         >>> LabeledMatrix((row, np.array(['x', 'y', 'z'])), matrix.copy()).column
         ['x', 'y', 'z']
         """
-        (row, column) = xxx_todo_changeme  # FIXME
+        (row, column) = row_column_labels  # FIXME
         self.check_format((row, column), matrix)
         if is_scipysparse(matrix):
             matrix = KarmaSparse(matrix)
@@ -403,7 +421,7 @@ class LabeledMatrix:
                and aeq(self.matrix, other.matrix)
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, int]:
         """
         >>> matrix = np.array([[4, 6, 5], [7, 9, 8], [1, 3, 2]])
         >>> row, column = ['b', 'c', 'a'], ['x', 'z', 'y']
@@ -414,9 +432,9 @@ class LabeledMatrix:
         return self.matrix.shape
 
     @property
-    def dtype(self):
+    def dtype(self) -> np.dtype:
         """
-        Returns underlying matrix dtype
+        Returns underlying matrix dtype. Note that sparse matrices will be casted to float32
         >>> matrix = np.array([[4, 6, 0], [0, 9, 8], [0, 0, 2]])
         >>> row, column = ['b', 'c', 'a'], ['x', 'z', 'y']
         >>> LabeledMatrix((row, column), matrix.astype(np.int16)).dtype
@@ -429,14 +447,15 @@ class LabeledMatrix:
         return self.matrix.dtype
 
     @staticmethod
-    def check_format(xxx_todo_changeme: Tuple[List[Any], List[Any]], matrix: Union[np.ndarray, KarmaSparse]):
+    def check_format(row_column_labels: Tuple[Union[List[Any], np.ndarray, IndexedList],
+                                              Union[List[Any], np.ndarray, IndexedList]],
+                     matrix: Union[np.ndarray, KarmaSparse]):
         """
         Used to check a number of assertion on the content of a LabeledMatrix.
 
-        :param xxx_todo_changeme: tuple (row and column) labels, labels should be unique and of the correct
+        :param row_column_labels: tuple (row and column) labels, labels should be unique and of the correct
                                   shape, with respect to the given matrix
         :param matrix: a numpy or scipy two dimensional array
-        :return: None
         :raise: LabeledMatrixException
 
         Exemple: ::
@@ -465,7 +484,7 @@ class LabeledMatrix:
             ...                            np.array([[0, 1, 0], [1, 0, 1]]))  # doctest: +ELLIPSIS
 
         """
-        (row, column) = xxx_todo_changeme
+        (row, column) = row_column_labels
         if not (is_scipysparse(matrix) or is_karmasparse(matrix) or isinstance(matrix, np.ndarray)):
             raise LabeledMatrixException(f'Unacceptable matrix type: {type(matrix)}')
         if matrix.ndim != 2:
@@ -500,8 +519,10 @@ class LabeledMatrix:
         properties = '\n * '.join(properties)
         return f'<LabeledMatrix with properties :{properties}>'
 
-    def __getitem__(self, labels):
+    def __getitem__(self, labels: Tuple[Any, Any]):
         """
+        Access to matrix item by its labels. Missing labels will return 0 value.
+        :param labels: tuple with requested row label and column label
         >>> lm = LabeledMatrix((['a', 'b', 'c'], ['a', 'b', 'c']) , np.arange(9).reshape(3, 3))
         >>> lm #doctest: +NORMALIZE_WHITESPACE
         <LabeledMatrix with properties :
@@ -527,37 +548,41 @@ class LabeledMatrix:
             return self.matrix[self.row.index(x), self.column.index(y)]
         return 0
 
-    def is_square(self):
+    @property
+    def is_square(self) -> bool:
         """
+        Check if matrix is square, meaning row labels and column labels are the same
         >>> lm1 = LabeledMatrix((['b', 'a'], ['d', 'b']), np.arange(4).reshape(2, 2))
-        >>> lm1.is_square()
+        >>> lm1.is_square
         False
-        >>> lm1.symmetrize_label().is_square()
+        >>> lm1.symmetrize_label().is_square
         True
         """
         return self.row == self.column
 
-    def has_sorted_row(self):
+    @property
+    def _has_sorted_row(self) -> bool:
         return self.row.is_sorted()
 
-    def has_sorted_column(self):
+    @property
+    def _has_sorted_column(self) -> bool:
         return self.column.is_sorted()
 
-    def nnz(self):
+    def nnz(self) -> int:
         """
-        nnz as non-zero! Returns the number of non-zero element contained in
-        the matrix
-
-        :return: the number of non-zero element in the matrix
+        nnz as non-zero! Returns the number of non-zero elements contained in the matrix
         """
         if self._nnz is None:
             self._nnz = number_nonzero(self.matrix)
         return self._nnz
 
-    def density(self):
+    def density(self) -> float:
         return self.nnz() * 1. / np.product(self.matrix.shape)
 
-    def copy(self):
+    def copy(self) -> LabeledMatrix:
+        """
+        Copy underlying matrix and return new LabeledMatrix object with same labels and deco
+        """
         return LabeledMatrix(self.label, self.matrix.copy(), deco=self.deco)
 
     def rand_row(self):
@@ -567,6 +592,9 @@ class LabeledMatrix:
         return random.choice(self.column)
 
     def rand_label(self):
+        """
+        Chooses a random label pair of row and column from the matrix
+        """
         return self.rand_row(), self.rand_column()
 
     def set_deco(self, row_deco=None, column_deco=None):
@@ -581,12 +609,15 @@ class LabeledMatrix:
             self.column_deco = _check_dict(column_deco)
         self.deco = (self.row_deco, self.column_deco)
 
-    def to_dense(self):
+    def to_dense(self) -> LabeledMatrix:
         """
-        Returns only a view if self is dense
+        Transform matrix backend into numpy array and return new LabeledMatrix object
+        Return same object if it is already dense
         >>> import scipy.sparse as sp
         >>> lm = LabeledMatrix([['b', 'c'], ['a', 'd', 'e']],
         ...                    sp.rand(2, 3, 0.5, format='csr'))
+        >>> isinstance(lm.to_dense().matrix, np.ndarray)
+        True
         >>> lm.to_dense().to_sparse() == lm
         True
         """
@@ -594,10 +625,13 @@ class LabeledMatrix:
             return LabeledMatrix(self.label, self.matrix.toarray(), deco=self.deco)
         return self
 
-    def to_sparse(self):
+    def to_sparse(self) -> LabeledMatrix:
         """
-        Returns only a view if self is sparse
+        Transform matrix backend into KarmaSparse matrix and return new LabeledMatrix object
+        Return same object if it is already sparse
         >>> lm = LabeledMatrix([['b', 'c'], ['a', 'd']], np.array([[1,2], [3,0]]))
+        >>> isinstance(lm.to_sparse(), KarmaSparse)
+        True
         >>> lm.to_sparse().to_dense() == lm
         True
         """
@@ -605,17 +639,19 @@ class LabeledMatrix:
             return self
         return LabeledMatrix(self.label, KarmaSparse(self.matrix), deco=self.deco)
 
-    def to_optimal_format(self):
+    def to_optimal_format(self) -> LabeledMatrix:
         """
         Casts to sparse if density < min_density, casts to dense if density > min_density
         Returns a view if the condition is already met or in case of equality
+
+        min_density is a constant currently set to 20%
         """
         if keep_sparse(self.matrix):
             return self.to_sparse()
         return self.to_dense()
 
-    def align(self, other: 'LabeledMatrix',
-              axes=((0, 0, False), (1, 1, False))) -> Tuple['LabeledMatrix', 'LabeledMatrix']:
+    def align(self, other: LabeledMatrix,
+              axes=((0, 0, False), (1, 1, False))) -> Tuple[LabeledMatrix, LabeledMatrix]:
         """
         Aligns two LabeledMatrix according to provided axis
         For instance, if axes = [axis] and axis = (0, 1, True) means that
@@ -625,7 +661,7 @@ class LabeledMatrix:
         The third parameter in each element of axes` corresponds to outer/inner join in SQL logic.
             * if axis[2] == False, the default value, the intersection (inner) of labels will be taken
             * if axis[2] == True, the union (outer) of labels will be taken
-            * if axis[2] == None, the labels of other matrix will be taken
+            * if axis[2] == None, the labels of `other` matrix will be taken
 
         >>> lm1 = LabeledMatrix((['a', 'b'], ['c', 'd']), np.arange(4).reshape(2, 2))
         >>> lm2 = LabeledMatrix((['a', 'c'], ['b', 'd']), - np.arange(4).reshape(2, 2))
@@ -691,8 +727,13 @@ class LabeledMatrix:
         other_copy.set_deco(*other.deco)
         return self_copy, other_copy
 
-    def extend_row(self, rows, deco=None):
+    def extend_row(self,
+                   rows: Union[List[Any], np.ndarray, IndexedList],
+                   deco: Optional[dict] = None) -> LabeledMatrix:
         """
+        Extend row labels with additional labels, corresponding rows will be set to 0
+        :param rows: list of additional labels
+        :param deco: optional decoration dictionary for additional labels
         >>> lm = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
         >>> aeq(lm.extend_row(['b']).sort().matrix, np.array([[1, 2],[0, 0],[3, 4]]))
         True
@@ -711,8 +752,13 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_row, 1, True),
                              deco=(dict_merge(self.row_deco, deco or {}), self.column_deco))
 
-    def extend_column(self, columns, deco=None):
+    def extend_column(self,
+                      columns: Union[List[Any], np.ndarray, IndexedList],
+                      deco: Optional[dict] = None) -> LabeledMatrix:
         """
+        Extend column labels with additional labels, corresponding columns will be set to 0
+        :param columns: list of additional labels
+        :param deco: optional decoration dictionary for additional labels
         >>> lm = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
         >>> lm.extend_column(['b']).sort().matrix
         array([[1, 0, 2],
@@ -732,8 +778,13 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_column, 0, True),
                              deco=(self.row_deco, dict_merge(self.column_deco, deco or {})))
 
-    def extend(self, label, deco=({}, {})):
+    def extend(self,
+               label: Tuple[Union[List[Any], np.ndarray, IndexedList], Union[List[Any], np.ndarray, IndexedList]],
+               deco: Tuple[dict, dict] = ({}, {})) -> LabeledMatrix:
         """
+        Extend labels with additional labels, corresponding rows & columns will be set to 0
+        :param label: tuple with additional labels for rows and columns respectively
+        :param deco: optional tuple with decoration dictionaries for additional row and column labels respectively
         >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
         >>> lm.extend(2*[['a']]).matrix
         array([[0, 0, 0],
@@ -763,14 +814,17 @@ class LabeledMatrix:
                [0, 0]])
         """
         if label[0] and label[1]:
-            return self.extend_column(label[1]).extend_row(label[0])
+            return self.extend_column(label[1], deco[1]).extend_row(label[0], deco[0])
         if label[0]:
-            return self.extend_row(label[0])
+            return self.extend_row(label[0], deco[0])
         if label[1]:
-            return self.extend_column(label[1])
+            return self.extend_column(label[1], deco[1])
         return self.copy()
 
-    def restrict_row(self, rows):
+    def restrict_row(self, rows: Union[List[Any], np.ndarray, IndexedList]) -> LabeledMatrix:
+        """
+        Return a submatrix restricted to a list of rows
+        """
         common_rows, arg_row, _ = self.row.intersection(rows)
         if not common_rows:
             raise LabeledMatrixException('restrict has returned an empty labeled matrix')
@@ -778,7 +832,10 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_row, 1),
                              deco=self.deco)
 
-    def restrict_column(self, columns):
+    def restrict_column(self, columns: Union[List[Any], np.ndarray, IndexedList]) -> LabeledMatrix:
+        """
+        Return a submatrix restricted to a list of columns
+        """
         common_columns, arg_column, _ = self.column.intersection(columns)
         if not common_columns:
             raise LabeledMatrixException('restrict has returned an empty labeled matrix')
@@ -786,7 +843,8 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_column, 0),
                              deco=self.deco)
 
-    def restrict(self, label):
+    def restrict(self, label: Tuple[Union[List[Any], np.ndarray, IndexedList],
+                                    Union[List[Any], np.ndarray, IndexedList]]) -> LabeledMatrix:
         """
         Return a submatrix: keep only the rows and columns with the given labels.
         >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
@@ -819,7 +877,10 @@ class LabeledMatrix:
             return self.restrict_row(label[0])
         return self.copy()
 
-    def exclude_row(self, rows):
+    def exclude_row(self, rows: Union[List[Any], np.ndarray, IndexedList]) -> LabeledMatrix:
+        """
+        Return a submatrix without a list of rows
+        """
         keep_row, arg_row = self.row.difference(rows)
         if not keep_row:
             raise LabeledMatrixException('exclude has returned an empty labeled matrix')
@@ -827,7 +888,10 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_row, 1),
                              deco=self.deco)
 
-    def exclude_column(self, columns):
+    def exclude_column(self, columns: Union[List[Any], np.ndarray, IndexedList]) -> LabeledMatrix:
+        """
+        Return a submatrix without a list of columns
+        """
         keep_column, arg_column = self.column.difference(columns)
         if not keep_column:
             raise LabeledMatrixException('exclude has returned an empty labeled matrix')
@@ -835,8 +899,10 @@ class LabeledMatrix:
                              align_along_axis(self.matrix, arg_column, 0),
                              deco=self.deco)
 
-    def exclude(self, label):
+    def exclude(self, label: Tuple[Union[List[Any], np.ndarray, IndexedList],
+                                   Union[List[Any], np.ndarray, IndexedList]]) -> LabeledMatrix:
         """
+        Return a submatrix without the rows and columns with the given labels.
         >>> lm = LabeledMatrix([['b', 'c'], ['x', 'y', 'z']], np.arange(6).reshape(2,3))
         >>> lm.exclude((None, ['y', 'h'])).label
         (['b', 'c'], ['x', 'z'])
@@ -856,8 +922,11 @@ class LabeledMatrix:
             return self.exclude_row(label[0])
         return self.copy()
 
-    def symmetrize_label(self, restrict=False):
+    def symmetrize_label(self, restrict: bool = False) -> LabeledMatrix:
         """
+        Return the square matrix with same labels for rows and columns
+        :param restrict: boolean whether to take the intersection of row and column labels for resulting matrix (True)
+                         or their union (False)
         >>> lm1 = LabeledMatrix((['b', 'a'], ['d', 'b']),
         ...                     np.arange(4).reshape(2, 2))
         >>> lm_square = lm1.symmetrize_label()
@@ -873,7 +942,7 @@ class LabeledMatrix:
         >>> aeq(lm_square.matrix, np.array([[1, 0],[7, 6]]))
         True
         """
-        if self.is_square():
+        if self.is_square:
             return self
         if restrict:
             lm = self.restrict_row(self.column).restrict_column(self.row)
@@ -881,7 +950,7 @@ class LabeledMatrix:
             lm = self.extend_row(self.column).extend_column(self.row)
         return lm.align(lm, [(0, 1, None)])[0]
 
-    def _take_on_row(self, indices=None) -> 'LabeledMatrix':
+    def _take_on_row(self, indices=None) -> LabeledMatrix:
         """
         >>> lm = LabeledMatrix((['b', 'c'], ['y', 'x', 'z']), np.arange(6).reshape(2, 3))
         >>> lm.label[0]
@@ -907,21 +976,28 @@ class LabeledMatrix:
         column = take_indices(self.column, indices)
         return LabeledMatrix((self.row, column), self.matrix[:, indices], self.deco)
 
-    def sort_row(self):
-        if not self.has_sorted_row():
+    def sort_row(self) -> LabeledMatrix:
+        """
+        Return a new matrix with row labels sorted in increasing order
+        """
+        if not self._has_sorted_row:
             row, argsort_row = self.row.sorted()
             return LabeledMatrix((row, self.column), self.matrix[argsort_row], self.deco)
         return self
 
-    def sort_column(self):
-        if not self.has_sorted_column():
+    def sort_column(self) -> LabeledMatrix:
+        """
+        Return a new matrix with column labels sorted in increasing order
+        """
+        if not self._has_sorted_column:
             column, argsort_column = self.column.sorted()
             return LabeledMatrix((self.row, column), self.matrix[:, argsort_column],
                                  self.deco)
         return self
 
-    def sort_by_deco(self):
+    def sort_by_deco(self) -> LabeledMatrix:
         """
+        Order row and column labels by the order given by the decoration dictionaries
         >>> lm = LabeledMatrix((['b', 'c'], ['y', 'x', 'z']), np.arange(6).reshape(2, 3),
         ...                    deco=({'b': 'f', 'c': 'a'}, {'x': 'k', 'z': 'l'}))
         >>> lm.sort().label
@@ -941,8 +1017,9 @@ class LabeledMatrix:
 
         return self._take_on_row(row_indices)._take_on_column(column_indices)
 
-    def sort(self):
+    def sort(self) -> LabeledMatrix:
         """
+        Return a new matrix with both row and column labels sorted in increasing order
         >>> lm = LabeledMatrix((['b', 'c'], ['y', 'x', 'z']), np.arange(6).reshape(2, 3))
         >>> lm['c', 'x'] == lm.sort()['c', 'x'] == 4
         True
@@ -955,7 +1032,7 @@ class LabeledMatrix:
         """
         return self.sort_row().sort_column()
 
-    def rename_row(self, prefix='', suffix='', mapping=None):
+    def rename_row(self, prefix='', suffix='', mapping=None) -> LabeledMatrix:
         """
         Returns LabeledMatrix with changed row names
         Args:
@@ -975,7 +1052,7 @@ class LabeledMatrix:
         row_deco = keymap(dict(zip(self.row, rows)).get, self.row_deco)
         return LabeledMatrix((rows, self.column), self.matrix, (row_deco, self.column_deco))
 
-    def rename_column(self, prefix='', suffix='', mapping=None):
+    def rename_column(self, prefix='', suffix='', mapping=None) -> LabeledMatrix:
         """
         Returns LabeledMatrix with changed column names
         Args:
@@ -991,8 +1068,10 @@ class LabeledMatrix:
         """
         return self.transpose().rename_row(prefix, suffix, mapping).transpose()
 
-    def sample_rows(self, p):
+    def sample_rows(self, p: Union[int, float]) -> LabeledMatrix:
         """
+        Take a subsample of matrix rows of a given size
+        :param p: either float between 0 and 1 indicating proportion of rows to keep or integer number of rows
         >>> lm = LabeledMatrix((['b', 'c', 'd'], ['x', 'y', 'z']),
         ...                    np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]]))
         >>> lm.sample_rows(12) #doctest: +ELLIPSIS
@@ -1017,8 +1096,10 @@ class LabeledMatrix:
         p = int(p)
         return self.restrict_row(random.sample(self.row.list, p))
 
-    def sample_columns(self, p):
+    def sample_columns(self, p: Union[int, float]) -> LabeledMatrix:
         """
+        Take a subsample of matrix columns of a given size
+        :param p: either float between 0 and 1 indicating proportion of columns to keep or integer number of columns
         >>> lm = LabeledMatrix((['b', 'c', 'd'], ['x', 'y', 'z']),
         ...                    np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]]))
         >>> lm.sample_columns(12) #doctest: +ELLIPSIS
@@ -1043,12 +1124,39 @@ class LabeledMatrix:
         p = int(p)
         return self.restrict_column(random.sample(self.column.list, p))
 
-    def transpose(self):
+    def transpose(self) -> LabeledMatrix:
+        """
+        Matrix transposition
+        """
         return LabeledMatrix((self.column, self.row), self.matrix.transpose(),
                              deco=(self.deco[1], self.deco[0]))
 
-    def without_zeros(self, axis=None, min_nonzero=1):
+    def zeros(self, force_sparse: bool = False) -> LabeledMatrix:
         """
+        Return a matrix of the same shape and same labels but filled with zeros
+        :param force_sparse: boolean whether return sparse zeros matrix even if current matrix is dense
+        >>> lm = LabeledMatrix([['b', 'c']] * 2, np.array([[1,2], [3,4]]))
+        >>> aeq(lm.zeros().matrix, np.zeros((2,2)))
+        True
+        >>> lm.zeros().label == lm.label
+        True
+        >>> aeq(lm.to_sparse().zeros().matrix.toarray(), np.zeros((2,2)))
+        True
+        """
+        if self.is_sparse or force_sparse:
+            matrix_zeros = KarmaSparse(self.matrix.shape)
+        else:
+            matrix_zeros = np.zeros(self.matrix.shape, dtype=self.matrix.dtype)
+        return LabeledMatrix(self.label, matrix_zeros, deco=self.deco)
+
+    def without_zeros(self, axis: Optional[int] = None, min_nonzero: int = 1) -> LabeledMatrix:
+        """
+        Return a matrix without rows and/or columns with all values strictly smaller than min_nonzero
+        :param axis: axis along which to apply the operation
+                     0 keep all rows, remove zero columns
+                     1 remove zero rows, keep all columns
+                     None remove both zero rows and zero columns
+        :param min_nonzero: threshold on values to consider them non-zero, default 1
         >>> lm = LabeledMatrix((['b', 'c', 'd'], ['x', 'y', 'z']),
         ...                    np.array([[1,0, 0], [0, 0, 0], [0, 1, 0]]))
         >>> lm.matrix
@@ -1077,10 +1185,9 @@ class LabeledMatrix:
             return LabeledMatrix((to_keep, self.column), self.matrix[index], deco=self.deco)
         return LabeledMatrix((self.row, to_keep), self.matrix[:, index], deco=self.deco)
 
-    def nonzero_mask(self):
+    def nonzero_mask(self) -> LabeledMatrix:
         """
-        Same as matrix_utils.nonzero_mask():
-        replace each non-zero entry by 1.
+        Replace each non-zero entry by 1
         >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[1,0], [3,0]]))
         >>> aeq(lm.nonzero_mask().matrix, np.array([[1, 0], [1, 0]]))
         True
@@ -1089,9 +1196,9 @@ class LabeledMatrix:
         """
         return LabeledMatrix(self.label, nonzero_mask(self.matrix), deco=self.deco)
 
-    def rank(self, axis=1, reverse=False):
+    def rank(self, axis: int = 1, reverse: bool = False) -> LabeledMatrix:
         """
-        Returns ranks of entries along given axis in ascending order (descending if reverse is True)
+        Return ranks of entries along given axis in ascending order (descending if reverse is True)
         >>> mat = np.array([[1, 2, 4, 3],
         ...                 [0, 0, 0, 0],
         ...                 [2, 1, 3, 4]])
@@ -1107,8 +1214,10 @@ class LabeledMatrix:
         """
         return LabeledMatrix(self.label, rank_matrix(self.matrix, axis=axis, reverse=reverse), deco=self.deco)
 
-    def diagonal(self):
+    def diagonal(self) -> LabeledMatrix:
         """
+        Keep only diagonal values (where row label is equal to column label)
+        Currently works only on square matrix (row and column labels are the same)
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c']), np.array([[4, 6], [7, 9]]))
         >>> aeq(lm.to_sparse().diagonal().matrix, np.array([[4, 0],[0, 9]]))
         True
@@ -1116,7 +1225,7 @@ class LabeledMatrix:
         array([[4, 0],
                [0, 9]])
         """
-        if not self.is_square():
+        if not self.is_square:
             raise LabeledMatrixException('diagonal() works only on square matrices.')
         if self.is_sparse:
             diag_matrix = ks_diag(self.matrix.diagonal(), format=self.matrix.format)
@@ -1124,8 +1233,9 @@ class LabeledMatrix:
             diag_matrix = np.diagflat(self.matrix.diagonal())
         return LabeledMatrix(self.label, diag_matrix, deco=self.deco)
 
-    def without_diagonal(self):
+    def without_diagonal(self) -> LabeledMatrix:
         """
+        Replace diagonal values (where row label is equal to column label) by 0
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c']), np.array([[4, 6], [7, 9]]))
         >>> lm.to_sparse().without_diagonal().matrix.toarray()
         array([[0., 6.],
@@ -1149,8 +1259,9 @@ class LabeledMatrix:
                              complement(self.matrix, (diag_indices[0], diag_indices[1])),
                              deco=self.deco)
 
-    def without_mask(self, mask):
+    def without_mask(self, mask: LabeledMatrix) -> LabeledMatrix:
         """
+        Take all labels with non-zero values from mask, replace values with same labels in self by 0
         >>> lm = LabeledMatrix((['b', 'c'], ['b', 'c']), np.array([[4, 6], [7, 9]]))
         >>> lm.without_mask(LabeledMatrix((['b'], ['b']), np.array([[1]]))).matrix
         array([[0, 6],
@@ -1171,156 +1282,13 @@ class LabeledMatrix:
                              complement(self.matrix, mask.matrix),
                              deco=self.deco)
 
-    def zeros(self, force_sparse=False):
-        """
-        >>> lm = LabeledMatrix([['b', 'c']] * 2, np.array([[1,2], [3,4]]))
-        >>> aeq(lm.zeros().matrix, np.zeros((2,2)))
-        True
-        >>> lm.zeros().label == lm.label
-        True
-        >>> aeq(lm.to_sparse().zeros().matrix.toarray(), np.zeros((2,2)))
-        True
-        """
-        if self.is_sparse or force_sparse:
-            matrix_zeros = KarmaSparse(self.matrix.shape)
-        else:
-            matrix_zeros = np.zeros(self.matrix.shape, dtype=self.matrix.dtype)
-        return LabeledMatrix(self.label, matrix_zeros, deco=self.deco)
+    def __neg__(self):
+        return -1 * self
 
-    def _divide(self, lm):
-        """
-        element-wise division, assuming labels are the same
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,0], [3,4]]))
-        >>> d = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[0.5,2], [3,4]]))
-        >>> d._divide(lm).matrix
-        array([[0.5, 0. ],
-               [1. , 1. ]])
-        >>> d.to_sparse()._divide(lm.to_sparse()).matrix.toarray()
-        array([[0.5, 0. ],
-               [1. , 1. ]], dtype=float32)
-        >>> d._divide(lm.to_sparse()).matrix.toarray()
-        array([[0.5, 0. ],
-               [1. , 1. ]], dtype=float32)
-        >>> d.to_sparse()._divide(lm).matrix.toarray()
-        array([[0.5, 0. ],
-               [1. , 1. ]], dtype=float32)
-        """
-        matrix = safe_multiply(self.matrix, pseudo_element_inverse(lm.matrix))
-        return LabeledMatrix(self.label, matrix,
-                             deco=zipmerge(self.deco, lm.deco))
+    def __pos__(self):
+        return self
 
-    def _scalar_divide(self, scalar):
-        """
-        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
-        >>> lm1._scalar_divide(2.0).matrix
-        array([[0.5, 1. ],
-               [1.5, 2. ]])
-        >>> aeq(lm1._scalar_divide(2).matrix, np.array([[ 0.5,  1. ],[ 1.5,  2.]]))
-        True
-        >>> aeq(lm1.to_sparse()._scalar_divide(2).matrix, np.array([[ 0.5,  1. ], [ 1.5, 2.]]))
-        True
-        """
-        return LabeledMatrix(self.label, self.matrix / float(scalar), deco=self.deco)
-
-    def inverse(self, scalar=1.0):
-        """
-        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1.,2.], [5., 0.]]))
-        >>> lm1.inverse(2.0).matrix
-        array([[2. , 1. ],
-               [0.4, 0. ]])
-        >>> lm1.to_sparse().inverse(2.0).matrix.toarray()
-        array([[2. , 1. ],
-               [0.4, 0. ]], dtype=float32)
-        >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1,2], [5,4]]))
-        >>> lm.to_sparse().inverse(2.0).matrix.toarray()
-        array([[2. , 1. ],
-               [0.4, 0.5]], dtype=float32)
-        >>> lm.inverse(2.).matrix
-        array([[2. , 1. ],
-               [0.4, 0.5]])
-        """
-        return LabeledMatrix(self.label,
-                             pseudo_element_inverse(self.matrix, scalar),
-                             deco=self.deco)
-
-    def divide(self, other):
-        """
-        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,2.]]))
-        >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
-        >>> mlm = lm1.divide(lm2)
-        >>> mlm.matrix
-        array([[0.5]])
-        >>> mlm.label
-        (['c'], ['c'])
-        >>> np.all(mlm.matrix == lm1.to_sparse().divide(lm2.to_sparse()).matrix.toarray())
-        True
-        """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._divide(o)
-
-    def _multiply(self, lm):
-        """
-        Point-wise multiply, assuming that labels are the same
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,2], [3,4]]))
-        >>> aeq(lm._multiply(lm).matrix, np.array([[ 1,  4], [ 9, 16]]))
-        True
-        >>> aeq(lm.to_sparse()._multiply(lm.to_sparse()).matrix.toarray(), np.array([[1, 4], [9, 16]]))
-        True
-        >>> aeq(lm.to_sparse()._multiply(lm).matrix.toarray(), np.array([[1, 4], [9, 16]]))
-        True
-        >>> aeq(lm._multiply(lm.to_sparse()).matrix.toarray(), np.array([[1, 4], [9, 16]]))
-        True
-        """
-        matrix = safe_multiply(self.matrix, lm.matrix)
-        return LabeledMatrix(self.label, matrix, deco=self.deco)
-
-    def multiply(self, other):
-        """
-        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
-        >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
-        >>> mlm = lm2.multiply(lm1)
-        >>> mlm.matrix
-        array([[16]])
-        >>> mlm.label
-        (['c'], ['c'])
-        >>> np.all(mlm.matrix ==
-        ...       lm2.to_sparse().multiply(lm1.to_sparse()).matrix.toarray())
-        True
-        """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._multiply(o)
-
-    def _scalar_multiply(self, scalar):
-        """
-        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
-        >>> (lm1 * 2).matrix
-        array([[2, 4],
-               [6, 8]])
-        """
-        return LabeledMatrix(self.label, self.matrix * scalar, deco=self.deco)
-
-    def _scalar_add(self, scalar):
-        """
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,0], [0,4]]))
-        >>> aeq(lm._scalar_add(-2.5).matrix, np.array([[-1.5,  0],[ 0,  1.5]]))
-        True
-        >>> aeq(lm._scalar_add(-2).matrix, np.array([[-1,  0],[ 0,  2]]))
-        True
-        >>> aeq(lm.to_sparse()._scalar_add(-2).matrix, np.array([[-1,  0],[ 0,  2]]))
-        True
-        >>> aeq(lm.to_sparse()._scalar_add(-2.).matrix, np.array([[-1,  0],[ 0,  2]]))
-        True
-        >>> lm._scalar_add(-2.).matrix
-        array([[-1.,  0.],
-               [ 0.,  2.]])
-        """
-        if self.is_sparse:
-            return LabeledMatrix(self.label, self.matrix + scalar, deco=self.deco)
-        matrix = self.matrix.copy().astype(max(self.matrix.dtype, type(scalar)))
-        matrix[matrix.nonzero()] += scalar
-        return LabeledMatrix(self.label, matrix, deco=self.deco)
-
-    def _add(self, other):
+    def _add(self, other: LabeledMatrix) -> LabeledMatrix:
         """
         Point-wise sum, assuming that labels are the same
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,2], [3,4]]))
@@ -1337,7 +1305,7 @@ class LabeledMatrix:
         return LabeledMatrix(self.label, safe_add(self.matrix, other.matrix),
                              deco=zipmerge(self.deco, other.deco))
 
-    def add(self, other):
+    def add(self, other: LabeledMatrix) -> LabeledMatrix:
         """
         >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
         >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
@@ -1357,73 +1325,26 @@ class LabeledMatrix:
         s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
         return s._add(o)
 
-    def _dot(self, lm, top=None, mask=None):
+    def _scalar_add(self, scalar) -> LabeledMatrix:
         """
-        >>> lm = LabeledMatrix((['x', 'y'], ['a', 'b']), np.array([[1,2], [3,4]]))
-        >>> lm._dot(lm).matrix
-        array([[ 7, 10],
-               [15, 22]])
-        >>> np.all(lm._dot(lm).matrix ==
-        ...        lm.to_sparse()._dot(lm.to_sparse()).matrix.toarray())
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,0], [0,4]]))
+        >>> aeq(lm._scalar_add(-2.5).matrix, np.array([[-1.5,  0],[ 0,  1.5]]))
         True
+        >>> aeq(lm._scalar_add(-2).matrix, np.array([[-1,  0],[ 0,  2]]))
+        True
+        >>> aeq(lm.to_sparse()._scalar_add(-2).matrix, np.array([[-1,  0],[ 0,  2]]))
+        True
+        >>> aeq(lm.to_sparse()._scalar_add(-2.).matrix, np.array([[-1,  0],[ 0,  2]]))
+        True
+        >>> lm._scalar_add(-2.).matrix
+        array([[-1.,  0.],
+               [ 0.,  2.]])
         """
-        if top is not None:
-            return LabeledMatrix((self.row, lm.column),
-                                 truncated_dot(self.matrix, lm.matrix, nb=top),
-                                 deco=(self.row_deco, lm.column_deco))
-        if mask is not None:
-            return LabeledMatrix((self.row, lm.column),
-                                 safe_dot(self.matrix, lm.matrix, mask.matrix),
-                                 deco=(self.row_deco, lm.column_deco))
-        return LabeledMatrix((self.row, lm.column),
-                             safe_dot(self.matrix, lm.matrix),
-                             deco=(self.row_deco, lm.column_deco))
-
-    def dot(self, other, top=None, mask=None):
-        """
-        If self and other labels are distinct, then dot restrict columns and rows
-        so that they match.
-        >>> lm1 = LabeledMatrix((['x', 'y'], ['a', 'b', 'c']), np.arange(6).reshape(2,3))
-        >>> lm2 = LabeledMatrix((['a', 'b', 'd'], ['w']), np.arange(3).reshape(3,1))
-        >>> lm1.set_deco(row_deco={'x': 'X', 'y': 'Y'})
-        >>> lm2.set_deco(column_deco={'w': 'W'})
-        >>> slm = lm1.dot(lm2)
-        >>> slm.matrix
-        array([[1],
-               [4]])
-        >>> slm.label
-        (['x', 'y'], ['w'])
-        >>> np.all(slm.matrix == lm1.to_sparse().dot(lm2.to_sparse()).matrix.toarray())
-        True
-        >>> aeq(lm1.to_sparse().dot(lm2).matrix, np.array([[1],[4]]))
-        True
-
-        >>> lm1.dot(lm2).reco('x')  #doctest: +NORMALIZE_WHITESPACE
-          entry_key  nb_nonzero  total_score  min_score deco
-        0         x           1            1          1    X
-        ------------------------------------------------------------
-          reco  score deco_entry_key deco_reco
-        0    w      1              X         W
-
-        >>> mask = slm.restrict_row(['y'])
-        >>> aeq(lm1.dot(lm2, mask=mask).matrix, np.array([[4]]))
-        True
-        """
-        if (mask is not None) and (top is not None):
-            raise ValueError('Cannot provide both `mask` and `top` in dot')
-        s, o = self.align(other, axes=[(0, 1, False)])
-        if mask is None:
-            return s._dot(o, top=top)
-        else:
-            s, mask = s.align(mask, axes=[(1, 1, False)])
-            o, mask = o.align(mask, axes=[(0, 0, False)])
-            return s._dot(o, mask=mask)
-
-    def __neg__(self):
-        return -1 * self
-
-    def __pos__(self):
-        return self
+        if self.is_sparse:
+            return LabeledMatrix(self.label, self.matrix + scalar, deco=self.deco)
+        matrix = self.matrix.copy().astype(max(self.matrix.dtype, type(scalar)))
+        matrix[matrix.nonzero()] += scalar
+        return LabeledMatrix(self.label, matrix, deco=self.deco)
 
     def __add__(self, other):
         """
@@ -1473,6 +1394,47 @@ class LabeledMatrix:
     def __rsub__(self, other):
         return self.__sub__(other).__neg__()
 
+    def _multiply(self, other: LabeledMatrix) -> LabeledMatrix:
+        """
+        Point-wise multiply, assuming that labels are the same
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,2], [3,4]]))
+        >>> aeq(lm._multiply(lm).matrix, np.array([[ 1,  4], [ 9, 16]]))
+        True
+        >>> aeq(lm.to_sparse()._multiply(lm.to_sparse()).matrix.toarray(), np.array([[1, 4], [9, 16]]))
+        True
+        >>> aeq(lm.to_sparse()._multiply(lm).matrix.toarray(), np.array([[1, 4], [9, 16]]))
+        True
+        >>> aeq(lm._multiply(lm.to_sparse()).matrix.toarray(), np.array([[1, 4], [9, 16]]))
+        True
+        """
+        matrix = safe_multiply(self.matrix, other.matrix)
+        return LabeledMatrix(self.label, matrix, deco=self.deco)
+
+    def multiply(self, other: LabeledMatrix) -> LabeledMatrix:
+        """
+        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
+        >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
+        >>> mlm = lm2.multiply(lm1)
+        >>> mlm.matrix
+        array([[16]])
+        >>> mlm.label
+        (['c'], ['c'])
+        >>> np.all(mlm.matrix ==
+        ...       lm2.to_sparse().multiply(lm1.to_sparse()).matrix.toarray())
+        True
+        """
+        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return s._multiply(o)
+
+    def _scalar_multiply(self, scalar) -> LabeledMatrix:
+        """
+        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
+        >>> (lm1 * 2).matrix
+        array([[2, 4],
+               [6, 8]])
+        """
+        return LabeledMatrix(self.label, self.matrix * scalar, deco=self.deco)
+
     def __mul__(self, other):
         """
         >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1,2], [3,4]]))
@@ -1489,6 +1451,56 @@ class LabeledMatrix:
 
     def __rmul__(self, other):
         return self.__mul__(other)
+
+    def _divide(self, other: LabeledMatrix) -> LabeledMatrix:
+        """
+        element-wise division, assuming labels are the same
+        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1,0], [3,4]]))
+        >>> d = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[0.5,2], [3,4]]))
+        >>> d._divide(lm).matrix
+        array([[0.5, 0. ],
+               [1. , 1. ]])
+        >>> d.to_sparse()._divide(lm.to_sparse()).matrix.toarray()
+        array([[0.5, 0. ],
+               [1. , 1. ]], dtype=float32)
+        >>> d._divide(lm.to_sparse()).matrix.toarray()
+        array([[0.5, 0. ],
+               [1. , 1. ]], dtype=float32)
+        >>> d.to_sparse()._divide(lm).matrix.toarray()
+        array([[0.5, 0. ],
+               [1. , 1. ]], dtype=float32)
+        """
+        matrix = safe_multiply(self.matrix, pseudo_element_inverse(other.matrix))
+        return LabeledMatrix(self.label, matrix,
+                             deco=zipmerge(self.deco, other.deco))
+
+    def divide(self, other: LabeledMatrix) -> LabeledMatrix:
+        """
+        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,2.]]))
+        >>> lm2 = LabeledMatrix(2*[['a', 'c']], np.array([[1,2], [3,4]]))
+        >>> mlm = lm1.divide(lm2)
+        >>> mlm.matrix
+        array([[0.5]])
+        >>> mlm.label
+        (['c'], ['c'])
+        >>> np.all(mlm.matrix == lm1.to_sparse().divide(lm2.to_sparse()).matrix.toarray())
+        True
+        """
+        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return s._divide(o)
+
+    def _scalar_divide(self, scalar):
+        """
+        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1,2], [3,4]]))
+        >>> lm1._scalar_divide(2.0).matrix
+        array([[0.5, 1. ],
+               [1.5, 2. ]])
+        >>> aeq(lm1._scalar_divide(2).matrix, np.array([[ 0.5,  1. ],[ 1.5,  2.]]))
+        True
+        >>> aeq(lm1.to_sparse()._scalar_divide(2).matrix, np.array([[ 0.5,  1. ], [ 1.5, 2.]]))
+        True
+        """
+        return LabeledMatrix(self.label, self.matrix / float(scalar), deco=self.deco)
 
     def __truediv__(self, other):
         return self.__div__(other)
@@ -1516,16 +1528,92 @@ class LabeledMatrix:
             return self.divide(other)
         raise ValueError(f'type of `other` is not understood : {type(other)}')
 
-    def _maximum(self, other):
+    def _dot(self,
+             other: LabeledMatrix,
+             top: Optional[int] = None,
+             mask: Optional[LabeledMatrix] = None) -> LabeledMatrix:
+        """
+        Calculate matrix dot operation: resulting row labels come from left matrix and column labels from right one
+        :param other: right matrix in dot product
+        :param top: take only top largest elements when calculating scalar product between two vectors
+        :param mask: LabeledMatrix indicating which labels to keep in the result
+        >>> lm = LabeledMatrix((['x', 'y'], ['a', 'b']), np.array([[1,2], [3,4]]))
+        >>> lm._dot(lm).matrix
+        array([[ 7, 10],
+               [15, 22]])
+        >>> np.all(lm._dot(lm).matrix ==
+        ...        lm.to_sparse()._dot(lm.to_sparse()).matrix.toarray())
+        True
+        """
+        if top is not None:
+            return LabeledMatrix((self.row, other.column),
+                                 truncated_dot(self.matrix, other.matrix, nb=top),
+                                 deco=(self.row_deco, other.column_deco))
+        if mask is not None:
+            return LabeledMatrix((self.row, other.column),
+                                 safe_dot(self.matrix, other.matrix, mask.matrix),
+                                 deco=(self.row_deco, other.column_deco))
+        return LabeledMatrix((self.row, other.column),
+                             safe_dot(self.matrix, other.matrix),
+                             deco=(self.row_deco, other.column_deco))
+
+    def dot(self,
+            other: LabeledMatrix,
+            top: Optional[int] = None,
+            mask: Optional[LabeledMatrix] = None) -> LabeledMatrix:
+        """
+        Calculate matrix dot operation: resulting row labels come from left matrix and column labels from right one
+        If left matrix column labels and right matrix row labels are distinct, then we restrict so that they match.
+        :param other: right matrix in dot product
+        :param top: take only top largest elements when calculating scalar product between two vectors
+        :param mask: LabeledMatrix indicating which labels to keep in the result
+        >>> lm1 = LabeledMatrix((['x', 'y'], ['a', 'b', 'c']), np.arange(6).reshape(2,3))
+        >>> lm2 = LabeledMatrix((['a', 'b', 'd'], ['w']), np.arange(3).reshape(3,1))
+        >>> lm1.set_deco(row_deco={'x': 'X', 'y': 'Y'})
+        >>> lm2.set_deco(column_deco={'w': 'W'})
+        >>> slm = lm1.dot(lm2)
+        >>> slm.matrix
+        array([[1],
+               [4]])
+        >>> slm.label
+        (['x', 'y'], ['w'])
+        >>> np.all(slm.matrix == lm1.to_sparse().dot(lm2.to_sparse()).matrix.toarray())
+        True
+        >>> aeq(lm1.to_sparse().dot(lm2).matrix, np.array([[1],[4]]))
+        True
+
+        >>> lm1.dot(lm2).display_reco('x')  #doctest: +NORMALIZE_WHITESPACE
+          entry_key  nb_nonzero  total_score  min_score deco
+        0         x           1            1          1    X
+        ------------------------------------------------------------
+          reco  score deco_entry_key deco_reco
+        0    w      1              X         W
+
+        >>> mask = slm.restrict_row(['y'])
+        >>> aeq(lm1.dot(lm2, mask=mask).matrix, np.array([[4]]))
+        True
+        """
+        if (mask is not None) and (top is not None):
+            raise ValueError('Cannot provide both `mask` and `top` in dot')
+        s, o = self.align(other, axes=[(0, 1, False)])
+        if mask is None:
+            return s._dot(o, top=top)
+        else:
+            s, mask = s.align(mask, axes=[(1, 1, False)])
+            o, mask = o.align(mask, axes=[(0, 0, False)])
+            return s._dot(o, mask=mask)
+
+    def _maximum(self, other: LabeledMatrix) -> LabeledMatrix:
         return LabeledMatrix(self.label, safe_maximum(self.matrix, other.matrix),
                              deco=self.deco)
 
-    def _minimum(self, other):
+    def _minimum(self, other: LabeledMatrix) -> LabeledMatrix:
         return LabeledMatrix(self.label, safe_minimum(self.matrix, other.matrix),
                              deco=self.deco)
 
-    def maximum(self, other):
+    def maximum(self, other: LabeledMatrix) -> LabeledMatrix:
         """
+        Take coordinate-maximum between self and other (for each pair of labels take the largest value)
         >>> lm1 = LabeledMatrix(2*[['b', 'c', 'd']],
         ...                     np.array([[1,0,5], [0,0,0], [0,1,0]]))
         >>> lm2 = LabeledMatrix(2*[['b', 'c', 'd']],
@@ -1536,8 +1624,9 @@ class LabeledMatrix:
         s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
         return s._maximum(o)
 
-    def minimum(self, other):
+    def minimum(self, other: LabeledMatrix) -> LabeledMatrix:
         """
+        Take coordinate-minimum between self and other (for each pair of labels take the smallest value)
         >>> lm1 = LabeledMatrix(2*[['b', 'c', 'd']],
         ...                     np.array([[1,0,5], [0,0,0], [0,1,0]]))
         >>> lm2 = LabeledMatrix(2*[['b', 'c', 'd']],
@@ -1557,54 +1646,9 @@ class LabeledMatrix:
         s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
         return s._minimum(o)
 
-    def scalar_multiply_rows(self, rows, scalar):
+    def max(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
-        Multiplies given rows by a scalar
-        Args:
-            rows: rows to multiply; takes intersection of self.row and given list
-            scalar: scalar to multiply on
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]))
-        >>> lm.scalar_multiply_rows(['c', 'f'], 2).matrix
-        array([[1, 0],
-               [6, 8]])
-        >>> lm.scalar_multiply_rows(['b', 'c'], 0.5).matrix
-        array([[0.5, 0. ],
-               [1.5, 2. ]])
-        >>> lm.scalar_multiply_rows(['a', 'd'], 5).matrix
-        array([[1, 0],
-               [3, 4]])
-        """
-        try:
-            diff_lm = self.restrict_row(rows)
-        except LabeledMatrixException:
-            return self
-
-        diff_lm = (1 - scalar) * diff_lm
-        diff_lm, _ = diff_lm.align(self, [(0, 0, None), (1, 1, None)])
-
-        return self - diff_lm
-
-    def scalar_multiply_columns(self, columns, scalar):
-        """
-        Multiplies given columns by a scalar
-        Args:
-            columns: columns to multiply; takes intersection of self.column and given list
-            scalar: scalar to multiply on
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y']), np.array([[1, 0], [3, 4]]))
-        >>> lm.scalar_multiply_columns(['y', 'z'], 2).matrix
-        array([[1, 0],
-               [3, 8]])
-        >>> lm.scalar_multiply_columns(['x', 'y'], 0.5).matrix
-        array([[0.5, 0. ],
-               [1.5, 2. ]])
-        >>> lm.scalar_multiply_columns(['u', 'z'], 5).matrix
-        array([[1, 0],
-               [3, 4]])
-        """
-        return self.transpose().scalar_multiply_rows(columns, scalar).transpose()
-
-    def max(self, axis=1):
-        """
+        Calculate the maximum along given axis, return result as a diagonal square LabeledMatrix
         >>> lm = LabeledMatrix((['c', 'b'], ['x', 'y', 'z']) ,
         ...                    np.array([[0.3, 0.6, 0], [0.75, 0.5, 0]]))
         >>> lm.max().sort().matrix.toarray()
@@ -1630,8 +1674,9 @@ class LabeledMatrix:
             return values
         return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
-    def min(self, axis=1):
+    def min(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
+        Calculate the minimum along given axis, return result as a diagonal square LabeledMatrix
         >>> lm = LabeledMatrix((['a', 'b', 'c'], ['x', 'y', 'z']),
         ...                    np.arange(9).reshape(3, 3) + 1)
         >>> lm.min().sort().matrix.toarray().astype(np.int64)
@@ -1658,9 +1703,9 @@ class LabeledMatrix:
             return values
         return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
-    def sum(self, axis=1):
+    def sum(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
-        Computes sum along axis, returns a diagonal matrix (easier to use in matrix product)
+        Calculate the sum along given axis, return result as a diagonal square LabeledMatrix
         >>> lm = LabeledMatrix((['a', 'b'], ['x']), np.array([[5], [25]]))
         >>> aeq(lm.sum().matrix.toarray(), np.array([[5, 0], [0, 25]]))
         True
@@ -1680,8 +1725,9 @@ class LabeledMatrix:
             return values
         return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
-    def mean(self, axis=1):
+    def mean(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
+        Calculate the average along given axis, return result as a diagonal square LabeledMatrix
         >>> lm = LabeledMatrix((['a', 'b'], ['x', 'y']), np.array([[5, 5], [25, 75]])).sort()
         >>> lm.mean().matrix.toarray()
         array([[ 5.,  0.],
@@ -1703,62 +1749,20 @@ class LabeledMatrix:
             return values
         return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
 
-    def abs(self):
+    def normalize(self, axis: Optional[int] = 1, norm: str = 'l1') -> LabeledMatrix:
         """
-        >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
-        >>> lm.abs().matrix
-        array([[0.5 , 0.5 ],
-               [0.25, 0.  ]])
-        >>> lm.to_sparse().abs().matrix.toarray()
-        array([[0.5 , 0.5 ],
-               [0.25, 0.  ]], dtype=float32)
+        Normalize the matrix along given axis
         """
-        return LabeledMatrix(self.label, abs(self.matrix), deco=self.deco)
+        trans_matrix = normalize(self.matrix.copy(), axis=axis, norm=norm)
+        return LabeledMatrix(self.label, trans_matrix, deco=self.deco)
 
-    def sign(self):
+    def apply_numpy_function(self,
+                             function: Callable[[Number], Number],
+                             function_args: Optional[list] = None) -> LabeledMatrix:
         """
-        >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
-        >>> lm.sign().matrix
-        array([[ 1., -1.],
-               [-1.,  0.]])
-        >>> np.all(lm.to_sparse().sign().matrix.toarray() == lm.sign().matrix)
-        True
-        """
-        if self.is_sparse:
-            return LabeledMatrix(self.label, self.matrix.sign(), deco=self.deco)
-        return LabeledMatrix(self.label, np.sign(self.matrix), deco=self.deco)
-
-    def apply_lambda(self, lambda_):
-        """
-        >>> mat = np.array([[0.4, 0.5, 0, 0],
-        ...                 [0, 0.4, 0, 0],
-        ...                 [0, 0, 0.4, 0.5],
-        ...                 [0.1, 0, 0, 0.4]])
-        >>> lm = LabeledMatrix(2*[['a', 'b', 'c', 'd']], mat)
-        >>> bilambda = lambda x: int(x[1] > x[0])
-        >>> lm.to_sparse().apply_lambda(bilambda).matrix.toarray()
-        array([[0. , 0.5, 0. , 0. ],
-               [0. , 0. , 0. , 0. ],
-               [0. , 0. , 0. , 0.5],
-               [0. , 0. , 0. , 0. ]], dtype=float32)
-        >>> lm.apply_lambda(bilambda).matrix
-        array([[0. , 0.5, 0. , 0. ],
-               [0. , 0. , 0. , 0. ],
-               [0. , 0. , 0. , 0.5],
-               [0. , 0. , 0. , 0. ]])
-        """
-        x, y = self.matrix.nonzero()
-        factor = np.array([lambda_((self.row[i], self.column[j])) for i, j in zip(x, y)])
-        if self.is_sparse:
-            data = self.matrix.data * factor
-            matrix = KarmaSparse((data, (x, y)), shape=self.matrix.shape)
-        else:
-            matrix = self.matrix.copy()
-            matrix[(x, y)] *= factor
-        return LabeledMatrix(self.label, matrix, deco=self.deco)
-
-    def apply_numpy_function(self, function, function_args=None):
-        """
+        Apply a pointwise (numpy) method on each value of the matrix
+        :param function: callable that takes one number as input and that returns another number
+        :param function_args: optional list of args to pass into the function call
         >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1.345,2.234], [3.890,4.678]]))
         >>> lm.apply_numpy_function(np.round, [1]).matrix
         array([[1.3, 2.2],
@@ -1781,40 +1785,96 @@ class LabeledMatrix:
             matrix[matrix.nonzero()] = function(matrix[matrix.nonzero()], *function_args)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
-    def power(self, power):
+    def power(self, power: int) -> LabeledMatrix:
         return self.apply_numpy_function(np.power, [power])
 
-    def log1p(self):
+    def __pow__(self, power: int):
+        return self.power(power)
+
+    def abs(self) -> LabeledMatrix:
+        """
+        Take absolute value of each matrix entry
+        >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
+        >>> lm.abs().matrix
+        array([[0.5 , 0.5 ],
+               [0.25, 0.  ]])
+        >>> lm.to_sparse().abs().matrix.toarray()
+        array([[0.5 , 0.5 ],
+               [0.25, 0.  ]], dtype=float32)
+        """
+        return LabeledMatrix(self.label, abs(self.matrix), deco=self.deco)
+
+    def __abs__(self):
+        return self.abs()
+
+    def sign(self) -> LabeledMatrix:
+        """
+        >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
+        >>> lm.sign().matrix
+        array([[ 1., -1.],
+               [-1.,  0.]])
+        >>> np.all(lm.to_sparse().sign().matrix.toarray() == lm.sign().matrix)
+        True
+        """
+        if self.is_sparse:
+            return LabeledMatrix(self.label, self.matrix.sign(), deco=self.deco)
+        return LabeledMatrix(self.label, np.sign(self.matrix), deco=self.deco)
+
+    def inverse(self, scalar: float = 1.0) -> LabeledMatrix:
+        """
+        Inverse each matrix value and multiply by given scalar
+        >>> lm1 = LabeledMatrix(2*[['b', 'c']], np.array([[1.,2.], [5., 0.]]))
+        >>> lm1.inverse(2.0).matrix
+        array([[2. , 1. ],
+               [0.4, 0. ]])
+        >>> lm1.to_sparse().inverse(2.0).matrix.toarray()
+        array([[2. , 1. ],
+               [0.4, 0. ]], dtype=float32)
+        >>> lm = LabeledMatrix(2*[['a', 'b']], np.array([[1,2], [5,4]]))
+        >>> lm.to_sparse().inverse(2.0).matrix.toarray()
+        array([[2. , 1. ],
+               [0.4, 0.5]], dtype=float32)
+        >>> lm.inverse(2.).matrix
+        array([[2. , 1. ],
+               [0.4, 0.5]])
+        """
+        return LabeledMatrix(self.label,
+                             pseudo_element_inverse(self.matrix, scalar),
+                             deco=self.deco)
+
+    def log1p(self) -> LabeledMatrix:
+        """
+        Apply np.log1p function on each matrix value
+        """
         return self.apply_numpy_function(np.log1p)
 
-    def log(self):
+    def log(self) -> LabeledMatrix:
+        """
+        Apply np.log function on each matrix value
+        """
         return self.apply_numpy_function(np.log)
 
-    def exp(self):
+    def exp(self) -> LabeledMatrix:
+        """
+        Apply np.exp function on each matrix value
+        """
         return self.apply_numpy_function(np.exp)
 
-    def round(self):
+    def round(self) -> LabeledMatrix:
+        """
+        Apply np.round function on each matrix value
+        """
         return self.apply_numpy_function(np.round)
 
-    def trunc(self):
+    def trunc(self) -> LabeledMatrix:
+        """
+        Apply np.trunc function on each matrix value
+        """
         return self.apply_numpy_function(np.trunc)
 
-    def soft_cutoff(self, threshold):
+    def clip(self, lower: Optional[float] = None, upper: Optional[float] = None) -> LabeledMatrix:
         """
-        >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']),
-        ...                    np.array([[3, -6, 9], [7, 5, 10]]))
-        >>> lm.soft_cutoff(100).matrix
-        array([[0.02955447, 0.        , 0.08606881],
-               [0.06760618, 0.04877058, 0.09516258]])
-        """
-
-        def np_soft_cutoff(x, threshold):
-            return np.maximum(1. - np.exp(-x / threshold), 0)
-
-        return self.apply_numpy_function(np_soft_cutoff, [threshold])
-
-    def clip(self, lower=None, upper=None):
-        """
+        Apply np.clip function with arguments lower and upper on each matrix value
         >>> lm = LabeledMatrix(2*[['b', 'c']], np.array([[0.5, -0.5], [-0.25, 0]]))
         >>> lm.clip(0.1, 0.25).matrix
         array([[0.25, 0.1 ],
@@ -1825,8 +1885,9 @@ class LabeledMatrix:
         """
         return self.apply_numpy_function(np.clip, [lower, upper])
 
-    def logistic(self, shift, coef=1.):
+    def logistic(self, shift: float, coef: float = 1.) -> LabeledMatrix:
         """
+        Apply sigmoid function centered at shift and rescaled by coef on each matrix value
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']),
         ...                    np.array([[3, 6, 9], [7, 5, 10]]))
         >>> lm.logistic(6).matrix
@@ -1836,10 +1897,23 @@ class LabeledMatrix:
         array([[0.04742587, 0.5       , 0.95257413],
                [0.7310586 , 0.26894143, 0.98201376]], dtype=float32)
         """
-        return self.apply_numpy_function(logit, [shift, coef])
+        return self.apply_numpy_function(sigmoid, [shift, coef])
 
-    def truncate(self, cutoff=None, nb=None, cum_h=None, cum_v=None, nb_h=None, nb_v=None, to_optimal_format=False):
+    def truncate(self,
+                 cutoff=None,
+                 nb=None,
+                 cum_h=None, cum_v=None,
+                 nb_h=None, nb_v=None,
+                 to_optimal_format=False) -> LabeledMatrix:
         """
+        TODO docstring
+        :param cutoff:
+        :param nb:
+        :param cum_h:
+        :param cum_v:
+        :param nb_h:
+        :param nb_v:
+        :param to_optimal_format:
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'z', 'y']), np.array([[4, 6, 5], [7, 9, 8]]))
         >>> lm.truncate(cutoff=6).matrix
         array([[0, 6, 0],
@@ -1879,29 +1953,32 @@ class LabeledMatrix:
             lm = lm.to_optimal_format()
         return lm
 
-    def truncate_by_budget(self, density, volume):
+    def truncate_by_budget(self, density: LabeledMatrix, volume: Number) -> LabeledMatrix:
         """
-        self - typically a similarity matrix
-        density - diagonal matrix (~ self.column)
-        volume - min_volume of neighbourhood we wish w.r.t. given density
-
+        Return a sparse matrix for which sum by row of non-zero elements is bigger or equal to given volume
+        Typically, self can be considered as similarity matrix
+        and truncation is used to define neighborhoods of a given point with the minimal size equal to volume
+        :param density: diagonal LabeledMatrix with labels from self.column.
+                        It will be used to give different weights to columns when calculating the sum of a row
+        :param volume: we want each row to have at least given volume.
+                       In the example above it can be considered as minimal size of a point's neighbourhood.
         >>> sim = LabeledMatrix((['b', 'c'], ['x', 'y', 'z']), np.array([[2, 1, 0], [0, 1, 2]]))
         >>> density = LabeledMatrix((['x', 'y', 'z'], ['x', 'y', 'z']),
         ...                         np.diag(np.arange(1,4)))
         >>> aeq(sim.truncate_by_budget(density, 1.5).matrix, np.array([[2, 1, 0], [0, 0, 2]]))
         True
         """
-        if not density.is_square():
+        if not density.is_square:
             raise ValueError('density matrix should be squared')
         density = density.align(self, axes=[(1, 0, None), (0, 0, None)])[0]
         matrix = truncate_by_budget(self.matrix, density.matrix, volume)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
-    def truncate_by_count(self, max_rank, axis):
+    def truncate_by_count(self, max_rank: Union[dict, int], axis: Optional[int]) -> LabeledMatrix:
         """
-        Returns LabeledMatrix truncated to max_rank maximal elements
-        Args:
-            max_rank: int or dict: maximal rank per axis
+        Return LabeledMatrix truncated to max_rank maximal elements
+        :param max_rank: int or dict: maximal rank to keep (can be dictionary with labels of given axis)
+        :param axis: 0/1/None
         >>> lm = LabeledMatrix((['b', 'c'], ['x', 'z', 'y']), np.array([[4, 6, 5], [7, 9, 8]]))
         >>> lm.truncate_by_count({'b': 1, 'c': 2}, axis=1).matrix
         array([[0, 6, 0],
@@ -1917,12 +1994,11 @@ class LabeledMatrix:
         return LabeledMatrix(self.label, truncate_by_count(self.matrix, max_rank, axis=axis),
                              deco=self.deco)
 
-    def normalize(self, axis=1, norm='l1'):
-        trans_matrix = normalize(self.matrix.copy(), axis=axis, norm=norm)
-        return LabeledMatrix(self.label, trans_matrix, deco=self.deco)
-
-    def anomaly(self, skepticism=1.):
+    def anomaly(self, skepticism: float = 1.) -> LabeledMatrix:
         """
+        Calculate anomaly measure of each value to appear in matrix compared to marginal distribution of those values
+        FIXME Link exact description of the formulas
+        :param skepticism: float, the bigger it is more likely we will consider some value an anomaly
         >>> v = np.array([[7, 0, 3],
         ...               [5, 0, 5],
         ...               [3, 3, 4],
@@ -1938,7 +2014,7 @@ class LabeledMatrix:
         """
         return LabeledMatrix(self.label, anomaly(self.matrix, skepticism), self.deco)
 
-    def dict_argmax(self):
+    def dict_argmax(self) -> dict:
         """
         >>> mat = np.array([[4, 5, 0],
         ...                 [0, 3, 0],
@@ -1955,7 +2031,7 @@ class LabeledMatrix:
         my_dict = {x: lm_nonzero.column[asort[i]] for i, x in enumerate(lm_nonzero.row)}
         return my_dict
 
-    def dict_max(self, axis=1):
+    def dict_max(self, axis: int = 1) -> Dict[Any, Number]:
         """
         >>> mat = np.array([[4, 5, 0],
         ...                 [0, 3, 0],
@@ -1970,9 +2046,18 @@ class LabeledMatrix:
         lm_nonzero = self.without_zeros()
         return dict(zip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
 
-    def similarity(self, other=None, cutoff=0.005, nb_keep=200, top=1000, cumtop=0.02):
+    def similarity(self, other: Optional[LabeledMatrix] = None, cutoff: float = 0.005, nb_keep: int = 200,
+                   top: int = 1000, cumtop: float = 0.02):
         """
-        See matrix_utils.buddies_matrix.
+        Return Labeled matrix with similarity between row vectors, keeping only the most similar pairs
+        FIXME Link an article or describe how exactly similarity is calculated
+        :param other: optional LabeledMatrix to calculate similarities between row vectors from self and from other
+        :param cutoff: in resulting matrix keep only similarities larger than `cutoff`
+        :param nb_keep: in resulting matrix keep only `nb_keep` most similar pairs for each row label
+        :param top: consider only `top` largest coordinates in each row vector when calculating similarity
+        :param cumtop: consider only `cumtop` part of each row vector's l1-norm (keeping largest coordinates)
+        :return: matrix of the shape (len(self.row), len(other.row)) or
+                                     (len(self.row), len(other.row)) if other is not specified
         >>> mat = np.array([[0.4, 0.5, 0, 0.1, 0],
         ...                 [0, 0.1, 0.4, 0.5, 0],
         ...                 [0, 0, 0, 0, 0],
@@ -2006,36 +2091,7 @@ class LabeledMatrix:
                                             cutoff=cutoff, nb_keep=nb_keep),
                              deco=(lm.row_deco, other.row_deco))
 
-    def similarity_query(self, my_row=None, nb=20, top=5000):
-        """
-        TODO : this method needs rewritting
-        >>> lm1 = LabeledMatrix((['a', 'b', 'c'], ['x', 'y']),
-        ...                     np.array([[5, 5], [7, 3], [3, 7]]))
-        >>> lm1.similarity_query('b') #doctest: +NORMALIZE_WHITESPACE
-          entry_key  nb_nonzero  total_score  min_score
-        0         b           3         24.0        6.0
-        ------------------------------------------------------------
-          reco  score
-        0    b   10.0
-        1    a    8.0
-        2    c    6.0
-        >>> lm1.to_sparse().similarity_query('c') #doctest: +NORMALIZE_WHITESPACE
-          entry_key  nb_nonzero  total_score  min_score
-        0         c           3         24.0        6.0
-        ------------------------------------------------------------
-          reco  score
-        0    c   10.0
-        1    a    8.0
-        2    b    6.0
-        """
-        if my_row is None:
-            my_row = self.rand_row()
-        if my_row not in self.row:
-            print('Unknown label')
-        else:
-            self.restrict_row([my_row]).similarity(self, top=top).reco(my_row, nb=nb)
-
-    def jaccard(self):
+    def jaccard(self) -> LabeledMatrix:
         """
         LM is viewed as occurence matrix (item, user) and the jaccard similarity is
         computed between items.
@@ -2055,7 +2111,7 @@ class LabeledMatrix:
             ._add(total._dot(inter.nonzero_mask()))._add(-inter)
         return 1. * inter / union
 
-    def _relative_count(self, top, axis):
+    def _relative_count(self, top: Union[float, int], axis: int) -> int:
         """
         :param top: int with number of lines/columns or float with proportion of lines/columns
         :param axis: in [0, 1]
@@ -2073,36 +2129,44 @@ class LabeledMatrix:
             raise ValueError(f'top argument must be a float in [0, 1) or an integer, got {type(top)} instead')
         return top
 
-    def pairwise_overlap(self, top, axis=0, renorm=True, potential=False):
+    def pairwise_overlap(self, top: Union[float, int], axis: int = 0,
+                         renorm: bool = True, potential: bool = False) -> LabeledMatrix:
         """
-        * top can by either int (number) either float in [0, 1]
-        * axis in {0, 1}, default is 0
-        * renorm = True/False, default is True
+        Calculating similarity between matrix columns (axis=0) or rows (axis=1) based on common top values.
+        For example for axis=0:
+        * in each column keep only top largest values
+        * for each pair of columns i, j overlap is equal to number of coordinates corresponding
+        to top values between column i and column j
 
-        Warning : That takes into account only nonzero scores
-            >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
-            >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-            >>> np.array(lm.pairwise_overlap(2).matrix)
-            array([[1. , 0.5, 0.5],
-                   [0.5, 1. , 0.5],
-                   [0.5, 0.5, 1. ]], dtype=float32)
-            >>> np.array(lm.pairwise_overlap(3).matrix)
-            array([[1.       , 0.6666667, 0.6666667],
-                   [0.6666667, 1.       , 1.       ],
-                   [0.6666667, 1.       , 1.       ]], dtype=float32)
-            >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int64)
-            array([[3, 2, 2],
-                   [2, 3, 3],
-                   [2, 3, 3]])
-            >>> np.array(lm.pairwise_overlap(0.8, axis=1, renorm=False).matrix, dtype=np.int64)
-            array([[2, 1, 1, 1],
-                   [1, 2, 2, 2],
-                   [1, 2, 2, 2],
-                   [1, 2, 2, 2]])
-            >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).is_square()
-            True
-            >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).row
-            [0, 1, 2, 3]
+        :param top: can be either number of top values to consider, either float in [0, 1] as % of total values
+        :param axis: 0 or 1, default is 0
+        :param renorm: boolean to normalize resulting row with l1 norm:
+                       we consider overlap as % of number of top values, default is True
+        :param potential: boolean whether to use matrix values as weights when calculating intersection weight or
+                          just count intersecting non-zero values, default False (counting non-zero values)
+        >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
+        >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
+        >>> np.array(lm.pairwise_overlap(2).matrix)
+        array([[1. , 0.5, 0.5],
+               [0.5, 1. , 0.5],
+               [0.5, 0.5, 1. ]], dtype=float32)
+        >>> np.array(lm.pairwise_overlap(3).matrix)
+        array([[1.       , 0.6666667, 0.6666667],
+               [0.6666667, 1.       , 1.       ],
+               [0.6666667, 1.       , 1.       ]], dtype=float32)
+        >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int64)
+        array([[3, 2, 2],
+               [2, 3, 3],
+               [2, 3, 3]])
+        >>> np.array(lm.pairwise_overlap(0.8, axis=1, renorm=False).matrix, dtype=np.int64)
+        array([[2, 1, 1, 1],
+               [1, 2, 2, 2],
+               [1, 2, 2, 2],
+               [1, 2, 2, 2]])
+        >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).is_square
+        True
+        >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).row
+        [0, 1, 2, 3]
         """
         if axis != 0:
             return self.transpose().pairwise_overlap(top, axis=co(axis), renorm=renorm, potential=potential)
@@ -2119,12 +2183,14 @@ class LabeledMatrix:
             return overlap_lm.normalize(norm='linf')
         return overlap_lm
 
-    def external_overlap(self, other, top, renorm=True):
+    def external_overlap(self, other: LabeledMatrix, top: Union[float, int], renorm: bool = True) -> LabeledMatrix:
         """
+        Calculate similarity between columns in self and columns in other based on common top values
+        as described in pairwise_overlap
         :param other: LabeledMatrix with alternative score
-        :param top: size of extract
-        :param renorm: bool: whether we should renormalize the result
-        :return: external overlap matrix between self and other
+        :param top: can be either number of top values to consider, either float in [0, 1] as % of total values
+        :param renorm: boolean to normalize resulting row with l1 norm:
+                       we consider overlap as % of number of top values, default is True
         >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix, deco=({}, {'a': 'A'}))
         >>> lm.external_overlap(lm, 2).to_dense().matrix
@@ -2172,70 +2238,26 @@ class LabeledMatrix:
 
         return max_ranks, max_volumes
 
-    def population_allocation(self, dispatch_mask, norm='l1'):
-        """
-        Returns population allocation matrix for a given score matrix (self), and dispatch matrix from dispatch_mask
-        both self and dispatch_mask should be LabeledMatrices with label (users, topics) and we use standard
-        LM's alignment by intersection on both users and topics
-        Args:
-            dispatch_mask: LabeledMatrix with dispatch
-            norm: string or None: norm to use to normalize result's rows, if None raw result will be returned
-        >>> score = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0.2], [0.5, 0.5], [0.2, 1]]))
-        >>> dispatch_mask = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0], [0.5, 0], [0., 1]]))
-        >>> score.population_allocation(dispatch_mask, norm=None).matrix
-        array([[2., 1.],
-               [2., 1.]])
-        >>> score.population_allocation(dispatch_mask).matrix
-        array([[0.66666667, 0.33333333],
-               [0.66666667, 0.33333333]])
-        """
-        pop_allocation = self.nonzero_mask().transpose().dot(dispatch_mask.nonzero_mask())
-        if norm is not None:
-            pop_allocation = pop_allocation.normalize(norm=norm)
-
-        return pop_allocation
-
-    def potential_allocation(self, dispatch_mask, norm='l1'):
-        """
-        Returns potential allocation matrix for a given score matrix (self), and dispatch matrix from dispatch_mask
-        both self and dispatch_mask should be LabeledMatrices with label (users, topics) and we use standard
-        LM's alignment by intersection on both users and topics
-        Args:
-            dispatch_mask: LabeledMatrix with dispatch
-            norm: string or None: norm to use to normalize result's rows, if None raw result will be returned
-        >>> score = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0.2], [0.5, 0.5], [0.2, 1]]))
-        >>> dispatch_mask = LabeledMatrix((['u1', 'u2', 'u3'], ['t1', 't2']), np.array([[1, 0], [0.5, 0], [0., 1]]))
-        >>> score.potential_allocation(dispatch_mask, norm=None).matrix
-        array([[1.5, 0.2],
-               [0.7, 1. ]])
-        >>> score.potential_allocation(dispatch_mask).matrix
-        array([[0.88235294, 0.11764706],
-               [0.41176471, 0.58823529]])
-        """
-        pot_allocation = self.transpose().dot(dispatch_mask.nonzero_mask())
-        if norm is not None:
-            pot_allocation = pot_allocation.normalize(norm=norm)
-
-        return pot_allocation
-
-    def _rank_dispatch(self, maximum_pressure, max_ranks, max_volumes):
+    def _rank_round_robin_allocation(self,
+                                     maximum_pressure: int,
+                                     max_ranks: Union[list, np.ndarray],
+                                     max_volumes: Union[list, np.ndarray]) -> LabeledMatrix:
         """
         WARNING: works only on nonzero scores
-        Returns LabeledMatrix with allocation user-topic
-        Args:
-            maximum_pressure: maximal number of times each user can appear in allocation
-            max_ranks: arraylike: maximal rank of user in extract each topic can take
-            max_volumes: arraylike: maximal value of population volume each topic can be allocated to
+        Return LabeledMatrix with allocation user-topic
+        :param maximum_pressure: maximal number of times each user can appear in allocation
+        :param max_ranks: arraylike: maximal rank of user in extract each topic can take
+        :param max_volumes: arraylike: maximal value of population volume each topic can be allocated to
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm._rank_dispatch(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._rank_round_robin_allocation(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
 
-        >>> lm._rank_dispatch(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._rank_round_robin_allocation(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
@@ -2246,30 +2268,36 @@ class LabeledMatrix:
         choice = rank_dispatch(self.matrix, maximum_pressure, np.asarray(max_ranks), np.asarray(max_volumes))
         return LabeledMatrix(self.label, choice, self.deco)
 
-    def rank_dispatch(self, maximum_pressure, max_ranks=None, max_volumes=None):
+    def rank_round_robin_allocation(self,
+                                    maximum_pressure: int = 1,
+                                    max_ranks: Optional[Union[int, dict]] = None,
+                                    max_volumes: Optional[Union[int, dict]] = None) -> LabeledMatrix:
         """
-        Return LabeledMatrix with allocation user-topic.
+        Return LabeledMatrix with allocation of row labels to 1 or many column labels in round-robin manner.
+        WARNING: zero values are ignored and not allocated
+        If we consider matrix as user preferences to some topic and we want to assign each user to 1 or many topics:
+        * each topic (column) will look at users (rows) in order given by their preference (matrix value)
+        * we will assign users (row labels) to topics (columns) iterating over topics (columns)
+            and picking most-interested user (row) - https://en.wikipedia.org/wiki/Round-robin_item_allocation
 
-        WARNING: works only on nonzero scores
-        Args:
-            maximum_pressure: maximal number of times each user can appear in allocation
-            max_ranks: int/dict: maximal rank of user in extract each topic can take;
-                                           default: maximal rank
-            max_volumes: int/dict: maximal value of population volume each topic can be allocated to;
-                                             default: all users
+        Optionally we may add more constraints
+        :param maximum_pressure: maximal number of times each row can appear in allocation, default 1
+        :param max_ranks: int/dict: maximal rank of user (row) each topic (column) can take
+        :param max_volumes: int/dict: maximal number of rows that can be allocated to each column
+        :return: LabeledMatrix of the same shape and with the same values, keeping only allocated pairs
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm.rank_dispatch(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.rank_round_robin_allocation(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
-        >>> lm.rank_dispatch(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.rank_round_robin_allocation(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
-        >>> lm.rank_dispatch(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.rank_round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
@@ -2277,26 +2305,33 @@ class LabeledMatrix:
         3        3        c    5.0
         """
         max_ranks, max_volumes = self._check_dispatch_params(max_ranks, max_volumes)
-        return self._rank_dispatch(maximum_pressure, max_ranks, max_volumes)
+        return self._rank_round_robin_allocation(maximum_pressure, max_ranks, max_volumes)
 
-    def argmax_dispatch(self, maximum_pressure, max_ranks=None, max_volumes=None):
+    def argmax_allocation(self,
+                          maximum_pressure: int,
+                          max_ranks: Optional[Union[int, dict]] = None,
+                          max_volumes: Optional[Union[int, dict]] = None) -> LabeledMatrix:
         """
-        Return LabeledMatrix with allocation user-topic based on score.
-
-        Args:
-            maximum_pressure: maximal number of times each user can appear in allocation
-            max_ranks: int/dict: maximal rank of user in extract each topic can take;
-                                           default: maximal rank
-            max_volumes: int/dict: maximal value of population volume each topic can be allocated to;
-                                             default: all users
+        Return LabeledMatrix with allocation of row labels to 1 or many column labels based on matrix value.
+        WARNING: zero values are ignored and not allocated
+        If we consider matrix as user preferences to some topic and we want to assign each user to 1 or many topics:
+        * we order pairs user—topic (row-column) in preference descending order
+        * iterating over pairs in this order we will check if it can be allocated wrt constraints:
+        :param maximum_pressure: maximal number of times each row can appear in allocation, default 1
+        :param max_ranks: int/dict: maximal rank of user (row) each topic (column) can take
+        :param max_volumes: int/dict: maximal number of rows that can be allocated to each column
+        :return: LabeledMatrix of the same shape and with the same values, keeping only allocated pairs
         """
         max_ranks, max_volumes = self._check_dispatch_params(max_ranks, max_volumes)
 
         choice = argmax_dispatch(self.matrix, maximum_pressure, max_ranks, max_volumes)
         return LabeledMatrix(self.label, choice, self.deco)
 
-    def tail_clustering(self, weight, k, min_density=0.):
+    def tail_clustering(self, weight: LabeledMatrix, n_clusters: int, min_density: float = 0.) -> LabeledMatrix:
         """
+        :param weight: weight LabeledMatrix, sum of weights for each row will be used to weight samples
+        :param n_clusters: number of clusters to construct
+        :param min_density:
         >>> v = np.array([[7, 0, 3],
         ...               [5, 0, 5],
         ...               [3, 3, 4],
@@ -2312,16 +2347,19 @@ class LabeledMatrix:
         mults = weight.sum(axis=1).align(self, axes=[(1, 1, None), (0, 1, None)])[0] \
             .matrix.diagonal()
         if self.is_sparse:
-            labels = sparse_tail_clustering(self.matrix, mults, k, min_density)
+            labels = sparse_tail_clustering(self.matrix, mults, n_clusters, min_density)
         else:
-            labels = tail_clustering(self.matrix, mults, k)
+            labels = tail_clustering(self.matrix, mults, n_clusters)
         lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(self.row_deco, self.row_deco)
         return lm
 
-    def hierarchical_clustering(self, weight, k):
+    def hierarchical_clustering(self, weight: Optional[LabeledMatrix], n_clusters: int) -> LabeledMatrix:
         """
-        Returns LabeledMatrix with clusters' characteristic vectors for each row
+        Return LabeledMatrix with clusters' characteristic vectors for each row using Ward's method
+        https://en.wikipedia.org/wiki/Ward%27s_method
+        :param weight: weight LabeledMatrix, sum of weights for each row will be used to weight samples
+        :param n_clusters: number of clusters to construct
         >>> v = np.array([[7, 0, 3],
         ...               [5, 0, 5],
         ...               [3, 3, 4],
@@ -2335,14 +2373,17 @@ class LabeledMatrix:
         if weight is not None:
             weight = weight.sum(axis=1).align(self, axes=[(1, 1, None), (0, 1, None)])[0].matrix.diagonal()
 
-        labels = WardTree(np.asarray(self.matrix), weights=weight, n_clusters=k).build_labels()
+        labels = WardTree(np.asarray(self.matrix), weights=weight, n_clusters=n_clusters).build_labels()
         lm = LabeledMatrix.from_zip_occurrence(self.row, take_indices(self.row, labels))
         lm.set_deco(self.row_deco, self.row_deco)
 
         return lm
 
-    def connected_components(self, connection='weak'):
+    def connected_components(self, connection='weak') -> LabeledMatrix:
         """
+        Return LabeledMatrix with clusters' characteristic vectors for each row
+        using scipy.sparse.csgraph.connected_components
+        :param connection: the type of connection to use in scipy.sparse.csgraph.connected_components
         >>> mat = np.array([[1, 1, 0, 0, 0],
         ...                 [0, 1, 0, 0, 1],
         ...                 [0, 0, 1, 0, 0],
@@ -2364,7 +2405,7 @@ class LabeledMatrix:
                [0, 0, 0, 1],
                [1, 0, 0, 0]])
         """
-        if not self.is_square():
+        if not self.is_square:
             raise LabeledMatrixException('Matrix must be square')
         matrix = self.matrix.to_scipy_sparse(copy=False) if self.is_sparse else self.matrix
         nn, lab = connected_components(matrix, connection=connection)
@@ -2373,8 +2414,10 @@ class LabeledMatrix:
         lm.set_deco(row_deco=self.row_deco)
         return lm
 
-    def affinity_clusters(self, preference=None, max_iter=200):
+    def affinity_clusters(self, preference: Optional[Union[str, Number]] = None, max_iter: int = 200):
         """
+        :param preference: 'mean', 'median' or float
+        :param max_iter:
         >>> similarity = np.array([[3, 5, 1, 1],
         ...                        [5, 2, 2, 1],
         ...                        [1, 1, 2, 6],
@@ -2396,14 +2439,19 @@ class LabeledMatrix:
         lm.set_deco(*self.deco)
         return lm
 
-    def spectral_clusters(self, k=10):
-        clust = SpectralClustering(n_clusters=k, affinity='precomputed', n_neighbors=3)
+    def spectral_clusters(self, n_clusters: int = 10):
+        """
+        Return LabeledMatrix with clusters' characteristic vectors for each row
+        using sklearn.cluster.SpectralClustering
+        :param n_clusters: number of clusters to generate
+        """
+        clust = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', n_neighbors=3)
         lab = clust.fit_predict(self.matrix)
         lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
         return lm
 
-    def co_clustering(self, ranks, max_iter=120, nb_preruns=30, pre_iter=4):
+    def co_clustering(self, ranks, max_iter=120, nb_preruns=30, pre_iter=4) -> Tuple[LabeledMatrix, LabeledMatrix]:
         """
         >>> matrix = np.array([[5, 5, 5, 0, 0, 0],
         ...                    [5, 5, 5, 0, 0, 0],
@@ -2437,14 +2485,13 @@ class LabeledMatrix:
         lmw.set_deco(column_deco=self.column_deco)
         return lmw, lmh
 
-    def svd(self, rank, randomized=True):
+    def svd(self, rank: int, randomized: bool = True) -> Tuple[LabeledMatrix, LabeledMatrix]:
         """
-        If randomized=False, scipy.sparse.linalg.svds solver will be used
-        For randomized=True, the result will be not exact but obtained by computing shorter time.
-        For randomized version, see:
-        http://arxiv.org/pdf/0909.4061.pdf
-        http://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html
-
+        Partial SVD matrix factorization
+        :param rank: number of largest singular values to keep
+        :param randomized: False corresponds to scipy.sparse.linalg.svds solver
+                           True faster but not exact algorithm from http://arxiv.org/pdf/0909.4061.pdf will be used
+        :return: two matrices, U & V each multiplied by sqrt of singular values matrix S.
         >>> lm = LabeledMatrix((range(5), range(4)), np.arange(20).reshape(5,4))
         >>> u, w = lm.svd(2, randomized=False)
         >>> u.matrix  #doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
@@ -2485,12 +2532,16 @@ class LabeledMatrix:
         lm_w = LabeledMatrix((self.column, list(range(rank))), w, (self.column_deco, {}))
         return lm_u, lm_w
 
-    def svd_proxy(self, rank, randomized=True):
+    def svd_appromximation(self, rank: int, randomized: bool = True) -> LabeledMatrix:
         """
+        Return reconstructed matrix after SVD factorization: lower rank approximation of the initial matrix
+        :param rank: number of largest singular values to keep
+        :param randomized: False corresponds to scipy.sparse.linalg.svds solver
+                           True faster but not exact algorithm from http://arxiv.org/pdf/0909.4061.pdf will be used
         >>> lm = LabeledMatrix((range(5), range(4)), np.arange(20).reshape(5,4))
-        >>> lm.svd_proxy(2) == lm
+        >>> lm.svd_appromximation(2) == lm
         True
-        >>> aeq(lm.svd_proxy(1).matrix, lm.svd_proxy(2).matrix)
+        >>> aeq(lm.svd_appromximation(1).matrix, lm.svd_appromximation(2).matrix)
         False
         """
         if isinstance(rank, int):
@@ -2514,9 +2565,10 @@ class LabeledMatrix:
                                mat_mask=self.matrix) / len(ranks)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
-    def sort_by_hierarchical_clustering(self):
+    def sort_by_hierarchical_clustering(self) -> LabeledMatrix:
         """
-        Returns LabeledMatrix with rows and columns reordered in respect to the Ward tree leaves labels
+        Return LabeledMatrix with rows and columns reordered wrt the Ward tree leaves labels
+        https://en.wikipedia.org/wiki/Ward%27s_method
         >>> v = np.array([[7, 0, 3],
         ...               [5, 0, 5],
         ...               [3, 3, 4],
@@ -2534,13 +2586,21 @@ class LabeledMatrix:
         order_coding = clustering_dispatcher(np.asarray(lm.matrix))
         idx = np.asarray(sorted(list(range(len(lm.row))), key=lambda i: order_coding[i]))
 
-        if lm.is_square():
+        if lm.is_square:
             return lm._take_on_row(idx)._take_on_column(idx)
         return lm._take_on_row(idx)
 
     @use_seed()
-    def nmf(self, rank, max_model_rank=60, max_iter=150, svd_init=False):
+    def nmf(self, rank: Optional[Union[int, List[int]]],
+            max_model_rank: int = 60,
+            max_iter: int = 150,
+            svd_init: bool = False) -> Tuple[LabeledMatrix, LabeledMatrix]:
         """
+        Return non-negative matrix factorization
+        :param rank:
+        :param max_model_rank:
+        :param max_iter:
+        :param svd_init:
         >>> m = LabeledMatrix.from_random(seed=12, sparse=False)
         >>> w, h = m.dot(m.transpose()).nmf(3, max_iter=20)
         >>> (w.dot(h.transpose()) - m.dot(m.transpose())).abs().matrix.sum() < 0.05
@@ -2568,8 +2628,11 @@ class LabeledMatrix:
                             deco=(self.column_deco, {}))
         return lmw, lmh
 
-    def nmf_fold(self, right_factor, max_iter=30):
+    def nmf_fold(self, right_factor: LabeledMatrix, max_iter: int = 30) -> LabeledMatrix:
         """
+        Find left factor in non-negative matrix factorization for a given matrix `self` and right factor
+        :param right_factor: already obtained right factor
+        :param max_iter: number of iterations
         >>> w = LabeledMatrix.from_random((10, 5), seed=100, sparse=False)
         >>> h = LabeledMatrix.from_random((7, 5), seed=100)
         >>> matrix = w.dot(h.transpose())
@@ -2586,13 +2649,20 @@ class LabeledMatrix:
         return LabeledMatrix((source.row, right_factor.column), left_factor_matrix,
                              deco=(source.row_deco, right_factor.column_deco))
 
-    def nmf_proxy(self, rank, max_iter=120, svd_init=True):
+    def nmf_approximation(self,
+                          rank: Optional[Union[int, List[int]]],
+                          max_iter: int = 120,
+                          svd_init: bool = True) -> LabeledMatrix:
         """
+        Return reconstructed matrix after NMF factorization: lower rank approximation of the initial matrix
+        :param rank:
+        :param max_iter:
+        :param svd_init:
         >>> m = LabeledMatrix.from_random(seed=12)
         >>> lm = m.dot(m.transpose())
-        >>> (lm - lm.nmf_proxy(3)).abs().matrix.sum() < 0.1
+        >>> (lm - lm.nmf_approximation(3)).abs().matrix.sum() < 0.1
         True
-        >>> (lm - lm.nmf_proxy([3, 4, 3])).abs().matrix.sum() < 0.1
+        >>> (lm - lm.nmf_approximation([3, 4, 3])).abs().matrix.sum() < 0.1
         True
         """
         if (isinstance(rank, int)) or (rank is None):
@@ -2609,12 +2679,12 @@ class LabeledMatrix:
                                mat_mask=self.matrix) / len(ranks)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
-    def _reco_df(self, my_row=None, nb=20):
+    def _reco_df(self, row: Optional[Any] = None, nb: int = 20):
         """
         >>> mat = np.array([[4, 5, 0, 1],
         ...                 [0, 0, 0, 0]])
         >>> lm = LabeledMatrix((['a', 'b'], range(4)), mat)
-        >>> lm.reco('b') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.display_reco('b') #doctest: +NORMALIZE_WHITESPACE
         All entries are zeros
           entry_key  nb_nonzero
         0         b           0
@@ -2623,19 +2693,19 @@ class LabeledMatrix:
         Columns: [reco, score]
         Index: []
         """
-        if my_row is None:
-            my_row = self.rand_row()
+        if row is None:
+            row = self.rand_row()
 
-        if my_row not in self.row:
+        if row not in self.row:
             print('Unknown label')
             return pd.DataFrame(), pd.DataFrame()
-        lm_loc = self.restrict_row([my_row])
+        lm_loc = self.restrict_row([row])
 
         try:
             lm_loc = lm_loc.without_zeros()
         except LabeledMatrixException:
             print('All entries are zeros')
-            return (pd.DataFrame([[my_row, 0]], columns=['entry_key', 'nb_nonzero']),
+            return (pd.DataFrame([[row, 0]], columns=['entry_key', 'nb_nonzero']),
                     pd.DataFrame([], columns=['reco', 'score']))
 
         my_df = lm_loc.truncate(nb_h=nb) \
@@ -2644,24 +2714,29 @@ class LabeledMatrix:
 
         # head
         nb_nonzero = len(lm_loc.column)
-        head = {'entry_key': [my_row], 'nb_nonzero': [nb_nonzero]}
+        head = {'entry_key': [row], 'nb_nonzero': [nb_nonzero]}
 
         if nb_nonzero > 0:
             head['total_score'] = [safe_sum(lm_loc.matrix)]
             head['min_score'] = [safe_min(lm_loc.matrix)]
         if getattr(self, 'row_deco', None):
-            head['deco'] = [self.row_deco.get(my_row, '')]
+            head['deco'] = [self.row_deco.get(row, '')]
         return pd.DataFrame(head).reset_index(drop=True), my_df.reset_index(drop=True)
 
-    def reco(self, my_row=None, nb=15, reco_only=False):
+    def display_reco(self, row: Optional[Any] = None, nb: int = 15, reco_only: bool = False):
         """
-        Argmax horizontal columns sorting
+        For a given row show column labels of nb largest elements.
+        If we consider current matrix as some preference score (for example rows as users,
+                columns as items to recommend) this method show top-nb recommendation.
+        :param row: chosen row label to get the reco. If not specified, random row is chosen
+        :param nb: number of recommendations to show
+        :param reco_only: boolean to skip header part
         >>> mat = np.array([[4, 5, 0, 1],
         ...                 [5, 4, 1, 0],
         ...                 [0, 1, 4, 5],
         ...                 [1, 0, 3, 4]])
         >>> lm = LabeledMatrix([['w', 'x', 'y', 'z'], ['a', 'b', 'c', 'd']], mat)
-        >>> lm.reco('w') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.display_reco('w') #doctest: +NORMALIZE_WHITESPACE
           entry_key  nb_nonzero  total_score  min_score
         0         w           3           10          1
         ------------------------------------------------------------
@@ -2670,7 +2745,7 @@ class LabeledMatrix:
         1    a      4
         2    d      1
         >>> lm.set_deco(row_deco={'w':'q'}, column_deco={'a': 'h'})
-        >>> lm.reco('w') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.display_reco('w') #doctest: +NORMALIZE_WHITESPACE
           entry_key  nb_nonzero  total_score  min_score deco
         0         w           3           10          1    q
         ------------------------------------------------------------
@@ -2680,19 +2755,30 @@ class LabeledMatrix:
         2    d      1              q      None
         """
         from IPython.display import display
-        head, reco = self._reco_df(my_row, nb)
+        head, reco = self._reco_df(row, nb)
         reco = reco.loc[:, reco.columns != 'entry_key']
         if not reco_only:
             display(head)
             print('-' * 60)
         display(reco)
 
-    def cluster_heatmap(self, **kwargs):
+    def plot_as_clustermap(self, **kwargs):
+        """
+        Plot current matrix as a sns.clustermap
+        :param kwargs: kwargs to propagate into sns.clustermap
+        :return: matplotlib Axes object
+        """
         import seaborn as sns
         kwargs = {'figsize': (30, 30), 'dendrogram_ratio': 0.05, 'cmap': sns.color_palette('RdYlGn_r', 100), **kwargs}
         return sns.clustermap(self.to_vectorial_dataframe(), **kwargs)
 
-    def heatmap(self, ordering=None, **kwargs):
+    def plot_as_heatmap(self, ordering: Optional[str] = None, **kwargs):
+        """
+        Plot current matrix as a sns.heatmap
+        :param ordering: optional ordering of labels. Available values 'hierarchical' and 'naive' (for sort on labels)
+        :param kwargs: kwargs to propagate into sns.heatmap
+        :return: matplotlib Axes object
+        """
         import seaborn as sns
         if ordering == 'hierarchical':
             lm = self.sort_by_hierarchical_clustering()
