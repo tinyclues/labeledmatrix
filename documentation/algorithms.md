@@ -1,15 +1,18 @@
 # Useful algorithms implemented on `LabeledMatrix`
 ### `anomaly`
+## Vector similarities
 ### `jaccard`
-### `pairwise_overlap`
-### `external_overlap`
-### `rank_round_robin_allocation`
+### `top_values_similarity`
+## Allocation algorithms
+### `round_robin_allocation`
 ### `argmax_allocation`
+## Clustering
 ### `tail_clustering`
 ### `hierarchical_clustering`
 ### `connected_components`
 ### `affinity_clusters`
 ### `spectral_clusters`
+## Matrix factorization
 ### `co_clustering`
 ### `svd`
 ### `svd_approximation`

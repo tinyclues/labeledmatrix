@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from numbers import Number
-
 import random
 from typing import Dict, Any, Union, List, Optional, Tuple, Callable
 
@@ -2129,8 +2128,8 @@ class LabeledMatrix:
             raise ValueError(f'top argument must be a float in [0, 1) or an integer, got {type(top)} instead')
         return top
 
-    def pairwise_overlap(self, top: Union[float, int], axis: int = 0,
-                         renorm: bool = True, potential: bool = False) -> LabeledMatrix:
+    def top_values_similarity(self, other: Optional[LabeledMatrix] = None, top: Union[float, int] = 0.1,
+                              axis: int = 0, renorm: bool = True, potential: bool = False) -> LabeledMatrix:
         """
         Calculating similarity between matrix columns (axis=0) or rows (axis=1) based on common top values.
         For example for axis=0:
@@ -2138,7 +2137,10 @@ class LabeledMatrix:
         * for each pair of columns i, j overlap is equal to number of coordinates corresponding
         to top values between column i and column j
 
+        :param other: optional other matrix to calculate similarity between columns in self and in other
+                      default: None, so we calculate similarities between columns in self
         :param top: can be either number of top values to consider, either float in [0, 1] as % of total values
+                    default: 10% of top values
         :param axis: 0 or 1, default is 0
         :param renorm: boolean to normalize resulting row with l1 norm:
                        we consider overlap as % of number of top values, default is True
@@ -2146,67 +2148,49 @@ class LabeledMatrix:
                           just count intersecting non-zero values, default False (counting non-zero values)
         >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> np.array(lm.pairwise_overlap(2).matrix)
+        >>> np.array(lm.top_values_similarity(2).matrix)
         array([[1. , 0.5, 0.5],
                [0.5, 1. , 0.5],
                [0.5, 0.5, 1. ]], dtype=float32)
-        >>> np.array(lm.pairwise_overlap(3).matrix)
+        >>> np.array(lm.top_values_similarity(lm, 2).matrix)
+        array([[1. , 0.5, 0.5],
+               [0.5, 1. , 0.5],
+               [0.5, 0.5, 1. ]], dtype=float32)
+        >>> np.array(lm.top_values_similarity(3).matrix)
         array([[1.       , 0.6666667, 0.6666667],
                [0.6666667, 1.       , 1.       ],
                [0.6666667, 1.       , 1.       ]], dtype=float32)
-        >>> np.array(lm.pairwise_overlap(0.8, renorm=False).matrix, dtype=np.int64)
+        >>> np.array(lm.top_values_similarity(0.8, renorm=False).matrix, dtype=np.int64)
         array([[3, 2, 2],
                [2, 3, 3],
                [2, 3, 3]])
-        >>> np.array(lm.pairwise_overlap(0.8, axis=1, renorm=False).matrix, dtype=np.int64)
+        >>> np.array(lm.top_values_similarity(0.8, axis=1, renorm=False).matrix, dtype=np.int64)
         array([[2, 1, 1, 1],
                [1, 2, 2, 2],
                [1, 2, 2, 2],
                [1, 2, 2, 2]])
-        >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).is_square
+        >>> lm.top_values_similarity(0.8, axis=1, renorm=False).is_square
         True
-        >>> lm.pairwise_overlap(0.8, axis=1, renorm=False).row
+        >>> lm.top_values_similarity(0.8, axis=1, renorm=False).row
         [0, 1, 2, 3]
         """
         if axis != 0:
-            return self.transpose().pairwise_overlap(top, axis=co(axis), renorm=renorm, potential=potential)
-
+            return self.transpose().top_values_similarity(other.transpose() if other else None, top, axis=co(axis),
+                                                          renorm=renorm, potential=potential)
         top = self._relative_count(top, axis=0)
 
         top_lm = self.truncate(nb_v=top)
         top_lm_mask = top_lm.nonzero_mask()
-        if potential:
-            overlap_lm = top_lm.transpose()._dot(top_lm_mask)
+        if other:
+            other_top_mask = other.truncate(nb_v=top).nonzero_mask()
         else:
-            overlap_lm = top_lm_mask.transpose()._dot(top_lm_mask)
+            other_top_mask = top_lm_mask
+        if potential:
+            overlap_lm = top_lm.transpose().dot(other_top_mask)
+        else:
+            overlap_lm = top_lm_mask.transpose().dot(other_top_mask)
         if renorm:
-            return overlap_lm.normalize(norm='linf')
-        return overlap_lm
-
-    def external_overlap(self, other: LabeledMatrix, top: Union[float, int], renorm: bool = True) -> LabeledMatrix:
-        """
-        Calculate similarity between columns in self and columns in other based on common top values
-        as described in pairwise_overlap
-        :param other: LabeledMatrix with alternative score
-        :param top: can be either number of top values to consider, either float in [0, 1] as % of total values
-        :param renorm: boolean to normalize resulting row with l1 norm:
-                       we consider overlap as % of number of top values, default is True
-        >>> matrix = np.array([[10, 1, 2], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
-        >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix, deco=({}, {'a': 'A'}))
-        >>> lm.external_overlap(lm, 2).to_dense().matrix
-        array([[1. , 0.5, 0.5],
-               [0.5, 1. , 0.5],
-               [0.5, 0.5, 1. ]])
-        >>> lm.external_overlap(lm, 2).deco
-        ({'a': 'A'}, {'a': 'A'})
-        """
-        # FIXME code can be mutualized with pairwise_overlap
-        top = self._relative_count(top, axis=0)
-
-        overlap_lm = self.truncate(nb_v=top).nonzero_mask().transpose() \
-            .dot(other.truncate(nb_v=top).nonzero_mask())
-        if renorm:
-            overlap_lm /= top
+             overlap_lm /= top
         return overlap_lm
 
     def _check_dispatch_params(self, max_ranks=None, max_volumes=None):
@@ -2238,10 +2222,10 @@ class LabeledMatrix:
 
         return max_ranks, max_volumes
 
-    def _rank_round_robin_allocation(self,
-                                     maximum_pressure: int,
-                                     max_ranks: Union[list, np.ndarray],
-                                     max_volumes: Union[list, np.ndarray]) -> LabeledMatrix:
+    def _round_robin_allocation(self,
+                                maximum_pressure: int,
+                                max_ranks: Union[list, np.ndarray],
+                                max_volumes: Union[list, np.ndarray]) -> LabeledMatrix:
         """
         WARNING: works only on nonzero scores
         Return LabeledMatrix with allocation user-topic
@@ -2250,14 +2234,14 @@ class LabeledMatrix:
         :param max_volumes: arraylike: maximal value of population volume each topic can be allocated to
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm._rank_round_robin_allocation(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
 
-        >>> lm._rank_round_robin_allocation(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
@@ -2268,10 +2252,10 @@ class LabeledMatrix:
         choice = rank_dispatch(self.matrix, maximum_pressure, np.asarray(max_ranks), np.asarray(max_volumes))
         return LabeledMatrix(self.label, choice, self.deco)
 
-    def rank_round_robin_allocation(self,
-                                    maximum_pressure: int = 1,
-                                    max_ranks: Optional[Union[int, dict]] = None,
-                                    max_volumes: Optional[Union[int, dict]] = None) -> LabeledMatrix:
+    def round_robin_allocation(self,
+                               maximum_pressure: int = 1,
+                               max_ranks: Optional[Union[int, dict]] = None,
+                               max_volumes: Optional[Union[int, dict]] = None) -> LabeledMatrix:
         """
         Return LabeledMatrix with allocation of row labels to 1 or many column labels in round-robin manner.
         WARNING: zero values are ignored and not allocated
@@ -2287,17 +2271,17 @@ class LabeledMatrix:
         :return: LabeledMatrix of the same shape and with the same values, keeping only allocated pairs
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm.rank_round_robin_allocation(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
-        >>> lm.rank_round_robin_allocation(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
-        >>> lm.rank_round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
@@ -2305,7 +2289,7 @@ class LabeledMatrix:
         3        3        c    5.0
         """
         max_ranks, max_volumes = self._check_dispatch_params(max_ranks, max_volumes)
-        return self._rank_round_robin_allocation(maximum_pressure, max_ranks, max_volumes)
+        return self._round_robin_allocation(maximum_pressure, max_ranks, max_volumes)
 
     def argmax_allocation(self,
                           maximum_pressure: int,

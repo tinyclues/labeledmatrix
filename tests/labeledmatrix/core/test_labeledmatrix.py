@@ -155,37 +155,37 @@ class LabeledMatrixTestCase(unittest.TestCase):
         matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         lm = LabeledMatrix((list(range(4)), ['a', 'b', 'c']), matrix)
 
-        np.testing.assert_array_equal(np.asarray(lm.rank_round_robin_allocation(1).matrix), [[10, 0, 0],
-                                                                                             [0, 5, 0],
-                                                                                             [0, 6, 0],
-                                                                                             [0, 0, 5]])
+        np.testing.assert_array_equal(np.asarray(lm.round_robin_allocation(1).matrix), [[10, 0, 0],
+                                                                                        [0, 5, 0],
+                                                                                        [0, 6, 0],
+                                                                                        [0, 0, 5]])
 
-        np.testing.assert_array_equal(np.asarray(lm.rank_round_robin_allocation(1, 1, 1).matrix), [[10, 0, 0],
-                                                                                                   [0, 0, 0],
-                                                                                                   [0, 6, 0],
-                                                                                                   [0, 0, 0]])
+        np.testing.assert_array_equal(np.asarray(lm.round_robin_allocation(1, 1, 1).matrix), [[10, 0, 0],
+                                                                                              [0, 0, 0],
+                                                                                              [0, 6, 0],
+                                                                                              [0, 0, 0]])
 
         np.testing.assert_array_equal(np.asarray(
-            lm.rank_round_robin_allocation(1, {'a': 3, 'b': 1, 'c': 2}, {'a': 3, 'b': 1, 'c': 2}).matrix),
+            lm.round_robin_allocation(1, {'a': 3, 'b': 1, 'c': 2}, {'a': 3, 'b': 1, 'c': 2}).matrix),
             [[10, 0, 0],
              [2, 0, 0],
              [0, 6, 0],
              [0, 0, 5]])
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_round_robin_allocation(1, [1, 1, 1], 2)
+            _ = lm.round_robin_allocation(1, [1, 1, 1], 2)
         self.assertEqual('max_ranks must be integer or dict', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_round_robin_allocation(1, 2, [2, 2, 2])
+            _ = lm.round_robin_allocation(1, 2, [2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_round_robin_allocation(1, 2, {'a': -3, 'b': 1, 'c': 2})
+            _ = lm.round_robin_allocation(1, 2, {'a': -3, 'b': 1, 'c': 2})
         self.assertEqual('max_volumes must be positive or 0', str(e.exception))
 
         with self.assertRaises(ValueError) as e:
-            _ = lm.rank_round_robin_allocation(1, {'a': -3, 'b': 1, 'c': 2}, 2)
+            _ = lm.round_robin_allocation(1, {'a': -3, 'b': 1, 'c': 2}, 2)
         self.assertEqual('max_ranks must be positive or 0', str(e.exception))
 
     def test_argmax_dispatch(self):
