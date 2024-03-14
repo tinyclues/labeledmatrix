@@ -161,20 +161,19 @@ def argsort(arr, nb=-1, reverse=False):
     return parallel_argsort(arr, reverse=reverse)
 
 
-def logit(x, shift=0., width=1.):
+def sigmoid(x, shift=0., width=1.):
     """
-    >>> import numpy as np
-    >>> logit(1, 0, 1)
+    >>> sigmoid(1, 0, 1)
     0.7310585786300049
-    >>> logit(3, -3, 2)
+    >>> sigmoid(3, -3, 2)
     0.9525741268224334
     """
     return expit((x - shift) / width)
 
 
-def logit_inplace(x, shift=0., width=1.):
+def sigmoid_inplace(x, shift=0., width=1.):
     """
-    TODO we should use precomputed logit table!!!
+    TODO we should use precomputed table!!!
     """
     if shift != 0:
         x -= shift

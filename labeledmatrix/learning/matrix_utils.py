@@ -10,7 +10,7 @@ from scipy.stats.mstats import mquantiles
 from scipy.linalg import solve_triangular, get_blas_funcs
 from scipy.sparse import isspmatrix as is_scipysparse, csr_matrix as scipy_csr_matrix
 
-from cyperf.tools import logit, argsort
+from cyperf.tools import sigmoid, argsort
 from cyperf.matrix.rank_dispatch import matrix_rank_dispatch
 from cyperf.matrix.argmax_dispatch import sparse_argmax_dispatch
 from cyperf.matrix.karma_sparse import (KarmaSparse, is_karmasparse,
@@ -27,8 +27,7 @@ class SparseUtilsException(Exception):
 
 def truncate_by_budget(matrix, density, volume, axis=1):
     """
-    Return a sparse matrices for wich sum, by row, of non-zero
-    elements with respect to density parameter is bigger or equal to volume.
+    Return a sparse matrix for which sum by row of non-zero elements wrt density parameter is bigger or equal to volume
 
     :param matrix: square similarity matrix that is used to define neighborhoods
                    of a given point
@@ -1138,7 +1137,7 @@ def normalize(matrix, norm='l1', axis=1, invpow=1., invlog=0., threshold=None, w
     factor = np.power(norms, invpow)
     factor *= np.power(np.log1p(norms), invlog)
     if threshold is not None:
-        factor /= logit(norms, shift=threshold, width=width)
+        factor /= sigmoid(norms, shift=threshold, width=width)
     matrix = cast_float32(matrix).copy()
     if axis == 1:
         matrix /= factor[:, np.newaxis]
@@ -1295,6 +1294,7 @@ def safe_add(matrix1, matrix2):
 
 def anomaly(matrix, skepticism):
     """
+    FIXME Link article describing the formulas
     >>> matrix = np.array([[2, 2, 1, 1], [3, 2, 0, 0], [3, 0, 1, 1]])
     >>> np.round(anomaly(matrix, skepticism=0.5), 3)
     array([[-0.089,  0.   ,  0.   ,  0.   ],

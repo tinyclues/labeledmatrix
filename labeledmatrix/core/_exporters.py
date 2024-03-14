@@ -5,10 +5,10 @@ from cyperf.tools import apply_python_dict, argsort, take_indices
 
 def to_vectorial_dataframe(lm, deco: bool = False) -> pd.DataFrame:
     """
-    TODO doc
-    :param lm:
-    :param deco:
-    :return:
+    Export LabeledMatrix to pd.DataFrame as matrix
+    :param lm: LabeledMatrix to transform
+    :param deco: boolean whether names of dataframe's index entries should be changed with decoration stored in lm.deco
+    :return: pd.DataFrame with indexes (row and column) equal to lm.row and lm.column and values equal to lm.matrix
     """
     if deco:
         columns = apply_python_dict(lm.column_deco, lm.column.list, None, True)
@@ -45,8 +45,6 @@ def to_flat_dataframe(lm, row="col0", col="col1", dist="similarity", **kwargs) -
     return pd.DataFrame(data)
 
 
-# FIXME add structs with label:value instead of list
-# FIXME can we reuse self.to_ragged_tensor or self.to_pyarrow here if removing argsort ?
 def to_list_dataframe(lm, col: str = "col", prefix: str = "list_of_", exclude: bool = False) -> pd.DataFrame:
     """
     Return a DataFrame with columns col, list_of_col.
