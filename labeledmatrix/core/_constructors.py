@@ -195,3 +195,51 @@ def from_pivot(dataframe: pd.DataFrame,
     if callable(aggregator):
         return aggregator(val, key_indices, key_uniques, col_indices, col_uniques, sparse)
     return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)
+
+
+def from_ragged_tensor(row_labels, indices, column_labels=None, values=None):
+    import tensorflow as tf
+
+    assert row_labels.shape[0] == indices.shape[0]
+    if values is not None:
+        assert indices.values.shape[0] == values.values.shape[0]
+        assert tf.reduce_all(tf.equal(indices.row_splits, values.row_splits))
+    else:
+        values = tf.ones_like(indices, dtype=tf.float32)
+    if column_labels is not None:
+        assert tf.reduce_max(indices.values) + 1 == column_labels.shape[0]
+    else:
+        column_labels, indices_flat = tf.unique(indices.values)
+        indices = indices.with_values(indices_flat)
+
+    row_labels, column_labels = np.asarray(row_labels), np.asarray(column_labels)
+
+    matrix = KarmaSparse((values.values.numpy(), indices.values.numpy(), indices.row_splits.numpy()),
+                         shape=(row_labels.shape[0], column_labels.shape[0]), format="csr")
+    if row_labels.dtype.kind == 'O':
+        row_labels = row_labels.astype(str)
+    if column_labels.dtype.kind == 'O':
+        column_labels = column_labels.astype(str)
+    return (row_labels, column_labels), matrix
+
+
+def from_pyarrow_list_array(row_labels, indices, column_labels=None, values=None):
+    import pyarrow as pa
+
+    assert len(row_labels) == len(indices)
+    if values is not None:
+        assert len(indices.values) == len(values.values)
+        assert pa.compute.all(pa.compute.equal(indices.offsets, values.offsets))
+    else:
+        values = pa.ListArray.from_arrays(indices.offsets, np.ones(len(indices.values), dtype=np.float32))
+    if column_labels is not None:
+        assert pa.compute.max(indices.values).as_py() + 1 == len(column_labels)
+    else:
+        dict_array = pa.compute.dictionary_encode(indices.values)
+        column_labels, indices = dict_array.dictionary, pa.ListArray.from_arrays(indices.offsets, dict_array.indices)
+
+    row_labels, column_labels = np.asarray(row_labels), np.asarray(column_labels)
+
+    matrix = KarmaSparse((np.asarray(values.values), np.asarray(indices.values), np.asarray(indices.offsets)),
+                         shape=(row_labels.shape[0], column_labels.shape[0]), format="csr")
+    return (row_labels, column_labels), matrix
