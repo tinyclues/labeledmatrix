@@ -215,9 +215,10 @@ class LabeledMatrix:
         >>> tensor = tf.RaggedTensor.from_row_splits(['a', 'b', 'a'], [0, 1, 3, 3])
         >>> tensor
         >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor)
-        >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor, column_labels=['x', 'y'])
         >>> matrix_values = tf.RaggedTensor.from_row_splits([3, 8, 2], [0, 1, 3, 3])
         >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor, values=matrix_values)
+        >>> tensor = tf.RaggedTensor.from_row_splits([0, 1, 0], [0, 1, 3, 3])
+        >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor, column_labels=['x', 'y'])
         """
         return cls(*from_ragged_tensor(row_labels, indices, column_labels, values))
 
@@ -238,9 +239,10 @@ class LabeledMatrix:
         >>> pa_array = pa.ListArray.from_pandas([['a'], ['b', 'a'], []])
         >>> pa_array
         >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array)
-        >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array, column_labels=['x', 'y'])
         >>> matrix_values = pa.ListArray.from_pandas([[3], [8, 2], []])
         >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array, values=matrix_values)
+        >>> pa_array = pa.ListArray.from_pandas([[0], [1, 0], []])
+        >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array, column_labels=['x', 'y'])
         """
         return cls(*from_pyarrow_list_array(row_labels, indices, column_labels, values))
 
