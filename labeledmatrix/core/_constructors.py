@@ -195,3 +195,85 @@ def from_pivot(dataframe: pd.DataFrame,
     if callable(aggregator):
         return aggregator(val, key_indices, key_uniques, col_indices, col_uniques, sparse)
     return _lm_aggregate_pivot(val, key_indices, key_uniques, col_indices, col_uniques, aggregator, sparse)
+
+
+def from_ragged_tensor(row_labels: Union[list, np.ndarray], indices,
+                       column_labels: Optional[Union[list, np.ndarray]] = None, values=None):
+    """
+    Constructing KarmaSparse matrix and label indexes from tensorflow.RaggedTensor with column labels/indices
+    Similar to from_pyarrow_list_array
+    :param row_labels: list/np.array/tf.Tensor with row labels
+    :param indices: tf.RaggedTensor with non-zero indices by line: it can be integer indices or column labels
+    :param column_labels: optional list/np.array/tf.Tensor with column labels
+                          by default indices' values will be used as column labels
+    :param values: optional tf.RaggedTensor with matrix values, should be aligned with indices.
+                   by default values will be equal to 1
+    """
+    import tensorflow as tf
+
+    assert row_labels.shape[0] == indices.shape[0], \
+        f'indices have number of rows different from row_labels {indices.shape[0]} != {row_labels.shape[0]}'
+    if values is not None:
+        assert indices.values.shape[0] == values.values.shape[0], \
+            f'values have number of non zero values different from indices ' \
+            f'{values.values.shape[0]} != {indices.values.shape[0]}'
+        assert tf.reduce_all(tf.equal(indices.row_splits, values.row_splits)), \
+            'all rows in values must have the same length as in indices'
+    else:
+        values = tf.ones_like(indices, dtype=tf.float32)
+    if column_labels is not None:
+        max_index = tf.reduce_max(indices.values) + 1
+        assert max_index + 1 == len(column_labels), \
+            f'Number of column labels is different from specified indices {len(column_labels)} != {max_index + 1}'
+    else:
+        column_labels, indices_flat = tf.unique(indices.values)
+        indices = indices.with_values(indices_flat)
+
+    row_labels, column_labels = np.asarray(row_labels), np.asarray(column_labels)
+
+    matrix = KarmaSparse((values.values.numpy(), indices.values.numpy(), indices.row_splits.numpy()),
+                         shape=(row_labels.shape[0], column_labels.shape[0]), format="csr")
+    if row_labels.dtype.kind == 'O':
+        row_labels = row_labels.astype(str)
+    if column_labels.dtype.kind == 'O':
+        column_labels = column_labels.astype(str)
+    return (row_labels, column_labels), matrix
+
+
+def from_pyarrow_list_array(row_labels: Union[list, np.ndarray], indices,
+                            column_labels: Optional[Union[list, np.ndarray]] = None, values=None):
+    """
+    Constructing KarmaSparse matrix and label indexes from pyarrow.ListArray with column labels/indices
+    Similar to from_ragged_tensor
+    :param row_labels: list/np.array/pa.Array with row labels
+    :param indices: pa.ListArray with non-zero indices by line: it can be integer indices or column labels
+    :param column_labels: optional list/np.array/pa.Array with column labels
+                          by default indices' values will be used as column labels
+    :param values: optional pa.ListArray with matrix values, should be aligned with indices.
+                   by default values will be equal to 1
+    """
+    import pyarrow as pa
+
+    assert len(row_labels) == len(indices),\
+        f'indices have number of rows different from row_labels {len(indices.values)} != {len(values.values)}'
+    if values is not None:
+        assert len(indices.values) == len(values.values), \
+            f'values have number of non zero values different from indices ' \
+            f'{len(values.values)} != {len(indices.values)}'
+        assert pa.compute.all(pa.compute.equal(indices.offsets, values.offsets)), \
+            'all rows in values must have the same length as in indices'
+    else:
+        values = pa.ListArray.from_arrays(indices.offsets, np.ones(len(indices.values), dtype=np.float32))
+    if column_labels is not None:
+        max_index = pa.compute.max(indices.values).as_py()
+        assert max_index + 1 == len(column_labels), \
+            f'Number of column labels is different from specified indices {len(column_labels)} != {max_index + 1}'
+    else:
+        dict_array = pa.compute.dictionary_encode(indices.values)
+        column_labels, indices = dict_array.dictionary, pa.ListArray.from_arrays(indices.offsets, dict_array.indices)
+
+    row_labels, column_labels = np.asarray(row_labels), np.asarray(column_labels)
+
+    matrix = KarmaSparse((np.asarray(values.values), np.asarray(indices.values), np.asarray(indices.offsets)),
+                         shape=(row_labels.shape[0], column_labels.shape[0]), format="csr")
+    return (row_labels, column_labels), matrix

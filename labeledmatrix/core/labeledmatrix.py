@@ -34,7 +34,8 @@ from labeledmatrix.learning.randomize_svd import randomized_svd
 from labeledmatrix.learning.sparse_tail_clustering import sparse_tail_clustering
 from labeledmatrix.learning.tail_clustering import tail_clustering
 
-from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot
+from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot, from_ragged_tensor, \
+    from_pyarrow_list_array
 from ._exporters import to_vectorial_dataframe, to_flat_dataframe, to_list_dataframe
 from .random import use_seed
 from .utils import co, aeq, zipmerge, is_integer
@@ -198,37 +199,66 @@ class LabeledMatrix:
         return cls(*res)
 
     @classmethod
-    def from_ragged_tensor(cls, row_index, column_labels, indices, values=None) -> LabeledMatrix:
+    def from_ragged_tensor(cls, row_labels: Union[list, np.ndarray], indices,
+                           column_labels: Optional[Union[list, np.ndarray]] = None, values=None) -> LabeledMatrix:
         """
-
-        :param row_index: tf.Tensor
-        :param column_labels: list/np.array
-        :param indices: tf.RaggedTensor
-        :param values: optional tf.RaggedTensor with matrix values, should be aligned with indices
+        Constructing sparse LabeledMatrix from tensorflow.RaggedTensor with column labels/indices
+        Similar to from_pyarrow_list_array
+        :param row_labels: list/np.array/tf.Tensor with row labels
+        :param indices: tf.RaggedTensor with non-zero indices by line: it can be integer indices or column labels
+        :param column_labels: optional list/np.array/tf.Tensor with column labels
+                              by default indices' values will be used as column labels
+        :param values: optional tf.RaggedTensor with matrix values, should be aligned with indices.
+                       by default values will be equal to 1
+        # TODO fill doctests outputs
+        >>> import tensorflow as tf
+        >>> tensor = tf.RaggedTensor.from_row_splits(['a', 'b', 'a'], [0, 1, 3, 3])
+        >>> tensor
+        >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor)
+        >>> matrix_values = tf.RaggedTensor.from_row_splits([3, 8, 2], [0, 1, 3, 3])
+        >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor, values=matrix_values)
+        >>> tensor = tf.RaggedTensor.from_row_splits([0, 1, 0], [0, 1, 3, 3])
+        >>> LabeledMatrix.from_ragged_tensor(['r0', 'r1', 'r2'], tensor, column_labels=['x', 'y'])
         """
-        if values is not None:
-            assert indices.values.shape[0] == values.values.shape[0]
-            assert np.array_equal(indices.offsets, values.offsets)
-        # FIXME
+        return cls(*from_ragged_tensor(row_labels, indices, column_labels, values))
 
     @classmethod
-    def from_pyarrow_list_array(cls, row_index, column_labels, indices, values=None) -> LabeledMatrix:
+    def from_pyarrow_list_array(cls, row_labels: Union[list, np.ndarray], indices,
+                                column_labels: Optional[Union[list, np.ndarray]] = None, values=None) -> LabeledMatrix:
         """
-        :param row_index:
-        :param column_labels:
-        :param indices:
-        :param values:
-        :return:
+        Constructing sparse LabeledMatrix from pyarrow.ListArray with column labels/indices
+        Similar to from_ragged_tensor
+        :param row_labels: list/np.array/pa.Array with row labels
+        :param indices: pa.ListArray with non-zero indices by line: it can be integer indices or column labels
+        :param column_labels: optional list/np.array/pa.Array with column labels
+                              by default indices' values will be used as column labels
+        :param values: optional pa.ListArray with matrix values, should be aligned with indices.
+                       by default values will be equal to 1
+        # TODO fill doctests outputs
+        >>> import pyarrow as pa
+        >>> pa_array = pa.ListArray.from_pandas([['a'], ['b', 'a'], []])
+        >>> pa_array
+        >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array)
+        >>> matrix_values = pa.ListArray.from_pandas([[3], [8, 2], []])
+        >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array, values=matrix_values)
+        >>> pa_array = pa.ListArray.from_pandas([[0], [1, 0], []])
+        >>> LabeledMatrix.from_pyarrow_list_array(['r0', 'r1', 'r2'], pa_array, column_labels=['x', 'y'])
         """
-        # FIXME same idea as with ragged, maybe transform pyarrow to ragged first and then call cls.from_ragged_tensor
+        return cls(*from_pyarrow_list_array(row_labels, indices, column_labels, values))
 
     @classmethod
-    def from_xarray(cls) -> LabeledMatrix:
+    def from_xarray(cls, values) -> LabeledMatrix:
         """
-
-        :return:
+        Constructing dense LabeledMatrix from 2-dimensional xarray.DataArray
+        Dims' coordinates are directly put into row and column labels
+        :param values: xr.DataArray
+        # TODO fill doctests outputs
+        >>> import xarray as xr
+        >>> array = xr.DataArray([[1, 2, 3], [4, 5, 6]], dims=("x", "y"), coords={"x": ['a', 'b']})
+        >>> LabeledMatrix.from_xarray(array)
         """
-        # FIXME
+        assert values.ndim == 2
+        return cls(tuple(list(values.get_index(dim)) for dim in values.dims), values.data)
 
     def to_vectorial_dataframe(self, deco=False) -> pd.DataFrame:
         """
@@ -332,12 +362,33 @@ class LabeledMatrix:
         # FIXME
         # FIXME same question as for to_ragged_tensor
 
-    def to_xarray(self):
+    def to_xarray(self, row_dimension: Optional[str] = None, column_dimension: Optional[str] = None):
         """
-
-        :return:
+        Transforming LabeledMatrix into 2-dimensional xarray.DataArray
+        row labels and column labels are put to corresponding dimensions' coordinates
+        :param row_dimension: dimension name for matrix rows, be default "row"
+        :param column_dimension: dimension name for matrix columns, be default "column"
+        >>> lm  = LabeledMatrix((['a', 'b'], ['x', 'y', 'z']), [[1, 2, 3], [4, 5, 6]])
+        >>> lm.to_xarray('i', 'j')  #doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+        <xarray.DataArray (i: 2, j: 3)> Size: ...
+        array([[1, 2, 3],
+               [4, 5, 6]])
+        Coordinates:
+          * i        (i) <U1 ... 'a' 'b'
+          * j        (j) <U1 ... 'x' 'y' 'z'
         """
-        # FIXME
+        import xarray as xr
+        attrs = {}
+        if row_dimension is None:
+            row_dimension = 'row'
+        if column_dimension is None:
+            column_dimension = 'column'
+        if self.row_deco:
+            attrs[f'{row_dimension} deco'] = self.row_deco
+        if self.column_deco:
+            attrs[f'{column_dimension} deco'] = self.column_deco
+        return xr.DataArray(self.to_dense().matrix, dims=(row_dimension, column_dimension),
+                            coords={row_dimension: list(self.row), column_dimension: list(self.column)}, attrs=attrs)
 
     def to_tensorflow_model(self, input_name, output_name, default='zero', coordinates=None):
         """
@@ -348,7 +399,6 @@ class LabeledMatrix:
         :return:
         """
         # FIXME: TF lookup + embeddings
-        pass
 
     def __init__(self,
                  row_column_labels: Tuple[Union[List[Any], np.ndarray, IndexedList],
