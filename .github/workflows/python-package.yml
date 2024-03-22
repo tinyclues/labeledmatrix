@@ -32,7 +32,7 @@ jobs:
       - name: cythonize
         run: pipenv run ./setup.py build_ext -i -j2
       - name: pylint
-        run: pipenv run pylint labeledmatrix cyperf  --rcfile=setup.cfg
+        run: pipenv run pylint labeledmatrix cyperf --rcfile=setup.cfg
       - name: pytest
         if: success() || failure()
         run: pipenv run pytest tests --durations=10
