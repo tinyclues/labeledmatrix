@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: pipenv install
     - name: cythonize
-      run: ./setup.py build_ext -i -j2
+      run: pipenv run ./setup.py build_ext -i -j2
     - name: pylint
       run: pipenv run pylint labeledmatrix cyperf
     - name: pytest
