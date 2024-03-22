@@ -44,7 +44,7 @@ def nmf(matrix, rank=20, max_model_rank=100, max_iter=150, svd_init=False, verbo
         print(f"NMF : Matrix dimensions are {matrix.shape}")
         if is_karmasparse(matrix):
             print(f"NMF will use KarmaSparse Matrix with density={matrix.density}")
-    max_model_rank = min(max_model_rank or 100, matrix.shape)
+    max_model_rank = min(max_model_rank or 100, *matrix.shape)
 
     if rank is None:
         # nmf with coordinate selection via poisson AIC
