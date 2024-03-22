@@ -7,7 +7,7 @@ from numpy.testing import assert_allclose
 
 from labeledmatrix.learning.matrix_utils import kl_div
 from labeledmatrix.learning.nmf import nmf, nmf_fold, NMF, GNMF
-from labeledmatrix.core.random import use_seed
+from labeledmatrix.core.random import UseSeed
 
 
 def shuffle_indices(sp_matrix):
@@ -46,7 +46,7 @@ class LibNMFTestCase(unittest.TestCase):
             self.assertEqual(w.dtype, dtype)
             self.assertEqual(h.dtype, dtype)
 
-        matrix = (100 * np.random.rand(3, 10)).astype(np.int)
+        matrix = (100 * np.random.rand(3, 10)).astype(np.int64)
         w, h = nmf(matrix, rank=None)
         self.assertEqual(w.dtype, np.float32)
         self.assertEqual(h.dtype, np.float32)
@@ -57,7 +57,7 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertEqual(h.dtype, matrix.dtype)
 
     def test_reconstruction(self):
-        with use_seed(120):
+        with UseSeed(120):
             matrix = np.dot(np.random.poisson(2, size=(10, 4)),
                             np.random.poisson(6, size=(4, 10)))
         matrix[0, 0] = 0
@@ -78,7 +78,7 @@ class LibNMFTestCase(unittest.TestCase):
         assert_allclose(h_d, h_s, 1e-4)
 
     def test_seed(self):
-        with use_seed(100):
+        with UseSeed(100):
             matrix = np.dot(np.random.poisson(2, size=(10, 4)),
                             np.random.poisson(6, size=(4, 10)))
         matrix[0, 0] = 0
@@ -101,7 +101,7 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertLessEqual(np.max(np.abs(sp_mat.toarray() - np.dot(w1, h1.transpose()))), 0.15)
 
     def test_rank_detection(self):
-        with use_seed(3335):
+        with UseSeed(3335):
             matrix = np.dot(np.random.zipf(1.5, size=(30, 10)), np.random.zipf(2, size=(10, 30)))
         seed = int(matrix.sum())
         w1, h1 = nmf(matrix, rank=None, seed=seed)
@@ -151,7 +151,7 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertGreaterEqual(np.abs(h_dense - h0).sum(), 10 ** -4)
 
     def test_nmf_fold(self):
-        with use_seed(100):
+        with UseSeed(100):
             l, r = np.random.rand(10, 3), np.random.rand(3, 6)
         m = l.dot(r)
         ll = nmf_fold(m, r, 100)
@@ -160,7 +160,7 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertGreaterEqual(np.mean(np.abs(lll - l)), 0.01)
 
         # sparse matrix
-        with use_seed(100):
+        with UseSeed(100):
             l = np.random.randint(0, 2, size=(10, 5))
             r = np.random.randint(0, 2, size=(5, 7))
         m = KarmaSparse(l.dot(r))
@@ -171,13 +171,13 @@ class LibNMFTestCase(unittest.TestCase):
         self.assertTrue(np.allclose(lll, ll))
 
     def test_iterate(self):
-        with use_seed(100):
+        with UseSeed(100):
             w, h = np.random.rand(1000, 5), np.random.rand(5, 20)
         m = w.dot(h)
         m_sparse = KarmaSparse(m).truncate_by_count(3, axis=1)
         for matrix in [m, m_sparse]:
             for metric in ['KL', 'euclid']:
-                with use_seed(25010):
+                with UseSeed(25010):
                     nmf_solver = NMF(matrix, 5, metric=metric)
                     nmf_solver.smart_init(svd_init=True)
                     dist_init = nmf_solver.dist()
@@ -185,7 +185,7 @@ class LibNMFTestCase(unittest.TestCase):
                     self.assertLess(nmf_solver.dist(), dist_init / 1.2)
 
     def test_graph_nmf(self):
-        with use_seed(100):
+        with UseSeed(100):
             w, h = np.random.rand(1000, 5), np.random.rand(5, 20)
         m = w.dot(h)
         m_sparse = KarmaSparse(m).truncate_by_count(3, axis=1)
@@ -196,7 +196,7 @@ class LibNMFTestCase(unittest.TestCase):
 
         for matrix in [m, m_sparse]:
             for metric in ['KL', 'euclid']:
-                with use_seed(25010):
+                with UseSeed(25010):
                     nmf_solver = GNMF(matrix, 5, metric=metric, adjacency=10000 * one_edge)
                     nmf_solver.smart_init(svd_init=True)
                     dist_init = nmf_solver.dist()

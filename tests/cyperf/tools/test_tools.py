@@ -22,7 +22,7 @@ class GetterTestCase(unittest.TestCase):
             v.extend(np.arange(4))
             arr = np.asarray(v)
             self.assertTrue(v.exported)
-            self.assertEquals(arr.dtype, getattr(np, v.__class__.__name__.split('Vector')[0]))
+            self.assertEqual(arr.dtype, getattr(np, v.__class__.__name__.split('Vector')[0]))
             np.testing.assert_equal(arr, [-4, 0, 1, 2, 3])
 
             with self.assertRaises(RuntimeError):
@@ -35,9 +35,9 @@ class GetterTestCase(unittest.TestCase):
                 v.extend(np.arange(4))
 
             arr[2] = -12
-            self.assertEquals(arr[0], -4)
-            self.assertEquals(arr[-1], 3)
-            self.assertEquals(arr[2], -12)
+            self.assertEqual(arr[0], -4)
+            self.assertEqual(arr[-1], 3)
+            self.assertEqual(arr[2], -12)
 
     def test_argpartition(self):
         for _ in range(100):

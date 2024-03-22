@@ -217,8 +217,8 @@ class ParallelSortCase(unittest.TestCase):
                 a = np.random.rand(100).astype(dtype)
                 a[::3] = np.nan
                 self._check_float(a)
-                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float)))
-                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float), True))
+                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float64)))
+                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float64), True))
 
     def test_sort_argsort_numeric_inf(self):
         for _ in range(5):
@@ -227,8 +227,8 @@ class ParallelSortCase(unittest.TestCase):
                 a[::3] = np.inf
                 a[::2] = -np.inf
                 self._check_float(a)
-                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float)))
-                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float), True))
+                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float64)))
+                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float64), True))
 
     def test_sort_argsort_numeric_inf_nan(self):
         for _ in range(5):
@@ -238,8 +238,8 @@ class ParallelSortCase(unittest.TestCase):
                 a[::2] = -np.inf
                 a[::7] = np.nan
                 self._check_float(a)
-                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float)))
-                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float), True))
+                assert_equal(parallel_argsort(a), parallel_argsort_float64_int_nan(a.astype(np.float64)))
+                assert_equal(parallel_argsort(a, True), parallel_argsort_float64_int_nan(a.astype(np.float64), True))
 
     def test_argsort_numeric(self):
         for b in chain(self.get_numerical_data_generator(), self.get_other_type_generator()):

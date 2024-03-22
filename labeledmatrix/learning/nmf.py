@@ -10,7 +10,7 @@ from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
 from .matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
 from .randomize_svd import nmf_svd_init
-from labeledmatrix.core.random import use_seed
+from labeledmatrix.core.random import UseSeed
 
 
 ADD_TIME = 20
@@ -19,7 +19,7 @@ EPSILON = 10 ** (-10)
 __all__ = ['nmf', 'nmf_fold']
 
 
-@use_seed()
+@UseSeed()
 def nmf(matrix, rank=20, max_model_rank=100, max_iter=150, svd_init=False, verbose=False):
     """
     matrix should be non-negative numpy.array (dim = 2) with non-zero columns.
@@ -344,7 +344,7 @@ def nmf_fold(matrix, right_factor, max_iter=30):
 
     right_margin = right_factor.sum(axis=1).clip(EPSILON)
     rank = right_factor.shape[0]
-    left_factor = np.full((matrix.shape[0], rank), 1.0 / rank, dtype=np.float)
+    left_factor = np.full((matrix.shape[0], rank), 1.0 / rank, dtype=np.float64)
 
     if is_karmasparse(matrix) and matrix.format != "csr":
         matrix = matrix.tocsr()  # taking a good alignment

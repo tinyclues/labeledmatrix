@@ -13,11 +13,13 @@ from cyperf.matrix import linear_error
 
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
-warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
 
+warnings.filterwarnings('ignore', category=SparseEfficiencyWarning)
 
 from sklearn.preprocessing import normalize as sk_normalize
 from labeledmatrix.learning.matrix_utils import normalize
+
+
 # from karma.core.utils import run_in_subprocess, Parallel  # FIXME
 
 
@@ -27,6 +29,7 @@ def np_almost_equal(x, y, decimal=5):
 
 def array_cast(x):
     return np.asarray(x, dtype=DTYPE)
+
 
 def kronii(left, right):
     left, right = np.asarray(left, dtype=np.float32), np.asarray(right, dtype=np.float32)
@@ -104,7 +107,6 @@ class MatrixFabric(object):
 
 
 class TestKarmaSparse(unittest.TestCase):
-
     mf = MatrixFabric(random_state=None, shape=(10, 6))
     matrixes = (np.array([[0., -2., 0., 1.], [0., 0., 4., 1.]]),
                 np.array([[4., 2., 2., 1.], [3., 2., 4., 1.]]),
@@ -296,87 +298,87 @@ class TestKarmaSparse(unittest.TestCase):
 
     def test_exception_in_init(self):
         a = sp.rand(4, 2, 0.5, format='csr', random_state=1111)
-        self.assertRaisesRegexp(ValueError,
-                                "Format should be one of",
-                                lambda: KarmaSparse(a, format="cscc"))
-        self.assertRaisesRegexp(ValueError,
-                                "Shape values should be > 0",
-                                lambda: KarmaSparse(a, shape=(3, -3)))
-        self.assertRaisesRegexp(ValueError,
-                                "Shape values should be > 0",
-                                lambda: KarmaSparse(a, shape=(-1, 3)))
-        self.assertRaisesRegexp(ValueError,
-                                "Wrong shape parameter, got",
-                                lambda: KarmaSparse(a, shape=(0, 3, 4)))
-        self.assertRaisesRegexp(TypeError,
-                                "Cannot cast to KarmaSparse",
-                                lambda: KarmaSparse("string", shape=(3, 4)))
-        self.assertRaisesRegexp(ValueError,
-                                "Cannot cast to KarmaSparse",
-                                lambda: KarmaSparse(("HAHA",)))
-        self.assertRaisesRegexp(ValueError,
-                                "format should be specified",
-                                lambda: KarmaSparse((a.data, a.indices, a.indptr)))
-        self.assertRaisesRegexp(TypeError,
-                                "Shape should be provided, got",
-                                lambda: KarmaSparse(([0, 1], [0, 1], [0, 1]), format="csr"))
-        self.assertRaisesRegexp(ValueError,
-                                "Wrong indptr shape: should be",
-                                lambda: KarmaSparse(([0, 1], [0, 1], [0, 1]),
-                                                    shape=(2, 3), format="csr"))
+        self.assertRaisesRegex(ValueError,
+                               "Format should be one of",
+                               lambda: KarmaSparse(a, format="cscc"))
+        self.assertRaisesRegex(ValueError,
+                               "Shape values should be > 0",
+                               lambda: KarmaSparse(a, shape=(3, -3)))
+        self.assertRaisesRegex(ValueError,
+                               "Shape values should be > 0",
+                               lambda: KarmaSparse(a, shape=(-1, 3)))
+        self.assertRaisesRegex(ValueError,
+                               "Wrong shape parameter, got",
+                               lambda: KarmaSparse(a, shape=(0, 3, 4)))
+        self.assertRaisesRegex(TypeError,
+                               "Cannot cast to KarmaSparse",
+                               lambda: KarmaSparse("string", shape=(3, 4)))
+        self.assertRaisesRegex(ValueError,
+                               "Cannot cast to KarmaSparse",
+                               lambda: KarmaSparse(("HAHA",)))
+        self.assertRaisesRegex(ValueError,
+                               "format should be specified",
+                               lambda: KarmaSparse((a.data, a.indices, a.indptr)))
+        self.assertRaisesRegex(TypeError,
+                               "Shape should be provided, got",
+                               lambda: KarmaSparse(([0, 1], [0, 1], [0, 1]), format="csr"))
+        self.assertRaisesRegex(ValueError,
+                               "Wrong indptr shape: should be",
+                               lambda: KarmaSparse(([0, 1], [0, 1], [0, 1]),
+                                                   shape=(2, 3), format="csr"))
         b = a.tocoo()
-        self.assertRaisesRegexp(ValueError,
-                                "Coordinates are too large for provided shape",
-                                lambda: KarmaSparse((b.data, (b.row, b.col)),
-                                                    shape=(2, 3), format="csr"))
+        self.assertRaisesRegex(ValueError,
+                               "Coordinates are too large for provided shape",
+                               lambda: KarmaSparse((b.data, (b.row, b.col)),
+                                                   shape=(2, 3), format="csr"))
 
     def test_check_format(self):
         for a in self.mf.iterator():
             # first indptr element is not 0
             mat = KarmaSparse(a, copy=True)
             mat.indptr[0] = 10
-            self.assertRaisesRegexp(ValueError,
-                                    'First element of indptr should be == 0',
-                                    mat.check_format)
+            self.assertRaisesRegex(ValueError,
+                                   'First element of indptr should be == 0',
+                                   mat.check_format)
 
             # last indptr element is negative
             mat = KarmaSparse(a, copy=True)
             mat.indptr[-1] = -2
-            self.assertRaisesRegexp(ValueError,
-                                    'Last element of indptr should be >= 0',
-                                    mat.check_format)
+            self.assertRaisesRegex(ValueError,
+                                   'Last element of indptr should be >= 0',
+                                   mat.check_format)
 
             # too high last value of indptr
             mat = KarmaSparse(a, copy=True)
             mat.indptr[-1] = mat.indices.shape[0] + 1
-            self.assertRaisesRegexp(ValueError,
-                                    'indptr should be <= the size of indices',
-                                    mat.check_format)
+            self.assertRaisesRegex(ValueError,
+                                   'indptr should be <= the size of indices',
+                                   mat.check_format)
 
             # too high values in indices
             mat = KarmaSparse(a, copy=True)
             if mat.indices.size >= 2:
                 mat.indices[1] = mat.shape[1] + 4 if mat.format == 'csr' \
                     else mat.shape[0] + 4
-                self.assertRaisesRegexp(ValueError,
-                                        'indices values should be < ',
-                                        mat.check_format)
+                self.assertRaisesRegex(ValueError,
+                                       'indices values should be < ',
+                                       mat.check_format)
 
             # negative values in indices
             mat = KarmaSparse(a, copy=True)
             if mat.indices.size != 0:
                 mat.indices[0] = -2
-                self.assertRaisesRegexp(ValueError,
-                                        'indices values should be >= than 0',
-                                        mat.check_format)
+                self.assertRaisesRegex(ValueError,
+                                       'indices values should be >= than 0',
+                                       mat.check_format)
 
             # decreasing sequence in indices
             mat = KarmaSparse(a, copy=True)
             mat.indptr[1] = mat.indptr[-1] + 5
             if np.count_nonzero(a) > 0:
-                self.assertRaisesRegexp(ValueError,
-                                        'non decreasing sequence',
-                                        mat.check_format)
+                self.assertRaisesRegex(ValueError,
+                                       'non decreasing sequence',
+                                       mat.check_format)
 
     def test_extend(self):
         axis_0, axis_1 = (13, 7)
@@ -469,10 +471,10 @@ class TestKarmaSparse(unittest.TestCase):
                 self.assertEqual(result.format, mat.format)
                 if axis == 1:
                     d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m)),
-                                                             np.full(m.shape[0], nb, dtype=np.int))
+                                                             np.full(m.shape[0], nb, dtype=np.int64))
                 else:
                     d_result = truncate_by_count_axis1_dense(np.ascontiguousarray(np.abs(m.T)),
-                                                             np.full(m.shape[1], nb, dtype=np.int)).T
+                                                             np.full(m.shape[1], nb, dtype=np.int64)).T
                 np_almost_equal(result.toarray(), d_result)
 
             for mat, axis in itertools.product([a, at], [0, 1]):
@@ -628,8 +630,8 @@ class TestKarmaSparse(unittest.TestCase):
             np_almost_equal(matrix1 + KarmaSparse(matrix2, format="csc"), result)
 
             np_almost_equal(KarmaSparse(matrix1) + matrix2[0], matrix1 + matrix2[0])
-            np_almost_equal(KarmaSparse(matrix1) + matrix2[0:1,:], matrix1 + matrix2[0:1,:])
-            np_almost_equal(KarmaSparse(matrix1) + matrix2[:,0:1], matrix1 + matrix2[:,0:1])
+            np_almost_equal(KarmaSparse(matrix1) + matrix2[0:1, :], matrix1 + matrix2[0:1, :])
+            np_almost_equal(KarmaSparse(matrix1) + matrix2[:, 0:1], matrix1 + matrix2[:, 0:1])
 
     def test_sum(self):
         axis = (0, 1, None)
@@ -690,9 +692,9 @@ class TestKarmaSparse(unittest.TestCase):
             true_dot = np.zeros((n, m))
             true_dot[mat_mask.nonzero()] = x.dot(y)[mat_mask.nonzero()]
             for my_mat_mask, my_x, my_y in itertools.product(
-                [KarmaSparse(mat_mask, format="csr"), KarmaSparse(mat_mask, format="csc")],
-                [x, KarmaSparse(x, format="csr"), KarmaSparse(x, format="csc")],
-                [y, KarmaSparse(y, format="csr"), KarmaSparse(y, format="csc")]):
+                    [KarmaSparse(mat_mask, format="csr"), KarmaSparse(mat_mask, format="csc")],
+                    [x, KarmaSparse(x, format="csr"), KarmaSparse(x, format="csc")],
+                    [y, KarmaSparse(y, format="csr"), KarmaSparse(y, format="csc")]):
                 res = my_mat_mask.mask_dot(my_x, my_y)
                 np_almost_equal(res.toarray(), true_dot)
                 self.assertEqual(res.format, my_mat_mask.format)
@@ -722,7 +724,7 @@ class TestKarmaSparse(unittest.TestCase):
                     np_almost_equal(ks.tocsc()[i:j:k].toarray(), a[i:j:k])
                     np_almost_equal(ks.tocsr()[i:j:k].toarray(), a[i:j:k])
                 else:
-                    self.assertRaisesRegexp(IndexError, "", lambda: ks[i:j])
+                    self.assertRaisesRegex(IndexError, "", lambda: ks[i:j])
             # single row
             for _ in range(10):
                 i = random.randint(-a.shape[0] - 10, a.shape[0] + 10)
@@ -730,7 +732,7 @@ class TestKarmaSparse(unittest.TestCase):
                     np_almost_equal(ks[i].toarray(), b[i].toarray())
                     np_almost_equal(ks.tocsc()[i].toarray(), b[i].toarray())
                 else:
-                    self.assertRaisesRegexp(IndexError, "", lambda: ks[i])
+                    self.assertRaisesRegex(IndexError, "", lambda: ks[i])
             # single col
             for _ in range(10):
                 i = random.randint(-a.shape[1] - 10, a.shape[1] + 10)
@@ -738,7 +740,7 @@ class TestKarmaSparse(unittest.TestCase):
                     np_almost_equal(ks[:, i].toarray(), b[:, i].toarray())
                     np_almost_equal(ks.tocsc()[:, i].toarray(), b[:, i].toarray())
                 else:
-                    self.assertRaisesRegexp(IndexError, "", lambda: ks[:, i])
+                    self.assertRaisesRegex(IndexError, "", lambda: ks[:, i])
 
             # col indices
             for _ in range(10):
@@ -760,15 +762,15 @@ class TestKarmaSparse(unittest.TestCase):
             ks = KarmaSparse(matrix, format="csr" if csr else "csc")
             np_almost_equal(ks.median(axis=axis), np.median(matrix, axis=axis))
 
-        self.assertRaisesRegexp(ValueError,
-                                'quantile should be in',
-                                lambda: ks.quantile(axis=0, q=2))
-        self.assertRaisesRegexp(TypeError,
-                                '',
-                                lambda: ks.quantile(axis=0, q="csr"))
-        self.assertRaisesRegexp(TypeError,
-                                'Axis should be of integer type, got',
-                                lambda: ks.quantile(axis="cc", q=0.3))
+        self.assertRaisesRegex(ValueError,
+                               'quantile should be in',
+                               lambda: ks.quantile(axis=0, q=2))
+        self.assertRaisesRegex(TypeError,
+                               '',
+                               lambda: ks.quantile(axis=0, q="csr"))
+        self.assertRaisesRegex(TypeError,
+                               'Axis should be of integer type, got',
+                               lambda: ks.quantile(axis="cc", q=0.3))
 
     def test_complement(self):
         for a in self.mf.iterator(dense=True):
@@ -912,7 +914,7 @@ class TestKarmaSparse(unittest.TestCase):
             self.assertTrue(isinstance(b, np.ndarray))
             self.assertTrue(isinstance(bb, KarmaSparse))
             np_almost_equal(aa, a)
-            np_almost_equal(b.astype(np.bool).sum(axis=1), rank)
+            np_almost_equal(b.astype(np.bool_).sum(axis=1), rank)
             np_almost_equal(a[b != 0], b[b != 0])
             np_almost_equal(a.max(axis=1)[rank != 0], b.max(axis=1)[rank != 0])
             arg_sort = a.argsort(axis=1)[:, ::-1]
@@ -1001,10 +1003,10 @@ class TestKarmaSparse(unittest.TestCase):
     def test_agg_multiplication_raises(self):
         a = np.array([[1, -1, 0],
                       [0, -2, -1],
-                      [2, 0, 0]], dtype=np.float)
+                      [2, 0, 0]], dtype=np.float64)
         b = np.array([[0, 1, 3],
                       [-1, 1, 1],
-                      [5, 0, 2]], dtype=np.float)
+                      [5, 0, 2]], dtype=np.float64)
         a_sp = KarmaSparse(a, format='csr')
         b_sp = KarmaSparse(b, format='csr')
 
@@ -1049,10 +1051,10 @@ class TestKarmaSparse(unittest.TestCase):
     def test_agg_multiplication(self):
         a = np.array([[1, 1, 0],
                       [1, 2, 1],
-                      [2, 0, 0]], dtype=np.float)
+                      [2, 0, 0]], dtype=np.float64)
         b = np.array([[0, 1, 3],
                       [1, 1, 1],
-                      [5, 0, 2]], dtype=np.float)
+                      [5, 0, 2]], dtype=np.float64)
         a_sp = KarmaSparse(a, format='csr')
         b_sp = KarmaSparse(b, format='csr')
 
@@ -1186,8 +1188,8 @@ class TestKarmaSparse(unittest.TestCase):
             dense = np.random.rand(a.shape[0], np.random.randint(1, 3))
             c = sparse.kronii(dense)
             expected_result = c.T.dot(c)
-            expected_result_dense = np.einsum('ij, ik, il, im -> jklm', a, dense, a, dense)\
-                                      .reshape(a.shape[1] * dense.shape[1], -1)
+            expected_result_dense = np.einsum('ij, ik, il, im -> jklm', a, dense, a, dense) \
+                .reshape(a.shape[1] * dense.shape[1], -1)
             for b in [dense, dense.astype(np.float32), KarmaSparse(dense)]:
                 np_almost_equal(sparse.kronii_second_moment(b), sparse.kronii_second_moment(b).T)
                 np_almost_equal(expected_result, sparse.kronii_second_moment(b), 5)

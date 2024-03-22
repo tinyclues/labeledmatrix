@@ -21,7 +21,7 @@ cpdef void inplace_reversed_index(ITER values, np.ndarray[ndim=1, dtype=INT1, mo
                                   dict position, list unique_values) except *:
     """
     >>> values = [4, 4, 'r', 'r', 2]
-    >>> indices = np.zeros(len(values), dtype=np.int)
+    >>> indices = np.zeros(len(values), dtype=np.int64)
     >>> position = {}
     >>> unique_values = []
     >>> inplace_reversed_index(values, indices, position, unique_values)

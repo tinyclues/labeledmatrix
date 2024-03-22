@@ -8,7 +8,7 @@ import scipy.sparse as sp
 from cyperf.indexing.indexed_list import reversed_index, IndexedList
 from cyperf.matrix.karma_sparse import KarmaSparse, ks_diag, dense_pivot
 
-from labeledmatrix.core.random import use_seed
+from labeledmatrix.core.random import UseSeed
 from labeledmatrix.learning.matrix_utils import keep_sparse
 
 
@@ -52,7 +52,7 @@ def from_random(shape=(4, 3), density=0.5, seed=None, square=False):
                 words.append(word)
         return words
 
-    with use_seed(seed):
+    with UseSeed(seed):
         row = _generate_words(shape[0], 5)
         if square:
             column = row

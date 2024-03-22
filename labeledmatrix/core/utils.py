@@ -5,10 +5,13 @@ from toolz import merge as dict_merge
 
 
 def aeq(matrix1, matrix2):
+    """
+    shortcut for np.allclose(matrix1, matrix2, rtol=1e-7)
+    """
     return np.allclose(matrix1, matrix2, rtol=1e-7)
 
 
-def co(axis):
+def co_axis(axis):
     """
     Given an axis, return the other one.
 
@@ -17,11 +20,11 @@ def co(axis):
 
     Exemples: ::
 
-        >>> co(0)
+        >>> co_axis(0)
         1
-        >>> co(1)
+        >>> co_axis(1)
         0
-        >>> co(3)  # doctest: +ELLIPSIS
+        >>> co_axis(3)  # doctest: +ELLIPSIS
         Traceback (most recent call last):
             ...
         RuntimeError: axis 3 is out of range [0,1]
@@ -33,17 +36,17 @@ def co(axis):
     elif axis == 1:
         return 0
     else:
-        raise RuntimeError("axis {} is out of range [0,1]".format(axis))
+        raise RuntimeError(f"axis {axis} is out of range [0,1]")
 
 
-def zipmerge(d1, d2):
+def zipmerge(dictionary1, dictionary2):
     """
     >>> aa = {'a': 3, 'c': 4}
     >>> bb = {'a': 5, 'b': 4}
     >>> zipmerge((aa, bb), (bb, aa))
     ({'a': 5, 'c': 4, 'b': 4}, {'a': 3, 'c': 4, 'b': 4})
     """
-    return tuple([dict_merge(x, y) for x, y in zip(d1, d2)])
+    return tuple(dict_merge(x, y) for x, y in zip(dictionary1, dictionary2))
 
 
 def is_integer(arg):
@@ -67,7 +70,7 @@ def lm_compute_volume_at_cutoff(lm, potential_cutoff):
     scores_ordered_array = np.sort(scores_array, axis=0)[::-1]
 
     # Compute array of users part of the potential cutoff
-    in_potential_cutoff_array = ((scores_ordered_array.cumsum(axis=0) / total_potential) < potential_cutoff)
+    in_potential_cutoff_array = (scores_ordered_array.cumsum(axis=0) / total_potential) < potential_cutoff
     # Compute users-in-potential-cutoff volume share
     vol_at_cutoff = in_potential_cutoff_array.sum(axis=0).astype('float32') / scores_array.shape[0]
 

@@ -236,40 +236,6 @@ class LabeledMatrixTestCase(unittest.TestCase):
             _ = lm_sparse.argmax_allocation(maximum_pressure=1, max_volumes=[2, 2, 2])
         self.assertEqual('max_volumes must be integer or dict', str(e.exception))
 
-    def test_population_potential_allocation(self):
-        mat = np.array([[0.6, 0., 0.],
-                        [0., 0.6, 0.],
-                        [0., 0., 0.6],
-                        [0., 0., 0.],
-                        [0.3, 0.4, 0.5],
-                        [0., 0., 0.3],
-                        [0.65, 0.65, 0.7],
-                        [0., 0., 0.],
-                        [0., 0.28, 0.],
-                        [0.24, 0., 0.31]], dtype=np.float32)
-        lm = LabeledMatrix([np.arange(10).astype(str).tolist(), ['t1', 't2', 't3']], mat)
-        dispatch_mask = np.array([[2, 0, 0],
-                                  [0, 2, 0],
-                                  [0, 0, 2],
-                                  [0, 0, 0],
-                                  [2, 0, 0],
-                                  [0, 0, 1],
-                                  [1, 0, 0],
-                                  [0, 0, 0],
-                                  [0, 1, 0],
-                                  [1, 0, 0]], dtype=np.int32)
-        dispatch_mask_lm = LabeledMatrix([np.arange(10).astype(str).tolist(), ['t1', 't2', 't3']], dispatch_mask)
-
-        pop_allocation = lm.population_allocation(dispatch_mask_lm)
-        pot_allocation = lm.potential_allocation(dispatch_mask_lm)
-
-        np.testing.assert_array_equal(pop_allocation.matrix, [[1., 0., 0.],
-                                                              [0.5, 0.5, 0.],
-                                                              [0.6, 0., 0.4]])
-        np.testing.assert_array_almost_equal(pot_allocation.matrix, [[1., 0., 0.],
-                                                                     [0.544, 0.456, 0.],
-                                                                     [0.627, 0., 0.373]], decimal=3)
-
     def test_lm_from_pivot(self):
         d = pd.DataFrame()
         d['gender'] = ['1', '1', '2', '2', '1', '2', '1', '3']

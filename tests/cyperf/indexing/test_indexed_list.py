@@ -34,7 +34,7 @@ class TestReversedIndex(unittest.TestCase):
     def test_inplace_reversed_index(self):
         first_values = [4, 4, 'a', 'b', 'a', 2]
         second_values = [5, 2, 'C', 'b', 3.3, 2]
-        indices = np.zeros(len(first_values) + len(second_values), dtype=np.int)
+        indices = np.zeros(len(first_values) + len(second_values), dtype=np.int64)
         position = {}
         unique_values = []
 

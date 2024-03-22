@@ -15,7 +15,7 @@ def hstack(list_of_lms: List[LabeledMatrix], sparse: bool = True):
     >>> lm3 = LabeledMatrix((['a', 'd'], ['z', 'w', 'x']), np.array([[1, 5, 20], [-1, 4, -20]])).sort()
     >>> lm = hstack([lm1, lm2, lm3])
     >>> df = lm.to_dense().sort().to_vectorial_dataframe()
-    >>> df['col1'] = df['dtype(col1, dtype=np.int)']
+    >>> df['col1'] = df['dtype(col1, dtype=np.int64)']
     >>> df #doctest: +NORMALIZE_WHITESPACE
     -------------------------------------------------------------------
     col0 | col1:0 | col1:1 | col1:2 | col1:3 | col1:4 | col1:5 | col1:6
