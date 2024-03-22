@@ -13,6 +13,7 @@ from numpy.distutils.misc_util import get_info
 from Cython.Build import cythonize
 from Cython.Build.Dependencies import default_create_extension
 
+from version import __version__
 
 def render_tempita():
     from Cython import Tempita
@@ -54,5 +55,5 @@ ext_modules = cythonize(
 pfile = Project(chdir=False).parsed_pipfile
 setup(
     ext_modules=ext_modules,
-    install_requires=convert_deps_to_pip(pfile['packages'])
+    install_requires=list(convert_deps_to_pip(pfile['packages']).values())
 )

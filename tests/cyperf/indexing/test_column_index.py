@@ -12,11 +12,11 @@ class ColumnIndexCase(unittest.TestCase):
     def check_groupsort_indexer_one_array(self, a):
         aa = a.copy()
 
-        indptr1 = np.zeros(a.max() + 2, dtype=np.int)
+        indptr1 = np.zeros(a.max() + 2, dtype=np.int64)
         nb_unique1, indices1 = groupsort_indexer(indptr1, a)
         assert_equal(a, aa)
 
-        indptr2 = np.zeros(a.max() + 2, dtype=np.int)
+        indptr2 = np.zeros(a.max() + 2, dtype=np.int64)
         nb_unique2, indices2 = groupsort_indexer_as_parallel_argsort(indptr2, a)
         assert_equal(a, aa)
 
@@ -34,7 +34,7 @@ class ColumnIndexCase(unittest.TestCase):
             self.check_groupsort_indexer_one_array(a)
 
         # test same values
-        self.check_groupsort_indexer_one_array(np.zeros(10, dtype=np.int))
+        self.check_groupsort_indexer_one_array(np.zeros(10, dtype=np.int64))
 
     def test_merge_sort(self):
         for _ in range(10):

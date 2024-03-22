@@ -6,7 +6,7 @@ import math
 
 import pandas as pd
 
-from labeledmatrix.core.random import use_seed
+from labeledmatrix.core.random import UseSeed
 
 
 def gen_values(length):
@@ -37,7 +37,7 @@ def gen_values(length):
     return values
 
 
-@use_seed()
+@UseSeed()
 def basic_dataframe(length, column_names=None):
     """
     Returns a dataframe with *length* rows and column names defined by *column_names*.
@@ -53,13 +53,13 @@ def basic_dataframe(length, column_names=None):
 
         >>> length = random.randint(100, 1000)
         >>> data = basic_dataframe(length)
-        >>> data.column_names
+        >>> list(data.columns)
         ['a', 'b', 'c']
         >>> len(data) == length
         True
         >>> column_names = ['x', 'y', 'z']
         >>> data = basic_dataframe(length, column_names)
-        >>> data.column_names == column_names
+        >>> list(data.columns) == column_names
         True
         >>> len(data) == length
         True

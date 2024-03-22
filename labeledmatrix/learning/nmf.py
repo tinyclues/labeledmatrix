@@ -8,9 +8,10 @@ from scipy.sparse import isspmatrix as is_scipy_sparse
 from scipy.sparse.linalg import cg
 from cyperf.matrix.karma_sparse import KarmaSparse, is_karmasparse, ks_diag
 
+from labeledmatrix.core.random import UseSeed
+
 from .matrix_utils import kl_div, normalize, safe_dot, safe_min, cast_2dim_float32_transpose
 from .randomize_svd import nmf_svd_init
-from labeledmatrix.core.random import use_seed
 
 
 ADD_TIME = 20
@@ -19,7 +20,7 @@ EPSILON = 10 ** (-10)
 __all__ = ['nmf', 'nmf_fold']
 
 
-@use_seed()
+@UseSeed()
 def nmf(matrix, rank=20, max_model_rank=100, max_iter=150, svd_init=False, verbose=False):
     """
     matrix should be non-negative numpy.array (dim = 2) with non-zero columns.
@@ -43,7 +44,7 @@ def nmf(matrix, rank=20, max_model_rank=100, max_iter=150, svd_init=False, verbo
         print(f"NMF : Matrix dimensions are {matrix.shape}")
         if is_karmasparse(matrix):
             print(f"NMF will use KarmaSparse Matrix with density={matrix.density}")
-    max_model_rank = min(max_model_rank or 100, min(matrix.shape))
+    max_model_rank = min(max_model_rank or 100, *matrix.shape)
 
     if rank is None:
         # nmf with coordinate selection via poisson AIC
@@ -103,7 +104,7 @@ class NMF():
             self.matrix = cast_2dim_float32_transpose(matrix).copy()
             self.is_sparse = False
         else:
-            raise ValueError("Wrong matrix type : {}".format(type(matrix)))
+            raise ValueError(f"Wrong matrix type : {type(matrix)}")
 
         self.metric, self.rank, self.renorm = metric, rank, renorm
 
@@ -127,16 +128,13 @@ class NMF():
         if self.metric == 'KL':
             if self.is_sparse:
                 return kl_div(self.matrix_csr, safe_dot(self.w, self.h, self.matrix_csr))
-            else:
-                return kl_div(self.matrix, safe_dot(self.w, self.h))
-        elif self.metric == 'euclid':
-            diff_matrix = (self.matrix - safe_dot(self.w, self.h))
+            return kl_div(self.matrix, safe_dot(self.w, self.h))
+        if self.metric == 'euclid':
+            diff_matrix = self.matrix - safe_dot(self.w, self.h)
             if is_karmasparse(diff_matrix):
                 return diff_matrix.sum_power(2)
-            else:
-                return np.sum(diff_matrix.ravel() ** 2)
-        else:
-            raise NotImplementedError('Unknown metric')
+            return np.sum(diff_matrix.ravel() ** 2)
+        raise NotImplementedError('Unknown metric')
 
     def factorisation_initial(self, w=None, h=None, svd_init=False):
         if svd_init:
@@ -153,10 +151,10 @@ class NMF():
 
     def iterate(self, maxiter):
         if self.metric == 'KL':
-            for i in range(maxiter):
+            for _ in range(maxiter):
                 self.brunet_update()
         elif self.metric == 'euclid':
-            for i in range(maxiter):
+            for _ in range(maxiter):
                 self.euclid_update()
 
     def brunet_update(self):
@@ -173,10 +171,8 @@ class NMF():
         if self.is_sparse:
             if left:
                 return safe_dot(self.w, self.h, self.matrix_csr, mask_mode="divide")
-            else:
-                return safe_dot(self.w, self.h, self.matrix_csc, mask_mode="divide")
-        else:
-            return self.matrix / safe_dot(self.w, self.h)
+            return safe_dot(self.w, self.h, self.matrix_csc, mask_mode="divide")
+        return self.matrix / safe_dot(self.w, self.h)
 
     def brunet_right(self):
         self.h *= safe_dot(self.w.transpose(), self.product_wh(left=False))
@@ -216,7 +212,7 @@ class GNMF(NMF):
     """
 
     def __init__(self, matrix, rank, adjacency, metric='KL', weight_type='adjacency'):
-        super(GNMF, self).__init__(matrix, rank, metric)
+        super().__init__(matrix, rank, metric)
         assert adjacency.shape == (self.n, self.n)
         if weight_type == 'adjacency':
             self.weights = adjacency
@@ -225,7 +221,7 @@ class GNMF(NMF):
         elif weight_type == 'matrix':
             self.weights = safe_dot(self.matrix, self.matrix.transpose(), mat_mask=adjacency)
         else:
-            raise NotImplementedError('Unknown weight_type: {}'.format(weight_type))
+            raise NotImplementedError(f'Unknown weight_type: {weight_type}')
         self.degree_matrix = ks_diag(self.weights.sum(axis=1))
         self.maximal_degree = self.degree_matrix.max()
         self.graph_laplacian = self.degree_matrix - self.weights
@@ -239,7 +235,7 @@ class GNMF(NMF):
             # largest abs of eigenvalue of matrix is less equal to 2 * self.maximal_degree + v,
             # so we can't guarantee that it will be close enough to 0 to use decomposition into series to inverse
             # so solving linear system seems to be the fastest way here
-            self.w[:, k] = cg(matrix.to_scipy_sparse(copy=False), arr[:, k], x0=self.w[:, k])[0]
+            self.w[:, k] = cg(matrix.to_scipy_sparse(copy=False), arr[:, k], x0=self.w[:, k], atol='legacy')[0]
 
         self.w.clip(self.epsilon, out=self.w)
 
@@ -319,9 +315,7 @@ class NMF_P(NMF):
     def check_convergence(self, nb_repeat=60):
         if len(self.rank_list) < nb_repeat:
             return False
-        else:
-            return all([x == self.rank_list[-1] < self.rank
-                        for x in self.rank_list[-nb_repeat:]])
+        return all(x == self.rank_list[-1] < self.rank for x in self.rank_list[-nb_repeat:])
 
     def add_rank_estimate(self, frac=0.1):
         guess_rank = np.sum(self.beta < frac * self.threshold)
@@ -344,7 +338,7 @@ def nmf_fold(matrix, right_factor, max_iter=30):
 
     right_margin = right_factor.sum(axis=1).clip(EPSILON)
     rank = right_factor.shape[0]
-    left_factor = np.full((matrix.shape[0], rank), 1.0 / rank, dtype=np.float)
+    left_factor = np.full((matrix.shape[0], rank), 1.0 / rank, dtype=np.float64)
 
     if is_karmasparse(matrix) and matrix.format != "csr":
         matrix = matrix.tocsr()  # taking a good alignment

@@ -188,7 +188,7 @@ def take_indices(iterable, indices, length=None):
     """
     >>> x = np.array([3, 4, 5.])
     >>> ind = np.array([1, 0, 1, 2])
-    >>> bool_ind = np.array([True, False, True], dtype=np.bool)
+    >>> bool_ind = np.array([True, False, True], dtype=np.bool_)
     >>> take_indices(x, 1)
     4.0
     >>> take_indices(slice(0, 7, 2), 3, 15)

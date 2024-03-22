@@ -37,8 +37,8 @@ from labeledmatrix.learning.tail_clustering import tail_clustering
 from ._constructors import from_zip_occurrence, from_random, from_diagonal, from_pivot, from_ragged_tensor, \
     from_pyarrow_list_array
 from ._exporters import to_vectorial_dataframe, to_flat_dataframe, to_list_dataframe
-from .random import use_seed
-from .utils import co, aeq, zipmerge, is_integer
+from .random import UseSeed
+from .utils import co_axis, aeq, zipmerge, is_integer
 
 __all__ = ['LabeledMatrix', 'LabeledMatrixException']
 
@@ -151,35 +151,40 @@ class LabeledMatrix:
         >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
         >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
         >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      180.0    75.0
         2      60.0     65.0
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      90.0     37.5
         2      60.0     32.5
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      10.0     4.5
         2      0.0      2.5
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'min', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'min',
+        ...                          sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      80.0     33.0
         2      60.0     30.0
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'max', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'max',
+        ...                          sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
@@ -748,8 +753,8 @@ class LabeledMatrix:
         """
         self_copy, other_copy = self, other
         for (ax_self, ax_other, extend) in axes:
-            label_self = self_copy.label[co(ax_self)]
-            label_other = other_copy.label[co(ax_other)]
+            label_self = self_copy.label[co_axis(ax_self)]
+            label_other = other_copy.label[co_axis(ax_other)]
             if extend is None:  # string alignment
                 new, self_arg, other_arg = label_self.align(label_other)
             elif extend:  # extension
@@ -1227,9 +1232,9 @@ class LabeledMatrix:
         index = np.where(safe_sum(nonzero_mask(self.matrix), axis=axis) >= min_nonzero)[0]
         if len(index) == 0:
             raise LabeledMatrixException('without_zeros has returned an empty labeled matrix')
-        if len(index) == self.matrix.shape[co(axis)]:
+        if len(index) == self.matrix.shape[co_axis(axis)]:
             return self
-        to_keep = self.label[co(axis)].select(index)
+        to_keep = self.label[co_axis(axis)].select(index)
         if axis == 1:
             return LabeledMatrix((to_keep, self.column), self.matrix[index], deco=self.deco)
         return LabeledMatrix((self.row, to_keep), self.matrix[:, index], deco=self.deco)
@@ -1371,8 +1376,8 @@ class LabeledMatrix:
         >>> (slm1 - slm).nnz()
         0
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._add(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._add(aligned_other)
 
     def _scalar_add(self, scalar) -> LabeledMatrix:
         """
@@ -1472,8 +1477,8 @@ class LabeledMatrix:
         ...       lm2.to_sparse().multiply(lm1.to_sparse()).matrix.toarray())
         True
         """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._multiply(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return aligned_self._multiply(aligned_other)
 
     def _scalar_multiply(self, scalar) -> LabeledMatrix:
         """
@@ -1535,8 +1540,8 @@ class LabeledMatrix:
         >>> np.all(mlm.matrix == lm1.to_sparse().divide(lm2.to_sparse()).matrix.toarray())
         True
         """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._divide(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return aligned_self._divide(aligned_other)
 
     def _scalar_divide(self, scalar):
         """
@@ -1644,13 +1649,12 @@ class LabeledMatrix:
         """
         if (mask is not None) and (top is not None):
             raise ValueError('Cannot provide both `mask` and `top` in dot')
-        s, o = self.align(other, axes=[(0, 1, False)])
+        aligned_self, aligned_other = self.align(other, axes=[(0, 1, False)])
         if mask is None:
-            return s._dot(o, top=top)
-        else:
-            s, mask = s.align(mask, axes=[(1, 1, False)])
-            o, mask = o.align(mask, axes=[(0, 0, False)])
-            return s._dot(o, mask=mask)
+            return aligned_self._dot(aligned_other, top=top)
+        aligned_self, mask = aligned_self.align(mask, axes=[(1, 1, False)])
+        aligned_other, mask = aligned_other.align(mask, axes=[(0, 0, False)])
+        return aligned_self._dot(aligned_other, mask=mask)
 
     def _maximum(self, other: LabeledMatrix) -> LabeledMatrix:
         return LabeledMatrix(self.label, safe_maximum(self.matrix, other.matrix),
@@ -1670,8 +1674,8 @@ class LabeledMatrix:
         >>> aeq(lm1.maximum(lm2.to_sparse()).matrix, np.array([[1, 0, 5], [0, 3, 0], [0, 2, 0]]))
         True
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._maximum(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._maximum(aligned_other)
 
     def minimum(self, other: LabeledMatrix) -> LabeledMatrix:
         """
@@ -1692,8 +1696,8 @@ class LabeledMatrix:
         >>> lm1.to_sparse().minimum(lm2.to_sparse()) == lm1.minimum(lm2 * 1.0)
         True
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._minimum(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._minimum(aligned_other)
 
     def max(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
@@ -1721,7 +1725,7 @@ class LabeledMatrix:
         values = safe_max(self.matrix, axis=axis)
         if axis is None:
             return values
-        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
+        return LabeledMatrix.from_diagonal(self.label[co_axis(axis)], values, self.deco[co_axis(axis)])
 
     def min(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
@@ -1750,7 +1754,7 @@ class LabeledMatrix:
         values = safe_min(self.matrix, axis=axis)
         if axis is None:
             return values
-        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
+        return LabeledMatrix.from_diagonal(self.label[co_axis(axis)], values, self.deco[co_axis(axis)])
 
     def sum(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
@@ -1772,7 +1776,7 @@ class LabeledMatrix:
         values = safe_sum(self.matrix, axis=axis)
         if axis is None:
             return values
-        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
+        return LabeledMatrix.from_diagonal(self.label[co_axis(axis)], values, self.deco[co_axis(axis)])
 
     def mean(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
@@ -1796,7 +1800,7 @@ class LabeledMatrix:
         values = safe_mean(self.matrix, axis=axis)
         if axis is None:
             return values
-        return LabeledMatrix.from_diagonal(self.label[co(axis)], values, self.deco[co(axis)])
+        return LabeledMatrix.from_diagonal(self.label[co_axis(axis)], values, self.deco[co_axis(axis)])
 
     def normalize(self, axis: Optional[int] = 1, norm: str = 'l1') -> LabeledMatrix:
         """
@@ -1830,7 +1834,7 @@ class LabeledMatrix:
         if self.is_sparse:
             matrix = self.matrix.apply_pointwise_function(function, function_args)
         else:
-            matrix = self.matrix.copy().astype(np.float)
+            matrix = self.matrix.copy().astype(np.float64)
             matrix[matrix.nonzero()] = function(matrix[matrix.nonzero()], *function_args)
         return LabeledMatrix(self.label, matrix, deco=self.deco)
 
@@ -1981,11 +1985,11 @@ class LabeledMatrix:
         if (nb_h == 0) or (nb_v == 0) or (nb == 0):
             return self.zeros()
         if cum_h is not None:
-            if not (0 < cum_h < 1):
+            if not 0 < cum_h < 1:
                 raise LabeledMatrixException(f'`cum_h` must be between 0 and 1, got {cum_h}')
             matrix = truncate_by_cumulative(matrix, per=cum_h, axis=1)
         if cum_v is not None:
-            if not (0 < cum_v < 1):
+            if not 0 < cum_v < 1:
                 raise LabeledMatrixException(f'`cum_v` must be between 0 and 1, got {cum_v}')
             matrix = truncate_by_cumulative(matrix, per=cum_v, axis=0)
         if cutoff:
@@ -2034,7 +2038,7 @@ class LabeledMatrix:
                [0, 9, 8]])
         """
         if isinstance(max_rank, dict):
-            max_rank = np.array([max_rank.get(label, 0) for label in self.label[co(axis)]],
+            max_rank = np.array([max_rank.get(label, 0) for label in self.label[co_axis(axis)]],
                                 dtype=np.int64)
         elif not is_integer(max_rank):
             raise ValueError('max_rank must be integer or dict')
@@ -2093,7 +2097,7 @@ class LabeledMatrix:
         True
         """
         lm_nonzero = self.without_zeros()
-        return dict(zip(lm_nonzero.label[co(axis)], lm_nonzero.matrix.max(axis=axis)))
+        return dict(zip(lm_nonzero.label[co_axis(axis)], lm_nonzero.matrix.max(axis=axis)))
 
     def similarity(self, other: Optional[LabeledMatrix] = None, cutoff: float = 0.005, nb_keep: int = 200,
                    top: int = 1000, cumtop: float = 0.02):
@@ -2225,7 +2229,7 @@ class LabeledMatrix:
         [0, 1, 2, 3]
         """
         if axis != 0:
-            return self.transpose().top_values_similarity(other.transpose() if other else None, top, axis=co(axis),
+            return self.transpose().top_values_similarity(other.transpose() if other else None, top, axis=co_axis(axis),
                                                           renorm=renorm, potential=potential)
         top = self._relative_count(top, axis=0)
 
@@ -2240,7 +2244,7 @@ class LabeledMatrix:
         else:
             overlap_lm = top_lm_mask.transpose().dot(other_top_mask)
         if renorm:
-             overlap_lm /= top
+            overlap_lm /= top
         return overlap_lm
 
     def _check_dispatch_params(self, max_ranks=None, max_volumes=None):
@@ -2284,14 +2288,16 @@ class LabeledMatrix:
         :param max_volumes: arraylike: maximal value of population volume each topic can be allocated to
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm._round_robin_allocation(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(1, [4, 4, 4], [4, 4, 4])\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
 
-        >>> lm._round_robin_allocation(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(2, [1, 4, 2], [1, 2, 2])\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
@@ -2321,17 +2327,20 @@ class LabeledMatrix:
         :return: LabeledMatrix of the same shape and with the same values, keeping only allocated pairs
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm.round_robin_allocation(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
-        >>> lm.round_robin_allocation(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1, 1, 1)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
-        >>> lm.round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
@@ -2442,8 +2451,8 @@ class LabeledMatrix:
         if not self.is_square:
             raise LabeledMatrixException('Matrix must be square')
         matrix = self.matrix.to_scipy_sparse(copy=False) if self.is_sparse else self.matrix
-        nn, lab = connected_components(matrix, connection=connection)
-        print(f'Number of components: {nn}')
+        n_components, lab = connected_components(matrix, connection=connection)
+        print(f'Number of components: {n_components}')
         lm = LabeledMatrix.from_zip_occurrence(self.row, lab)
         lm.set_deco(row_deco=self.row_deco)
         return lm
@@ -2624,7 +2633,7 @@ class LabeledMatrix:
             return lm._take_on_row(idx)._take_on_column(idx)
         return lm._take_on_row(idx)
 
-    @use_seed()
+    @UseSeed()
     def nmf(self, rank: Optional[Union[int, List[int]]],
             max_model_rank: int = 60,
             max_iter: int = 150,

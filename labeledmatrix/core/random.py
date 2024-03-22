@@ -1,26 +1,28 @@
 from collections.abc import Hashable
 from functools import wraps
 
-from numpy.random.mtrand import seed as np_seed
-from numpy.random.mtrand import get_state as np_get_state
-from numpy.random.mtrand import set_state as np_set_state
 from random import seed as py_seed
 from random import getstate as py_get_state
 from random import setstate as py_set_state
 
 import numpy as np
+from numpy.random.mtrand import seed as np_seed
+from numpy.random.mtrand import get_state as np_get_state
+from numpy.random.mtrand import set_state as np_set_state
 
 
-class use_seed:
+class UseSeed:
     def __init__(self, seed=None):
+        self.np_state = None
+        self.py_state = None
         if seed is not None:
             if not isinstance(seed, int) and not isinstance(seed, np.int32):
                 if isinstance(seed, Hashable):
                     self.seed = abs(np.int32(hash(seed)))  # hash returns int64, np.seed needs to be int32
                 else:
-                    raise ValueError("Invalid seed value `{}`, It should be an integer.".format(seed))
+                    raise ValueError(f"Invalid seed value `{seed}`, It should be an integer.")
             elif seed < 0:
-                raise ValueError("Invalid seed value `{}`, It should be positive.".format(seed))
+                raise ValueError(f"Invalid seed value `{seed}`, It should be positive.")
             else:
                 self.seed = seed
         else:
@@ -44,7 +46,7 @@ class use_seed:
         @wraps(f)
         def wrapper(*args, **kw):
             seed = self.seed if self.seed is not None else kw.pop('seed', None)
-            with use_seed(seed):
+            with UseSeed(seed):
                 return f(*args, **kw)
 
         return wrapper

@@ -6,18 +6,18 @@ from numpy.testing import assert_almost_equal, assert_allclose
 from scipy.sparse import rand, csr_matrix
 
 from labeledmatrix.learning.matrix_utils import *
-from labeledmatrix.core.random import use_seed
+from labeledmatrix.core.random import UseSeed
 
 
 class MatrixUtilsTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with use_seed(123):
+        with UseSeed(123):
             cls.mat1 = np.arange(-10, 10).reshape(5, 4).astype(dtype=DTYPE)
             cls.mat2 = np.arange(-10, 5).reshape(5, 3).astype(dtype=DTYPE)
 
     def test_gram_quantiles(self):
-        with use_seed(42):
+        with UseSeed(42):
             sparse_G = KarmaSparse(rand(100, 10, 0.1))
 
         assert_almost_equal(gram_quantiles(sparse_G, 0.1), [0.])
@@ -104,7 +104,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
     def test_to_array_if_needed_dtype(self):
         matrix = np.random.rand(100, 10)
 
-        for source_dtype, expected_dtype in [(np.bool, np.int32),
+        for source_dtype, expected_dtype in [(np.bool_, np.int32),
                                              (np.int64, np.int64),
                                              (np.uint64, np.float64),
                                              (np.int32, np.int32),
@@ -117,7 +117,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
             self.assertEqual(expected_dtype, to_array_if_needed(matrix.astype(source_dtype), min_dtype=np.int32).dtype,
                              msg={'source_dtype': source_dtype, 'min_dtype': np.int32})
 
-        for source_dtype, expected_dtype in [(np.bool, np.float32),
+        for source_dtype, expected_dtype in [(np.bool_, np.float32),
                                              (np.int64, np.float32),
                                              (np.uint64, np.float32),
                                              (np.int32, np.float32),
@@ -132,7 +132,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
                              msg={'source_dtype': source_dtype, 'min_dtype': np.float32})
 
     def test_as_sparse(self):
-        with use_seed(153):
+        with UseSeed(153):
             arr = np.random.randint(0, 2, (100, 10))
         for data in [arr, arr.tolist(), KarmaSparse(arr), csr_matrix(arr)]:
             res = as_sparse(data)
@@ -140,7 +140,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
             assert_almost_equal(res.toarray(), arr)
 
     def test_as_numpy(self):
-        with use_seed(153):
+        with UseSeed(153):
             arr = np.random.randint(0, 2, (100, 10))
         for data in [arr, arr.tolist(), KarmaSparse(arr), csr_matrix(arr)]:
             assert_almost_equal(as_numpy(data), arr)

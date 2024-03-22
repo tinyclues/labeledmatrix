@@ -15,7 +15,7 @@ def randomized_range_finder(A, size, n_iter):
     R = np.random.normal(size=(A.shape[1], size))
     Y = safe_dot(A, R)
     del R
-    for i in range(n_iter):
+    for _ in range(n_iter):
         Y = safe_dot(A, safe_dot(A.transpose(), Y))
     Q, _ = np.linalg.qr(Y, mode='reduced')
     return Q
@@ -56,13 +56,10 @@ def randomized_svd(M, n_components, n_iter=2):
     if transpose:
         # transpose back the results according to the input convention
         return V[:n_components,:].T, S[:n_components], U[:, :n_components].T
-    else:
-        return U[:, :n_components], S[:n_components], V[:n_components,:]
+    return U[:, :n_components], S[:n_components], V[:n_components,:]
 
 
 def nmf_svd_init(matrix, rank, eps):
-    """
-    """
     U, S, V = randomized_svd(matrix, rank, n_iter=1)
     W, H = np.zeros(U.shape), np.zeros(V.shape)
     W[:, 0] = np.sqrt(S[0]) * np.abs(U[:, 0])

@@ -473,8 +473,7 @@ class SelectIndex(ColumnIndex):
         # and will have the same dtype as indptr
         indptr = indptr.astype(get_index_dtype(indptr[-1]), copy=False)
 
-        super(SelectIndex, self).__init__(selection_values_method, parent_index.position,
-                                          indices, reversed_indices, indptr)
+        super().__init__(selection_values_method, parent_index.position, indices, reversed_indices, indptr)
 
     def _get_positions(self, values):
         return positions_select_inplace(self.parent_get_positions(values), self.indptr)
@@ -622,8 +621,7 @@ class MultiIndex(ColumnIndex):
 
         int_index = self._build_index()
 
-        super(MultiIndex, self).__init__(args[2], int_index.position, int_index.indices,
-                                         int_index.reversed_indices, int_index.indptr)
+        super().__init__(args[2], int_index.position, int_index.indices, int_index.reversed_indices, int_index.indptr)
 
     def _init_side_index(self, i, arg):
         if isinstance(arg, tuple) or isinstance(arg, list):
