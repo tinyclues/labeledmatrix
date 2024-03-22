@@ -13,6 +13,7 @@ from numpy.distutils.misc_util import get_info
 from Cython.Build import cythonize
 from Cython.Build.Dependencies import default_create_extension
 
+from version import __version__
 
 def render_tempita():
     from Cython import Tempita

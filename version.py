@@ -27,7 +27,7 @@ def get_version():
     LOGGER.info("Geting version using git.")
     if not is_git_repo():
         # In the production docker image git folder doesn't exist.
-        LOGGER.warn("We are not in a git folder, probably running in production, cannot return version.")
+        LOGGER.warning("We are not in a git folder, probably running in production, cannot return version.")
         version_returned = 'unknown'
         print(f"version=={version_returned}")
         return version_returned
