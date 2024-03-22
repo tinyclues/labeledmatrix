@@ -32,9 +32,6 @@ def get_version():
         print(f"version=={version_returned}")
         return version_returned
     describe_cmd = ['git', 'describe', '--tags', '--always']
-    print(_run(['git', 'describe']))
-    print(_run(['git', 'describe', '--tags']))
-    print(_run(['git', 'branch', '--all']))
     last_tag = _run(describe_cmd + ['--abbrev=0'])  # '1.0.14'
     describe = _run(describe_cmd)  # '1.0.14-2-gfaa2442'  {tag}-{nb_commit_since_tag}-{hash}'
     if describe == last_tag:
