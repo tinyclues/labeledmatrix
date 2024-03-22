@@ -76,7 +76,6 @@ def reduce_sum(list_of_lms: List[LabeledMatrix]):
         matrix = align_along_axis(lm.matrix, row_index, 1, extend=True)
         matrix = align_along_axis(matrix, column_index, 0, extend=True)
         result = safe_add(matrix, result)
-    from labeledmatrix.core.labeledmatrix import LabeledMatrix
     return LabeledMatrix((total_rows, total_columns),
                          result, deco=(row_deco, column_deco))
 

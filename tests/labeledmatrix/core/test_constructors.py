@@ -17,6 +17,7 @@ class ConstructorsTestCase(unittest.TestCase):
         df1 = df.sample(frac=1)
         lm1 = LabeledMatrix.from_zip_occurrence(df1['a'].values, df1['b'].values)
         self.assertEqual(lm1.sort(), lm.sort())
+        df_counts = df.groupby(['a', 'b'])['a'].count().to_dict()
         for i in range(len(df)):
             a, b = df['a'][i], df['b'][i]
-            self.assertEqual(lm1[a, b], df.counts(('a', 'b'))[(a, b)])
+            self.assertEqual(lm1[a, b], df_counts[(a, b)])

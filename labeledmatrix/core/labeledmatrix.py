@@ -1652,10 +1652,9 @@ class LabeledMatrix:
         aligned_self, aligned_other = self.align(other, axes=[(0, 1, False)])
         if mask is None:
             return aligned_self._dot(aligned_other, top=top)
-        else:
-            aligned_self, mask = aligned_self.align(mask, axes=[(1, 1, False)])
-            aligned_other, mask = aligned_other.align(mask, axes=[(0, 0, False)])
-            return aligned_self._dot(aligned_other, mask=mask)
+        aligned_self, mask = aligned_self.align(mask, axes=[(1, 1, False)])
+        aligned_other, mask = aligned_other.align(mask, axes=[(0, 0, False)])
+        return aligned_self._dot(aligned_other, mask=mask)
 
     def _maximum(self, other: LabeledMatrix) -> LabeledMatrix:
         return LabeledMatrix(self.label, safe_maximum(self.matrix, other.matrix),
@@ -2328,7 +2327,8 @@ class LabeledMatrix:
         :return: LabeledMatrix of the same shape and with the same values, keeping only allocated pairs
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm.round_robin_allocation(1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0

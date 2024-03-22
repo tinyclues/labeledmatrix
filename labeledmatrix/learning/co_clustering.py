@@ -137,9 +137,8 @@ class CoClustering():
     def check_convergence(self):
         if np.all(self.w_old.indices == self.w.indices) and np.all(self.h_old.indices == self.h.indices):
             return True
-        else:
-            self.w_old, self.h_old = self.w, self.h
-            return False
+        self.w_old, self.h_old = self.w, self.h
+        return False
 
     def idiv_update_right(self):
         self.get_hat_matrix()
