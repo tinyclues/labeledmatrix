@@ -239,7 +239,7 @@ class GNMF(NMF):
             # largest abs of eigenvalue of matrix is less equal to 2 * self.maximal_degree + v,
             # so we can't guarantee that it will be close enough to 0 to use decomposition into series to inverse
             # so solving linear system seems to be the fastest way here
-            self.w[:, k] = cg(matrix.to_scipy_sparse(copy=False), arr[:, k], x0=self.w[:, k])[0]
+            self.w[:, k] = cg(matrix.to_scipy_sparse(copy=False), arr[:, k], x0=self.w[:, k], atol='legacy')[0]
 
         self.w.clip(self.epsilon, out=self.w)
 

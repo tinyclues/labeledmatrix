@@ -53,7 +53,7 @@ def basic_dataframe(length, column_names=None):
 
         >>> length = random.randint(100, 1000)
         >>> data = basic_dataframe(length)
-        >>> data.column_names
+        >>> list(data.columns)
         ['a', 'b', 'c']
         >>> len(data) == length
         True

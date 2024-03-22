@@ -180,11 +180,10 @@ class CoClustering():
         self.get_cond_y_vs_haty()
         if not is_karmasparse(self.matrix):
             return self.pcond_x_vs_hatx.dot(self.hat_matrix).dot(self.pcond_y_vs_haty.transpose())
-        elif self.n <= self.m:  # to write condition correctly
+        if self.n <= self.m:  # to write condition correctly
             return safe_dot(self.pcond_x_vs_hatx.dot(self.hat_matrix),
                             self.pcond_y_vs_haty.transpose(),
                             self.matrix)
-        else:
-            return safe_dot(self.pcond_x_vs_hatx,
-                            self.pcond_y_vs_haty.dot(self.hat_matrix.transpose()).transpose(),
-                            self.matrix)
+        return safe_dot(self.pcond_x_vs_hatx,
+                        self.pcond_y_vs_haty.dot(self.hat_matrix.transpose()).transpose(),
+                        self.matrix)

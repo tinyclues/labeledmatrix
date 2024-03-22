@@ -33,10 +33,9 @@ def co_axis(axis):
     # TODO: check usage of this
     if axis == 0:
         return 1
-    elif axis == 1:
+    if axis == 1:
         return 0
-    else:
-        raise RuntimeError(f"axis {axis} is out of range [0,1]")
+    raise RuntimeError(f"axis {axis} is out of range [0,1]")
 
 
 def zipmerge(dictionary1, dictionary2):

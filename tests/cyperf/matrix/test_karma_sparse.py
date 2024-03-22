@@ -991,7 +991,7 @@ class TestKarmaSparse(unittest.TestCase):
 
     def test_dot_vector(self):
         for a, dtype in itertools.product(self.mf.iterator(dense=True),
-                                          [np.float, np.float32, np.int, np.int32]):
+                                          [np.float64, np.float32, np.int64, np.int32]):
             ks = KarmaSparse(a)
             vec1 = np.random.randn(ks.shape[1]).astype(dtype)
             vec0 = np.random.randn(ks.shape[0]).astype(dtype)

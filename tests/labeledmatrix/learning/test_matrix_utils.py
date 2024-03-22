@@ -104,7 +104,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
     def test_to_array_if_needed_dtype(self):
         matrix = np.random.rand(100, 10)
 
-        for source_dtype, expected_dtype in [(np.bool, np.int32),
+        for source_dtype, expected_dtype in [(np.bool_, np.int32),
                                              (np.int64, np.int64),
                                              (np.uint64, np.float64),
                                              (np.int32, np.int32),
@@ -117,7 +117,7 @@ class MatrixUtilsTestCase(unittest.TestCase):
             self.assertEqual(expected_dtype, to_array_if_needed(matrix.astype(source_dtype), min_dtype=np.int32).dtype,
                              msg={'source_dtype': source_dtype, 'min_dtype': np.int32})
 
-        for source_dtype, expected_dtype in [(np.bool, np.float32),
+        for source_dtype, expected_dtype in [(np.bool_, np.float32),
                                              (np.int64, np.float32),
                                              (np.uint64, np.float32),
                                              (np.int32, np.float32),

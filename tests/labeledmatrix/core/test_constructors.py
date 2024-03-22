@@ -14,7 +14,7 @@ class ConstructorsTestCase(unittest.TestCase):
         self.assertEqual(lm.matrix.sum(),100)
         np.testing.assert_array_equal(lm.row, df.drop_duplicates('a')['a'].values)
         np.testing.assert_array_equal(lm.column, df.drop_duplicates('b')['b'].values)
-        df1 = df.shuffle()
+        df1 = df.sample(frac=1)
         lm1 = LabeledMatrix.from_zip_occurrence(df1['a'].values, df1['b'].values)
         self.assertEqual(lm1.sort(), lm.sort())
         for i in range(len(df)):

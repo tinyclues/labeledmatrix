@@ -151,35 +151,40 @@ class LabeledMatrix:
         >>> d['gender'] = ['1', '1', '2', '2', '1', '2', '1']
         >>> d['revenue'] = [100,  42,  60,  30,  80,  35,  33]
         >>> d['csp'] = ['+', '-', '+', '-', '+', '-', '-']
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      180.0    75.0
         2      60.0     65.0
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'mean',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      90.0     37.5
         2      60.0     32.5
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std', sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'std',
+        ...                          sparse=False).to_vectorial_dataframe()  #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      10.0     4.5
         2      0.0      2.5
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'min', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'min',
+        ...                          sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
         1      80.0     33.0
         2      60.0     30.0
 
-        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'max', sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
+        >>> LabeledMatrix.from_pivot(d, 'gender', 'csp', 'revenue', 'max',
+        ...                          sparse=False).to_vectorial_dataframe() #doctest: +NORMALIZE_WHITESPACE
         ----------------------
         col0 | col1:+ | col1:-
         ----------------------
@@ -1371,8 +1376,8 @@ class LabeledMatrix:
         >>> (slm1 - slm).nnz()
         0
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._add(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._add(aligned_other)
 
     def _scalar_add(self, scalar) -> LabeledMatrix:
         """
@@ -1472,8 +1477,8 @@ class LabeledMatrix:
         ...       lm2.to_sparse().multiply(lm1.to_sparse()).matrix.toarray())
         True
         """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._multiply(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return aligned_self._multiply(aligned_other)
 
     def _scalar_multiply(self, scalar) -> LabeledMatrix:
         """
@@ -1535,8 +1540,8 @@ class LabeledMatrix:
         >>> np.all(mlm.matrix == lm1.to_sparse().divide(lm2.to_sparse()).matrix.toarray())
         True
         """
-        s, o = self.align(other, axes=[(0, 0, False), (1, 1, False)])
-        return s._divide(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, False), (1, 1, False)])
+        return aligned_self._divide(aligned_other)
 
     def _scalar_divide(self, scalar):
         """
@@ -1644,13 +1649,13 @@ class LabeledMatrix:
         """
         if (mask is not None) and (top is not None):
             raise ValueError('Cannot provide both `mask` and `top` in dot')
-        s, o = self.align(other, axes=[(0, 1, False)])
+        aligned_self, aligned_other = self.align(other, axes=[(0, 1, False)])
         if mask is None:
-            return s._dot(o, top=top)
+            return aligned_self._dot(aligned_other, top=top)
         else:
-            s, mask = s.align(mask, axes=[(1, 1, False)])
-            o, mask = o.align(mask, axes=[(0, 0, False)])
-            return s._dot(o, mask=mask)
+            aligned_self, mask = aligned_self.align(mask, axes=[(1, 1, False)])
+            aligned_other, mask = aligned_other.align(mask, axes=[(0, 0, False)])
+            return aligned_self._dot(aligned_other, mask=mask)
 
     def _maximum(self, other: LabeledMatrix) -> LabeledMatrix:
         return LabeledMatrix(self.label, safe_maximum(self.matrix, other.matrix),
@@ -1670,8 +1675,8 @@ class LabeledMatrix:
         >>> aeq(lm1.maximum(lm2.to_sparse()).matrix, np.array([[1, 0, 5], [0, 3, 0], [0, 2, 0]]))
         True
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._maximum(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._maximum(aligned_other)
 
     def minimum(self, other: LabeledMatrix) -> LabeledMatrix:
         """
@@ -1692,8 +1697,8 @@ class LabeledMatrix:
         >>> lm1.to_sparse().minimum(lm2.to_sparse()) == lm1.minimum(lm2 * 1.0)
         True
         """
-        s, o = self.align(other, axes=[(0, 0, True), (1, 1, True)])
-        return s._minimum(o)
+        aligned_self, aligned_other = self.align(other, axes=[(0, 0, True), (1, 1, True)])
+        return aligned_self._minimum(aligned_other)
 
     def max(self, axis: Optional[int] = 1) -> Union[Number, LabeledMatrix]:
         """
@@ -2284,14 +2289,16 @@ class LabeledMatrix:
         :param max_volumes: arraylike: maximal value of population volume each topic can be allocated to
         >>> matrix = np.array([[10, 1, 3], [2, 5, 3], [5, 6, 6], [1, 3, 5]])
         >>> lm = LabeledMatrix((range(4), ['a', 'b', 'c']), matrix)
-        >>> lm._round_robin_allocation(1, [4, 4, 4], [4, 4, 4]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(1, [4, 4, 4], [4, 4, 4])\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
 
-        >>> lm._round_robin_allocation(2, [1, 4, 2], [1, 2, 2]).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm._round_robin_allocation(2, [1, 4, 2], [1, 2, 2])\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        1        b    5.0
@@ -2327,11 +2334,13 @@ class LabeledMatrix:
         1        1        b    5.0
         2        2        b    6.0
         3        3        c    5.0
-        >>> lm.round_robin_allocation(1, 1, 1).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(1, 1, 1)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
-        >>> lm.round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2).to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
+        >>> lm.round_robin_allocation(2, {'a': 2, 'b': 1, 'c': 3}, 2)\
+        ...     .to_flat_dataframe('user_id', 'topic_id', 'score') #doctest: +NORMALIZE_WHITESPACE
            user_id topic_id  score
         0        0        a   10.0
         1        2        b    6.0
