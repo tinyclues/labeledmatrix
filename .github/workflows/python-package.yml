@@ -31,37 +31,8 @@ jobs:
         run: pipenv install --dev
       - name: cythonize
         run: pipenv run ./setup.py build_ext -i -j2
-  lint:
-    needs: [build]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.7"]
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pipenv'
-    - name: pylint
-      run: pipenv run pylint labeledmatrix cyperf
-  tests:
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [ "3.7" ]
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pipenv'
+      - name: pylint
+        run: pipenv run pylint labeledmatrix cyperf  --rcfile=setup.cfg
       - name: pytest
+        if: success() || failure()
         run: pipenv run pytest tests --durations=10
