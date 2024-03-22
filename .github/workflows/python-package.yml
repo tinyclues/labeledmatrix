@@ -11,7 +11,28 @@ on:
 
 jobs:
   build:
-
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unshallow repo clone
+        run: git fetch --prune --unshallow --tags
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pipenv'
+      - name: Install pipenv
+        run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
+      - name: Install dependencies
+        run: pipenv install --dev
+      - name: cythonize
+        run: pipenv run ./setup.py build_ext -i -j2
+  lint:
+    needs: [build]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,20 +41,27 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Unshallow repo clone
-      run: git fetch --prune --unshallow --tags
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pipenv'
-    - name: Install pipenv
-      run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
-    - name: Install dependencies
-      run: pipenv install --dev
-    - name: cythonize
-      run: pipenv run ./setup.py build_ext -i -j2
     - name: pylint
       run: pipenv run pylint labeledmatrix cyperf
-    - name: pytest
-      run: pipenv run pytest tests --durations=10
+  tests:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.7" ]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pipenv'
+      - name: pytest
+        run: pipenv run pytest tests --durations=10
