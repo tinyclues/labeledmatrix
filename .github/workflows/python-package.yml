@@ -30,7 +30,7 @@ jobs:
     - name: Install pipenv
       run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
     - name: Install dependencies
-      run: pipenv install
+      run: pipenv install --dev
     - name: cythonize
       run: pipenv run ./setup.py build_ext -i -j2
     - name: pylint
