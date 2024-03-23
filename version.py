@@ -39,7 +39,6 @@ def get_version():
         LOGGER.info("version is the last tag, version==%s", version_returned)
         print(f"version=={version_returned}")
         return version_returned
-    print(describe, last_tag, len(last_tag))
     short_hash = describe[len(last_tag) + 1:].split('-')[1]
     version_returned = "{}.dev0+{}".format(last_tag.replace('v', '', 1), short_hash[1:])
     LOGGER.info("version==%s", version_returned)
