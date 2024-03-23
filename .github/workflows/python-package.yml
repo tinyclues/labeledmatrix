@@ -5,12 +5,12 @@ name: Tests & Lint
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
