@@ -3,7 +3,7 @@
 
 # This workflow follow documentation from https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
-name: Publish to PyPi
+name: Publish
 
 on: push
 
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build package
+    name: Prepare distribution packages
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/labeledmatrix  # Replace <package-name> with your PyPI project name
+      url: https://pypi.org/p/labeledmatrix
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
