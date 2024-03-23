@@ -5,18 +5,20 @@ name: Dev
 
 on:
   push:
-    branches: ["master"]
+    branches: ['master']
   pull_request:
-    branches: ["master"]
+    branches: ['master']
 
 jobs:
   tests:
     name: Run tests and linter
     runs-on: ubuntu-latest
+    environment:
+      name: build
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7"]
+        python-version: ['3.7']
     steps:
       - uses: actions/checkout@v4
       - name: Unshallow repo clone

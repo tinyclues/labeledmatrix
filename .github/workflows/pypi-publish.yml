@@ -5,7 +5,10 @@
 
 name: Publish
 
-on: push
+on:
+  push:
+    branches: ['master']
+    tags: ['*']
 
 permissions:
   contents: read
@@ -14,9 +17,11 @@ jobs:
   build:
     name: Prepare distribution packages
     runs-on: ubuntu-latest
+    environment:
+      name: build
     strategy:
       matrix:
-        python-version: ["3.7"]
+        python-version: ['3.7']
     steps:
       - uses: actions/checkout@v4
       - name: Unshallow repo clone
