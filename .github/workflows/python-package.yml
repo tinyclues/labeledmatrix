@@ -6,8 +6,9 @@ name: Dev
 on:
   push:
     branches: ['master']
-  pull_request:
-    branches: ['master']
+# TODO revert before merge
+#  pull_request:
+#    branches: ['master']
 
 jobs:
   tests:
