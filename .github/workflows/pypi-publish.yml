@@ -7,11 +7,10 @@
 
 name: Publish
 
+# TODO revert before merge
 on:
   push:
-# TODO revert before merge
-#    branches: ['master']
-#    tags: ['*']
+    branches: ['master']
   pull_request:
     branches: ['master']
 
