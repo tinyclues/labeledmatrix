@@ -40,8 +40,7 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
           CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.manylinux_image }}
         run: |
-          curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
-          python -m pip install cibuildwheel
+          python -m pip install cibuildwheel pipenv
           python -m cibuildwheel --output-dir wheelhouse
       - name: Upload wheel for ${{ matrix.os }} ${{ strategy.job-index }}
         uses: actions/upload-artifact@v4
@@ -55,8 +54,6 @@ jobs:
       name: build
     steps:
       - uses: actions/checkout@v4
-      - name: Unshallow repo clone
-        run: git fetch --prune --unshallow --tags
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
