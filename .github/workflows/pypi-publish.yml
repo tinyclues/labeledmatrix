@@ -12,6 +12,8 @@ on:
 # TODO revert before merge
 #    branches: ['master']
 #    tags: ['*']
+  pull_request:
+    branches: ['master']
 
 permissions:
   contents: read
