@@ -1,4 +1,4 @@
-FROM python:3.7-buster as requirements
+FROM python:3.9-buster as requirements
 RUN pip install --upgrade pip
 RUN pip install pipenv
 COPY Pipfile Pipfile
