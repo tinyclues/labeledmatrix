@@ -15,18 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: build
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.9']
     steps:
       - uses: actions/checkout@v4
       - name: Unshallow repo clone
         run: git fetch --prune --unshallow --tags
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.9
           cache: 'pipenv'
       - name: Install pipenv
         run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
