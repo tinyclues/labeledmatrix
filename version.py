@@ -31,6 +31,8 @@ def get_version():
         version_returned = 'unknown'
         print(f"version=={version_returned}")
         return version_returned
+    # unshallow repo clone to make `git describe` work in CI
+    _run(['git', 'fetch', '--prune', '--unshallow', '--tags'])
     describe_cmd = ['git', 'describe', '--tags', '--always']
     last_tag = _run(describe_cmd + ['--abbrev=0'])  # '1.0.14'
     describe = _run(describe_cmd)  # '1.0.14-2-gfaa2442'  {tag}-{nb_commit_since_tag}-{hash}'
@@ -48,6 +50,7 @@ def get_version():
         version_returned = f"{last_tag.replace('v', '', 1)}.dev0+{short_hash[1:]}"
     LOGGER.info("version==%s", version_returned)
     print(f"version=={version_returned}")
+    print(_run(['pip', 'freeze']))
     return version_returned
 
 
